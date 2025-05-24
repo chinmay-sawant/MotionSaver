@@ -1,0 +1,9 @@
+# Core dependencies
+opencv-python>=4.5.0
+Pillow>=9.0.0
+tk>=0.1.0
+numpy>=1.20.0
+screeninfo>=0.8
+
+# Optional dependencies
+matplotlib>=3.5.0  # For advanced UI elements
