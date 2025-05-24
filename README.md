@@ -78,22 +78,21 @@ You can modify these settings using the GUI or by directly editing the configura
 - `clock_font_size`: Font size for the clock
 - `ui_font_family`: Font family for UI elements
 - `ui_font_size`: Font size for UI elements
-
 ## Project Structure
+
+```
 d:\Chinmay_Personal_Projects\ScreenSaver\
-├── PhotoEngine.py                # Main entry point for running the screensaver
-├── gui.py                        # Configuration GUI
-├── requirements.txt              # Project dependencies
-├── README.md                     # Documentation
-│
-├── config/                       # Configuration files
-│   └── userconfig.json           # User configuration
-│
-├── screensaver_app/              # Core application package
+├── PhotoEngine.py          # Main entry point for running the screensaver
+├── gui.py                  # Configuration GUI
+├── requirements.txt        # Project dependencies
+├── README.md               # Documentation
+├── config/                 # Configuration files
+│   └── userconfig.json     # User configuration
+├── screensaver_app/        # Core application package
 │   ├── __init__.py
-│   ├── PasswordConfig.py         # Password configuration and verification
-│   └── video_player.py           # Video processing and display
-│
-└── assets/                       # Default media assets
-    ├── default_video.mp4         # Default background video
-    └── default_profile.png       # Default profile image
+│   ├── PasswordConfig.py   # Password configuration and verification
+│   └── video_player.py     # Video processing and display
+└── assets/                 # Default media assets
+    ├── default_video.mp4     # Default background video
+    └── default_profile.png   # Default profile image
+```
