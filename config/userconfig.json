@@ -1,0 +1,21 @@
+{
+  "users": [
+    {
+      "username": "chinmay",
+      "password_hash": "03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4"
+    },
+    {
+      "username": "guest",
+      "password_hash": "84d89877f0d4041efb6bf91a16f0248f2fd573e6af05c19f96bedb9f882f7882"
+    }
+  ],
+  "default_user_for_display": "chinmay",
+  "profile_pic_path": "D:\\Chinmay_Personal_Projects\\ScreenSaver\\a35.jpg",
+  "profile_pic_path_crop": "ScreenSaver\\a35_crop.jpg",
+  "video_path": "D:\\Chinmay_Personal_Projects\\ScreenSaver\\video.mp4",
+  "theme": "dark",
+  "clock_font_family": "Segoe UI",
+  "clock_font_size": 64,
+  "ui_font_family": "Courier New",
+  "ui_font_size": 30
+}

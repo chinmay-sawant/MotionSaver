@@ -1,11 +1,11 @@
 import tkinter as tk
 import argparse
 import os
-from video_player import VideoClockScreenSaver # VideoClockScreenSaver now handles default profile
-from gui import ScreenSaverApp
-from PasswordConfig import verify_password_dialog_macos
+# Update imports to use the new package structure
+from screensaver_app.video_player import VideoClockScreenSaver 
+from screensaver_app.PasswordConfig import verify_password_dialog_macos
 
-def start_screensaver(video_path):
+def start_screensaver(video_path_override=None): # Modified to accept an optional override
     """Launch the full-screen screen saver directly"""
     root = tk.Tk()
     root.attributes('-fullscreen', True)
@@ -19,15 +19,19 @@ def start_screensaver(video_path):
     root.attributes('-transparentcolor', TRANSPARENT_KEY_FOR_LOGIN_TOPLEVEL)
     root.configure(bg='black') # Video player's background
 
-    app = VideoClockScreenSaver(root, video_path) # This will display video + default profile
+    # Pass the override to VideoClockScreenSaver. If None, VideoClockScreenSaver will use config.
+    app = VideoClockScreenSaver(root, video_path_override) 
     
     def on_escape(event):
-        # verify_password_dialog_macos shows the password-only input Toplevel
-        if verify_password_dialog_macos(root): # Pass root as parent for Toplevel
+        # verify_password_dialog_macos now returns True/False instead of a username
+        success = verify_password_dialog_macos(root)
+        if success: # If login successful
             app.close()
             root.destroy()
         else:
-            root.focus_set() 
+            # Check if root window still exists before trying to set focus
+            if root.winfo_exists():
+                root.focus_set() 
             print("Login cancelled or failed.")
     
     # Allow clicking on the main screensaver window (where profile is drawn)
@@ -41,18 +45,12 @@ def start_screensaver(video_path):
 
 def main():
     parser = argparse.ArgumentParser(description='Video Clock Screen Saver')
-    parser.add_argument('--video', default="video.mp4", help='Path to video file')
-    parser.add_argument('--gui', action='store_true', help='Launch GUI mode')
+    # The default for --video here is just for the help message and if used as an override.
+    # If --video is not provided, VideoClockScreenSaver will use its internal logic (config or its own default).
+    parser.add_argument('--video', default=None, help='Path to video file (overrides config)')
     args = parser.parse_args()
     
-    if args.gui:
-        # Start the GUI application
-        root = tk.Tk()
-        app = ScreenSaverApp(root)
-        root.mainloop()
-    else:
-        # Start the screensaver directly
-        start_screensaver(args.video)
+    start_screensaver(args.video)
 
 if __name__ == "__main__":
     main()
