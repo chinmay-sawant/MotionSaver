@@ -10,6 +10,7 @@ import tkinter.font as tkfont
 import platform
 from concurrent.futures import ThreadPoolExecutor
 import collections
+import getpass  # Added import
 
 from .PasswordConfig import load_config
 
@@ -20,7 +21,7 @@ def get_username_from_config():
 def get_user_config():
     return load_config()
 
-def draw_rounded_rectangle(draw, xy, radius, fill=None, outline=None, width=1):
+def draw_rounded_rectangle(draw, xy, radius, fill=None, outline=None, width=2):
     """Draws a rounded rectangle on a PIL Draw object."""
     x1, y1, x2, y2 = xy
     # Ensure coordinates are integers for drawing
@@ -36,11 +37,11 @@ def draw_rounded_rectangle(draw, xy, radius, fill=None, outline=None, width=1):
     draw.pieslice([(x1, y2-2*radius), (x1+2*radius, y2)], 90, 180, fill=fill, outline=outline if fill else None, width=width if fill else 0)
     draw.pieslice([(x2-2*radius, y2-2*radius), (x2, y2)], 0, 90, fill=fill, outline=outline if fill else None, width=width if fill else 0)
     
-    if not fill and outline: # Draw border if no fill
-        draw.line([(x1+radius,y1),(x2-radius,y1)],fill=outline,width=width)
-        draw.line([(x1+radius,y2),(x2-radius,y2)],fill=outline,width=width)
-        draw.line([(x1,y1+radius),(x1,y2-radius)],fill=outline,width=width)
-        draw.line([(x2,y1+radius),(x2,y2-radius)],fill=outline,width=width)
+    if not fill and outline:  # Draw border if no fill
+        draw.line([(x1+radius, y1), (x2-radius, y1)], fill=outline, width=width)
+        draw.line([(x1+radius, y2), (x2-radius, y2)], fill=outline, width=width)  # Thicker bottom border
+        draw.line([(x1, y1+radius), (x1, y2-radius)], fill=outline, width=width)
+        draw.line([(x2, y1+radius), (x2, y2-radius)], fill=outline, width=width)
 
 
 class FrameProcessorThread(threading.Thread):
@@ -222,18 +223,10 @@ class VideoClockScreenSaver:
         
         self.user_config = load_config()
         
-        # Determine the username to display on the screensaver
-        self.username_to_display = self.user_config.get('default_user_for_display')
-        user_exists = False
-        if self.username_to_display:
-            for u in self.user_config.get("users", []):
-                if u.get("username") == self.username_to_display:
-                    user_exists = True
-                    break
-        if not user_exists: # Fallback to first user if default not set or not found
-             self.username_to_display = self.user_config.get("users", [{}])[0].get("username", "User")
-        
-        self.username = self.username_to_display # Used for drawing profile elements
+        # Fetch system user name
+        system_user = getpass.getuser()
+        self.username_to_display = system_user
+        self.username = system_user
         
         # Use video_path from arg (CLI) if provided, else from config, else default
         # Default to "video.mp4" which is expected to be in the project root (ScreenSaver directory)
@@ -267,8 +260,9 @@ class VideoClockScreenSaver:
         
         # Load UI font settings from config
         self.ui_font_family = self.user_config.get("ui_font_family", "Arial")
-        self.ui_font_size = self.user_config.get("ui_font_size", 18)
-        
+        # Use a much larger font size for username label
+        self.ui_font_size = self.user_config.get("ui_font_size", 30)  # Significantly increase UI font size
+
         # CLOCK FONT
         font_path_used = None
         try:
@@ -286,18 +280,15 @@ class VideoClockScreenSaver:
             self.clock_font = ImageFont.load_default()
 
         # UI FONT
-        ui_font_path_used = None
         try:
             ui_font_path = find_font_path(self.ui_font_family)
             if ui_font_path:
                 self.profile_name_font = ImageFont.truetype(ui_font_path, self.ui_font_size)
                 self.profile_initial_font = ImageFont.truetype(ui_font_path, self.ui_font_size * 2)
-                ui_font_path_used = ui_font_path
                 print(f"Using UI font file: {ui_font_path}")
             else:
                 self.profile_name_font = ImageFont.truetype(self.ui_font_family, self.ui_font_size)
                 self.profile_initial_font = ImageFont.truetype(self.ui_font_family, self.ui_font_size * 2)
-                ui_font_path_used = self.ui_font_family
                 print(f"Using UI font family: {self.ui_font_family}")
         except Exception as e:
             print(f"Warning: UI font '{self.ui_font_family}' not found. Using PIL default. ({e})")
@@ -426,27 +417,40 @@ class VideoClockScreenSaver:
         text_y = (size - text_height) / 2 - text_y_offset -3 
         draw.text((text_x, text_y), initial, fill=(255, 255, 255, 220), font=self.profile_initial_font)
         return image
-
     def _create_pre_rendered_username_label(self):
+        """Create the username label below the profile picture."""
         name_text = self.username
-        try: 
-            bbox = self.profile_name_font.getbbox(name_text)
+
+        # Always use the configured UI font and size for the username label
+        try:
+            ui_font_path = find_font_path(self.ui_font_family)
+            if ui_font_path:
+                username_font = ImageFont.truetype(ui_font_path, self.ui_font_size)
+            else:
+                username_font = ImageFont.truetype(self.ui_font_family, self.ui_font_size)
+        except Exception:
+            username_font = ImageFont.load_default().font_variant(size=self.ui_font_size)
+
+        try:
+            bbox = username_font.getbbox(name_text)
             text_width, text_height = bbox[2] - bbox[0], bbox[3] - bbox[1]
             text_x_offset, text_y_offset = bbox[0], bbox[1]
-        except AttributeError: 
-            text_width, text_height = self.profile_name_font.getsize(name_text)
+        except AttributeError:
+            text_width, text_height = username_font.getsize(name_text)
             text_x_offset, text_y_offset = 0, 0
-        
-        padding = 10
+
+        padding = 15  # Increased padding for better appearance
         rect_width = text_width + 2 * padding
         rect_height = text_height + 2 * padding
-        
-        image = Image.new('RGBA', (int(rect_width), int(rect_height)), (0,0,0,0))
+
+        image = Image.new('RGBA', (int(rect_width), int(rect_height)), (0, 0, 0, 0))
         draw = ImageDraw.Draw(image)
-        draw_rounded_rectangle(draw, (0,0, rect_width-1, rect_height-1), 
-                               radius=8, fill=(30, 30, 30, 180))
-        
-        draw.text((padding - text_x_offset, padding - text_y_offset), name_text, font=self.profile_name_font, fill=(255, 255, 255, 230))
+        # Make the background transparent and remove the border
+        draw_rounded_rectangle(draw, (0, 0, rect_width - 1, rect_height - 1),
+                               radius=12, fill=(0, 0, 0, 0), outline=None, width=0)
+
+        draw.text((padding - text_x_offset, padding - text_y_offset),
+                  name_text, font=username_font, fill=(255, 255, 255, 255))
         return image
 
     def _process_frame_with_ui(self, pil_img):

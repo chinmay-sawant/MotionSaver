@@ -1,7 +1,6 @@
 import tkinter as tk
 import argparse
 import os
-# Update imports to use the new package structure
 from screensaver_app.video_player import VideoClockScreenSaver 
 from screensaver_app.PasswordConfig import verify_password_dialog_macos
 
@@ -23,7 +22,8 @@ def start_screensaver(video_path_override=None): # Modified to accept an optiona
     app = VideoClockScreenSaver(root, video_path_override) 
     
     def on_escape(event):
-        # verify_password_dialog_macos now returns True/False instead of a username
+        # Call the improved verify_password_dialog_macos function
+        # If the dialog is already open, this will close it
         success = verify_password_dialog_macos(root)
         if success: # If login successful
             app.close()
