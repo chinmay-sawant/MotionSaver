@@ -208,17 +208,20 @@ class MacOSStyleLogin:
         parent_width = self.parent.winfo_width()
         parent_height = self.parent.winfo_height()
 
-        # Position at bottom-center of the parent's screen area
+        # Position at center bottom of the parent's screen area
         pos_x = parent_x + (parent_width - pwd_width) // 2
-        pos_y = parent_y + parent_height - pwd_height - 20 # 20 pixels from the bottom
+        # Position at 95% down from the top (very close to bottom)
+        pos_y = parent_y + parent_height - pwd_height
 
-        # Ensure it doesn't go off-screen if parent is very small (unlikely for fullscreen)
-        # This basic check might need refinement if parent isn't truly fullscreen on a monitor.
-        if pos_y < parent_y: # If it would be above the parent's top
-            pos_y = parent_y + parent_height - pwd_height - 5 
+        # Ensure it doesn't go off-screen
+        if pos_y + pwd_height > parent_y + parent_height:
+            pos_y = parent_y + parent_height - pwd_height - 10  # 10px margin from bottom
+        if pos_y < parent_y:
+            pos_y = parent_y + 10  # 10px margin from top
         if pos_x < parent_x:
-            pos_x = parent_x + 5
-
+            pos_x = parent_x + 10  # 10px margin from left
+        if pos_x + pwd_width > parent_x + parent_width:
+            pos_x = parent_x + parent_width - pwd_width - 10  # 10px margin from right
 
         self.password_window.geometry(f"{pwd_width}x{pwd_height}+{pos_x}+{pos_y}")
         

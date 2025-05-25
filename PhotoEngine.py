@@ -11,12 +11,56 @@ WINDOWS_MULTI_MONITOR_SUPPORT = False
 hWinEventHook = None
 root_ref_for_hook = None # Global reference to the root window for the hook callback
 
+# Define missing Windows constants
+# From winuser.h: EVENT_SYSTEM_DISPLAYSETTINGSCHANGED = 0x000F
+EVENT_SYSTEM_DISPLAYSETTINGSCHANGED = 0x000F
+
 if platform.system() == "Windows":
     try:
         import win32api
         import win32con
         import win32gui
+        # Import additional Windows modules for event hooking
+        import win32event
+        from ctypes import windll, CFUNCTYPE, c_int, c_uint, c_void_p, POINTER, Structure
+        
+        # Flag for multi-monitor support
         WINDOWS_MULTI_MONITOR_SUPPORT = True
+        
+        # Define the WinEventProc callback function type
+        # WINEVENTPROC callback function prototype
+        WinEventProcType = CFUNCTYPE(
+            None,               # return type: void
+            c_void_p,           # hWinEventHook
+            c_uint,             # event
+            c_void_p,           # hwnd
+            c_int,              # idObject
+            c_int,              # idChild
+            c_uint,             # dwEventThread
+            c_uint              # dwmsEventTime
+        )
+        
+        # Define SetWinEventHook function prototype
+        user32 = windll.user32
+        user32.SetWinEventHook.argtypes = [
+            c_uint,             # eventMin
+            c_uint,             # eventMax
+            c_void_p,           # hmodWinEventProc
+            WinEventProcType,   # lpfnWinEventProc
+            c_uint,             # idProcess
+            c_uint,             # idThread
+            c_uint              # dwFlags
+        ]
+        user32.SetWinEventHook.restype = c_void_p
+        
+        # Define UnhookWinEvent function prototype
+        user32.UnhookWinEvent.argtypes = [c_void_p]  # hWinEventHook
+        user32.UnhookWinEvent.restype = c_int        # BOOL
+        
+        # Use the properly defined functions
+        SetWinEventHook = user32.SetWinEventHook
+        UnhookWinEvent = user32.UnhookWinEvent
+        
     except ImportError:
         print("pywin32 not installed, multi-monitor features and dynamic updates will be limited.")
 else:
@@ -82,17 +126,20 @@ def update_secondary_monitor_blackouts(main_tk_window):
         if old_win.winfo_exists():
             old_win.destroy()
 
+# Store the callback as a global to prevent garbage collection
+callback_ref = None
+
 def WinEventProcCallback(hWinEventHook, event, hwnd, idObject, idChild, dwEventThread, dwmsEventTime):
     """Callback for Windows display change events."""
     global root_ref_for_hook
-    if event == win32con.EVENT_SYSTEM_DISPLAYSETTINGSCHANGED:
+    if event == EVENT_SYSTEM_DISPLAYSETTINGSCHANGED:  # Using our defined constant instead of win32con
         if root_ref_for_hook and root_ref_for_hook.winfo_exists():
             # Schedule the update on the main Tkinter thread
             root_ref_for_hook.after(50, lambda: update_secondary_monitor_blackouts(root_ref_for_hook)) # Small delay
 
 def start_screensaver(video_path_override=None): 
     """Launch the full-screen screen saver directly"""
-    global secondary_screen_windows, hWinEventHook, root_ref_for_hook
+    global secondary_screen_windows, hWinEventHook, root_ref_for_hook, callback_ref
     secondary_screen_windows = [] 
     hWinEventHook = None
     
@@ -108,21 +155,25 @@ def start_screensaver(video_path_override=None):
     if WINDOWS_MULTI_MONITOR_SUPPORT:
         root.after(200, lambda: update_secondary_monitor_blackouts(root))
         
-        # Set up the Windows event hook for display changes
+        # Set up the Windows event hook for display changes using ctypes directly
         try:
-            hWinEventHook = win32gui.SetWinEventHook(
-                win32con.EVENT_SYSTEM_DISPLAYSETTINGSCHANGED, # Event Min
-                win32con.EVENT_SYSTEM_DISPLAYSETTINGSCHANGED, # Event Max
-                0, # hmodWinEventProc (must be 0 for WINEVENT_OUTOFCONTEXT)
-                WinEventProcCallback, # The callback function
-                0, # idProcess (0 for all processes)
-                0, # idThread (0 for all threads)
+            # Convert Python callback to C callback
+            callback_ref = WinEventProcType(WinEventProcCallback)
+            
+            hWinEventHook = SetWinEventHook(
+                EVENT_SYSTEM_DISPLAYSETTINGSCHANGED, # Event Min - using our defined constant
+                EVENT_SYSTEM_DISPLAYSETTINGSCHANGED, # Event Max - using our defined constant
+                0, # hmodWinEventProc
+                callback_ref, # Callback function
+                0, # idProcess
+                0, # idThread
                 win32con.WINEVENT_OUTOFCONTEXT | win32con.WINEVENT_SKIPOWNPROCESS
             )
+            if not hWinEventHook:
+                print("Failed to set event hook")
         except Exception as e:
             print(f"Error setting up display change event hook: {e}")
             hWinEventHook = None
-
 
     app = VideoClockScreenSaver(root, video_path_override) 
     
@@ -134,7 +185,7 @@ def start_screensaver(video_path_override=None):
             
             if hWinEventHook: # Unhook before destroying windows
                 try:
-                    win32gui.UnhookWinEvent(hWinEventHook)
+                    UnhookWinEvent(hWinEventHook)  # Use ctypes function
                 except Exception as e_unhook:
                     print(f"Error unhooking display event: {e_unhook}")
                 hWinEventHook = None
@@ -147,18 +198,29 @@ def start_screensaver(video_path_override=None):
             if root.winfo_exists():
                 root.destroy()
         else:
-            if root.winfo_exists():
-                root.focus_set() 
+            try:
+                if root and root.winfo_exists():
+                    root.focus_set()
+            except tk.TclError:
+                print("Root window already destroyed.")
             print("Login cancelled or failed.")
     
+    # Bind multiple keys and mouse click to trigger password prompt
     root.bind("<Escape>", on_escape)
+    root.bind("<Return>", on_escape)  # Enter key
+    root.bind("<KP_Enter>", on_escape)  # Numpad Enter key
+    root.bind("<space>", on_escape)  # Spacebar
+    root.bind("<Button-1>", on_escape)  # Left mouse click
+    
+    # Make sure the root window can receive focus for key events
+    root.focus_set()
     
     # Ensure hook is unhooked if window is closed by other means (though less likely for fullscreen)
     def on_closing_main_window():
         global hWinEventHook, root_ref_for_hook
         if hWinEventHook:
             try:
-                win32gui.UnhookWinEvent(hWinEventHook)
+                UnhookWinEvent(hWinEventHook)  # Use ctypes function
             except Exception as e_unhook:
                 print(f"Error unhooking display event on close: {e_unhook}")
             hWinEventHook = None
