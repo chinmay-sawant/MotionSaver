@@ -68,7 +68,7 @@ class MediaWidget:
         """Initialize widget content in separate thread"""
         try:
             # Longer delay to ensure video is fully stable
-            time.sleep(1.0)
+            time.sleep(0.1) # Reduced delay
             
             # Schedule UI creation on main thread
             self.parent_root.after(0, self._create_widget_ui)
@@ -95,7 +95,7 @@ class MediaWidget:
     def _start_detection_async(self):
         """Start media detection in completely separate thread""" # Renamed
         try:
-            time.sleep(3.0)
+            time.sleep(0.2) # Reduced delay, slightly more than UI init
             self.start_media_detection() # Renamed
         except Exception as e:
             print(f"Error starting media detection: {e}")
