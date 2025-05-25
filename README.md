@@ -96,3 +96,6 @@ d:\Chinmay_Personal_Projects\ScreenSaver\
     ├── default_video.mp4     # Default background video
     └── default_profile.png   # Default profile image
 ```
+
+## Demo
+[Watch the Demo](screenshots/demo.mp4)
