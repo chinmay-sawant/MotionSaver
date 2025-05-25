@@ -571,15 +571,8 @@ class ScreenSaverApp:
             filetypes=[("Image files", "*.png *.jpg *.jpeg *.gif *.bmp"), ("All files", "*.*")]
         )
         if filepath:
-            # Store relative path if possible, or absolute if on different drive
-            try:
-                rel_path = os.path.relpath(filepath, PROJECT_ROOT)
-                if ".." not in rel_path: # Check if it's within project or its subdirs
-                    self.profile_pic_path_var.set(rel_path)
-                else: # Different drive or far outside project
-                    self.profile_pic_path_var.set(filepath)
-            except ValueError: # Paths are on different drives (Windows)
-                 self.profile_pic_path_var.set(filepath)
+            # Always store the absolute path
+            self.profile_pic_path_var.set(os.path.abspath(filepath))
 
 
     def crop_profile_pic(self):
@@ -629,14 +622,8 @@ class ScreenSaverApp:
             filetypes=[("Video files", "*.mp4 *.avi *.mkv"), ("All files", "*.*")]
         )
         if filepath:
-            try:
-                rel_path = os.path.relpath(filepath, PROJECT_ROOT)
-                if ".." not in rel_path:
-                    self.video_path_var.set(rel_path)
-                else:
-                    self.video_path_var.set(filepath)
-            except ValueError:
-                 self.video_path_var.set(filepath)
+            # Always store the absolute path
+            self.video_path_var.set(os.path.abspath(filepath))
 
     def update_service_status(self):
         """Update service status display"""
