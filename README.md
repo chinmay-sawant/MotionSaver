@@ -1,4 +1,4 @@
-# Video Screen Saver Project
+# Motion Saver Project
 
 ## My Inspiration
 
