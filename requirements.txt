@@ -7,3 +7,8 @@ screeninfo>=0.8
 
 # Optional dependencies
 matplotlib>=3.5.0  # For advanced UI elements
+
+pygame>=2.0.0
+mutagen>=1.45.0
+winsdk>=1.0.0b9
+pywin32>=300
