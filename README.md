@@ -1,4 +1,4 @@
-# VideoClockScreenSaver
+# MotionSaver
 
 A modern, customizable screensaver that displays a video background with an elegant overlay showing the current time, user profile, and username.
 
