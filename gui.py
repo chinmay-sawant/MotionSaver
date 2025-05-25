@@ -12,16 +12,19 @@ import win32serviceutil
 # This will work when gui.py is imported as part of the package
 # For direct execution, sys.path needs adjustment (see if __name__ == '__main__')
 try:
-    from screensaver_app.PasswordConfig import load_config, save_config, change_password
+    from screensaver_app.PasswordConfig import load_config, save_config, change_password, add_user, delete_user
 except ImportError:
     # Fallback for direct script execution (no parent package)
-    import sys
-    import os
+    # import sys # sys already imported
+    # import os # os already imported
     sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), 'screensaver_app')))
-    from screensaver_app.PasswordConfig import load_config, save_config, change_password
+    from screensaver_app.PasswordConfig import load_config, save_config, change_password, add_user, delete_user
 
 # Define paths relative to this file's location if needed, or use absolute paths
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+# Define icons path
+ICONS_DIR = os.path.join(os.path.dirname(__file__), 'screensaver_app', 'icons')
+
 # USER_CONFIG_PATH is now implicitly handled by load_config/save_config
 
 class CroppingWindow(tk.Toplevel):
@@ -136,7 +139,8 @@ class ScreenSaverApp:
     def __init__(self, master):
         self.master = master
         master.title("Screen Saver Settings")
-        
+        master.state('zoomed') # Open maximized
+
         self.config = load_config()
         self.current_theme = tk.StringVar(value=self.config.get("theme", "light"))
         self.selected_clock_font_family = tk.StringVar(value=self.config.get("clock_font_family", "Segoe UI Emoji"))
@@ -155,14 +159,41 @@ class ScreenSaverApp:
 
         self.setup_styles()
        
+        # Load icons
+        self.add_user_icon = None
+        self.change_password_icon = None
+        self.copilot_icon = None # For footer
+        try:
+            add_icon_path = os.path.join(ICONS_DIR, "add_user_icon.png")
+            if os.path.exists(add_icon_path):
+                self.add_user_icon = ImageTk.PhotoImage(Image.open(add_icon_path).resize((20, 20), Image.Resampling.LANCZOS))
+            
+            change_pwd_icon_path = os.path.join(ICONS_DIR, "change_password_icon.png")
+            if os.path.exists(change_pwd_icon_path):
+                self.change_password_icon = ImageTk.PhotoImage(Image.open(change_pwd_icon_path).resize((20, 20), Image.Resampling.LANCZOS))
+            
+            copilot_icon_path = os.path.join(ICONS_DIR, "copilot.png") # Copilot icon
+            if os.path.exists(copilot_icon_path):
+                self.copilot_icon = ImageTk.PhotoImage(Image.open(copilot_icon_path).resize((20, 20), Image.Resampling.LANCZOS))
+        except Exception as e:
+            print(f"Error loading icons: {e}")
+
 
         # --- Main Frame ---
         main_frame = ttk.Frame(master, padding="10")
         main_frame.pack(fill=tk.BOTH, expand=True)
+        
+        # Configure grid columns for main_frame to have 2 expanding columns
+        main_frame.columnconfigure(0, weight=1)
+        main_frame.columnconfigure(1, weight=1)
+        
+        current_row = 0
+        current_col = 0
 
         # --- Profile Picture ---
         pic_frame = ttk.LabelFrame(main_frame, text="Profile Picture", padding="10")
-        pic_frame.pack(fill=tk.X, pady=5)
+        pic_frame.grid(row=current_row, column=current_col, padx=5, pady=5, sticky="nsew")
+        current_col += 1
 
         self.profile_pic_path_var = tk.StringVar(value=self.config.get("profile_pic_path", ""))
         self.profile_pic_path_crop_var = tk.StringVar(value=self.config.get("profile_pic_path_crop", ""))
@@ -175,168 +206,265 @@ class ScreenSaverApp:
         self.profile_pic_entry.grid(row=0, column=1, padx=5, pady=5, sticky=tk.EW)
         ttk.Button(pic_frame, text="Browse...", command=self.browse_profile_pic).grid(row=0, column=2, padx=5, pady=5)
         ttk.Button(pic_frame, text="Crop Image", command=self.crop_profile_pic).grid(row=0, column=3, padx=5, pady=5)
-        
+        pic_frame.columnconfigure(1, weight=1)
+
+
         # --- Video Path ---
         video_frame = ttk.LabelFrame(main_frame, text="Screen Saver Video", padding="10")
-        video_frame.pack(fill=tk.X, pady=5)
+        video_frame.grid(row=current_row, column=current_col, padx=5, pady=5, sticky="nsew")
+        current_col = 0 # Reset column
+        current_row += 1 # Move to next row
 
         self.video_path_var = tk.StringVar(value=self.config.get("video_path", "video.mp4"))
         ttk.Label(video_frame, text="Path:").grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)
         self.video_path_entry = ttk.Entry(video_frame, textvariable=self.video_path_var, width=40)
         self.video_path_entry.grid(row=0, column=1, padx=5, pady=5, sticky=tk.EW)
         ttk.Button(video_frame, text="Browse...", command=self.browse_video).grid(row=0, column=2, padx=5, pady=5)
+        video_frame.columnconfigure(1, weight=1)
 
         # --- Clock Font Settings ---
         font_frame = ttk.LabelFrame(main_frame, text="Clock Appearance", padding="10")
-        font_frame.pack(fill=tk.X, pady=5)
+        font_frame.grid(row=current_row, column=current_col, padx=5, pady=5, sticky="nsew")
+        current_col += 1
 
         ttk.Label(font_frame, text="Font Family:").grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)
-        self.font_families = sorted(list(tkfont.families(root=self.master))) # Pass root to families()
+        self.font_families = sorted(list(tkfont.families(root=self.master))) 
         self.font_combo = ttk.Combobox(font_frame, textvariable=self.selected_clock_font_family, values=self.font_families, width=37, state="readonly")
         self.font_combo.grid(row=0, column=1, padx=5, pady=5, sticky=tk.EW)
-        
-        # Create a custom style just for this combobox to ensure dark mode works
         self.style.configure('FontCombo.TCombobox', background="#222222", foreground="#FFFFFF", fieldbackground="#222222", selectbackground="#222222")
         self.font_combo.configure(style='FontCombo.TCombobox')
-        
         current_font_in_list = self.selected_clock_font_family.get()
         if current_font_in_list in self.font_families:
             self.font_combo.set(current_font_in_list)
         elif self.font_families: 
             self.font_combo.current(0) 
             self.selected_clock_font_family.set(self.font_combo.get())
-        else: # No fonts found
-            self.selected_clock_font_family.set("Default") # Placeholder if no fonts
-        
-        # Add font preview label
+        else: 
+            self.selected_clock_font_family.set("Default") 
         self.font_preview_label = ttk.Label(font_frame, text="Preview Text", font=(self.selected_clock_font_family.get(), 12))
         self.font_preview_label.grid(row=0, column=2, padx=5, pady=5, sticky=tk.W)
-        
-        # Bind combobox selection to update preview
         self.font_combo.bind("<<ComboboxSelected>>", self.update_font_preview)
-
-        # Enable keyboard navigation for font_combo
         self.font_combo.bind("<Up>", lambda e: self._combo_nav(self.font_combo, -1) or "break")
         self.font_combo.bind("<Down>", lambda e: self._combo_nav(self.font_combo, 1) or "break")
         self.font_combo.bind("<Key>", lambda e: self._combo_typeahead(self.font_combo, e))
-
         ttk.Label(font_frame, text="Font Size:").grid(row=1, column=0, padx=5, pady=5, sticky=tk.W)
         self.font_size_spinbox = ttk.Spinbox(font_frame, from_=10, to=200, increment=2, textvariable=self.selected_clock_font_size, width=5)
         self.font_size_spinbox.grid(row=1, column=1, padx=5, pady=5, sticky=tk.W)
-        
         font_frame.columnconfigure(1, weight=1)
-        
+
+
         # --- UI Font Settings ---
         ui_font_frame = ttk.LabelFrame(main_frame, text="UI Appearance", padding="10")
-        ui_font_frame.pack(fill=tk.X, pady=5)
+        ui_font_frame.grid(row=current_row, column=current_col, padx=5, pady=5, sticky="nsew")
+        current_col = 0
+        current_row += 1
 
         ttk.Label(ui_font_frame, text="Font Family:").grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)
-        self.ui_font_families = sorted(list(tkfont.families(root=self.master))) # Pass root to families()
+        self.ui_font_families = sorted(list(tkfont.families(root=self.master))) 
         self.ui_font_combo = ttk.Combobox(ui_font_frame, textvariable=self.selected_ui_font_family, values=self.ui_font_families, width=37, state="readonly")
         self.ui_font_combo.grid(row=0, column=1, padx=5, pady=5, sticky=tk.EW)
-        
-        # Create a custom style just for this combobox to ensure dark mode works
         self.style.configure('UIFontCombo.TCombobox', background="#222222", foreground="#FFFFFF", fieldbackground="#222222", selectbackground="#222222")
         self.ui_font_combo.configure(style='UIFontCombo.TCombobox')
-        
         current_ui_font_in_list = self.selected_ui_font_family.get()
         if current_ui_font_in_list in self.ui_font_families:
             self.ui_font_combo.set(current_ui_font_in_list)
         elif self.ui_font_families: 
             self.ui_font_combo.current(0) 
             self.selected_ui_font_family.set(self.ui_font_combo.get())
-        else: # No fonts found
-            self.selected_ui_font_family.set("Default") # Placeholder if no fonts
-        
-        # Add font preview label
+        else: 
+            self.selected_ui_font_family.set("Default") 
         self.ui_font_preview_label = ttk.Label(ui_font_frame, text="Preview Text", font=(self.selected_ui_font_family.get(), 12))
         self.ui_font_preview_label.grid(row=0, column=2, padx=5, pady=5, sticky=tk.W)
-        
-        # Bind combobox selection to update preview
         self.ui_font_combo.bind("<<ComboboxSelected>>", self.update_ui_font_preview)
-
-        # Enable keyboard navigation for ui_font_combo
         self.ui_font_combo.bind("<Up>", lambda e: self._combo_nav(self.ui_font_combo, -1) or "break")
         self.ui_font_combo.bind("<Down>", lambda e: self._combo_nav(self.ui_font_combo, 1) or "break")
         self.ui_font_combo.bind("<Key>", lambda e: self._combo_typeahead(self.ui_font_combo, e))
-
         ttk.Label(ui_font_frame, text="Font Size:").grid(row=1, column=0, padx=5, pady=5, sticky=tk.W)
         self.ui_font_size_spinbox = ttk.Spinbox(ui_font_frame, from_=10, to=200, increment=2, textvariable=self.selected_ui_font_size, width=5)
         self.ui_font_size_spinbox.grid(row=1, column=1, padx=5, pady=5, sticky=tk.W)
-        
         ui_font_frame.columnconfigure(1, weight=1)
-        
+
         # --- Theme Toggle ---
         theme_frame = ttk.LabelFrame(main_frame, text="Appearance", padding="10")
-        theme_frame.pack(fill=tk.X, pady=5)
+        theme_frame.grid(row=current_row, column=current_col, padx=5, pady=5, sticky="nsew")
+        current_col += 1
         self.theme_toggle_button = ttk.Checkbutton(
             theme_frame, text="Dark Mode", variable=self.current_theme,
             onvalue="dark", offvalue="light", command=self.toggle_theme
         )
-        self.theme_toggle_button.pack(anchor=tk.W, padx=5, pady=5)
-        
+        self.theme_toggle_button.pack(anchor=tk.W, padx=5, pady=5) # pack is fine for simple content
+
         # --- Timer Configuration ---
         timer_frame = ttk.LabelFrame(main_frame, text="Screensaver Timer", padding="10")
-        timer_frame.pack(fill=tk.X, pady=5)
-
+        timer_frame.grid(row=current_row, column=current_col, padx=5, pady=5, sticky="nsew")
+        current_col = 0
+        current_row += 1
         ttk.Label(timer_frame, text="Start after (minutes):").grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)
         self.timer_spinbox = ttk.Spinbox(timer_frame, from_=1, to=120, increment=1, textvariable=self.screensaver_timer, width=10)
         self.timer_spinbox.grid(row=0, column=1, padx=5, pady=5, sticky=tk.W)
 
         # --- Service Management ---
         service_frame = ttk.LabelFrame(main_frame, text="Windows Service", padding="10")
-        service_frame.pack(fill=tk.X, pady=5)
-
+        service_frame.grid(row=current_row, column=current_col, padx=5, pady=5, sticky="nsew")
+        current_col += 1
         self.service_status_label = ttk.Label(service_frame, text="Service Status: Unknown")
-        self.service_status_label.grid(row=0, column=0, columnspan=3, padx=5, pady=5, sticky=tk.W)
-
+        self.service_status_label.grid(row=0, column=0, columnspan=4, padx=5, pady=5, sticky=tk.W) # Adjusted columnspan
         ttk.Button(service_frame, text="Install Service", command=self.install_service).grid(row=1, column=0, padx=5, pady=5)
         ttk.Button(service_frame, text="Start Service", command=self.start_service).grid(row=1, column=1, padx=5, pady=5)
         ttk.Button(service_frame, text="Stop Service", command=self.stop_service).grid(row=1, column=2, padx=5, pady=5)
-        ttk.Button(service_frame, text="Uninstall Service", command=self.uninstall_service).grid(row=2, column=0, padx=5, pady=5)
+        ttk.Button(service_frame, text="Uninstall Service", command=self.uninstall_service).grid(row=1, column=3, padx=5, pady=5) # Moved to col 3
+
 
         # --- Widget Configuration ---
         widget_frame = ttk.LabelFrame(main_frame, text="Widgets", padding="10")
-        widget_frame.pack(fill=tk.X, pady=5)
-
-        # Stock widget
+        widget_frame.grid(row=current_row, column=current_col, padx=5, pady=5, sticky="nsew")
+        current_col = 0
+        current_row += 1
         self.stock_check = ttk.Checkbutton(
             widget_frame, 
             text="Enable Stock Market Widget", 
             variable=self.enable_stock_widget
         )
         self.stock_check.grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)
-
         ttk.Label(widget_frame, text="Market:").grid(row=0, column=1, padx=5, pady=5, sticky=tk.W)
         self.stock_market_combo = ttk.Combobox(
             widget_frame, 
             textvariable=self.stock_market,
-            values=["NASDAQ", "NYSE", "CRYPTO"],
+            values=["NASDAQ", "NYSE", "CRYPTO", "NSE"], 
             state="readonly",
-            width=15
+            width=15,
+            style="StockMarketCombo.TCombobox" # Assign a specific style
         )
         self.stock_market_combo.grid(row=0, column=2, padx=5, pady=5)
-
-        # Media widget
         self.media_check = ttk.Checkbutton(
             widget_frame, 
             text="Enable Media Player Widget", 
             variable=self.enable_media_widget
         )
-        self.media_check.grid(row=1, column=0, padx=5, pady=5, sticky=tk.W)
+        self.media_check.grid(row=1, column=0, columnspan=3, padx=5, pady=5, sticky=tk.W) # Span for better layout
+
+        # --- User Management ---
+        user_mgmt_frame = ttk.LabelFrame(main_frame, text="User Management", padding="10")
+        # Make User Management span both columns for more space
+        user_mgmt_frame.grid(row=current_row, column=0, columnspan=2, padx=5, pady=5, sticky="nsew")
+        current_row += 1 # current_row is now the row *after* user_mgmt_frame
+        # current_col is implicitly 0 after a columnspan
+
+        self.user_tree = ttk.Treeview(user_mgmt_frame, columns=("username",), show="headings", height=3)
+        self.user_tree.heading("username", text="Username")
+        self.user_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5, pady=5) # pack is fine here
+        
+        user_actions_frame = ttk.Frame(user_mgmt_frame)
+        user_actions_frame.pack(side=tk.LEFT, padx=5, fill=tk.Y) # pack is fine here
+
+        add_user_btn = ttk.Button(user_actions_frame, text="Add", image=self.add_user_icon, compound=tk.LEFT, command=self.add_user_dialog)
+        add_user_btn.pack(fill=tk.X, pady=3, ipady=2) 
+        
+        change_pwd_btn = ttk.Button(user_actions_frame, text="Password", image=self.change_password_icon, compound=tk.LEFT, command=self.change_password_dialog)
+        change_pwd_btn.pack(fill=tk.X, pady=3, ipady=2)
+
+        delete_user_btn = ttk.Button(user_actions_frame, text="Delete User", command=self.delete_user_dialog) 
+        delete_user_btn.pack(fill=tk.X, pady=3, ipady=2)
+        
+        self.load_users_to_tree()
+
+        # --- Footer Label ---
+        # current_row is the first row available after user_mgmt_frame.
+        # Skip one row means placing the footer at current_row + 1.
+        footer_row = current_row + 1 
+        
+        footer_outer_frame = ttk.Frame(main_frame) # Frame to help with centering
+        footer_outer_frame.grid(row=footer_row, column=0, columnspan=2, pady=(10,0)) # pady top for "skip row" effect
+
+        self.footer_label = ttk.Label(
+            footer_outer_frame, 
+            text="Made In India With \u2665 Using GitHub Copilot", 
+            image=self.copilot_icon, 
+            compound=tk.RIGHT # Icon to the right of text
+        )
+        self.footer_label.pack() # Pack will center it in the footer_outer_frame
 
         # --- Save Button ---
+        save_button_row = footer_row + 1
         save_button = ttk.Button(main_frame, text="Save Settings", command=self.save_settings)
-        save_button.pack(pady=20)
+        save_button.grid(row=save_button_row, column=0, columnspan=2, pady=20, sticky="s") 
+        main_frame.rowconfigure(save_button_row, weight=1) # Allow space below last content to push save button down
 
-        # Configure grid column weights for resizing
-        pic_frame.columnconfigure(1, weight=1)
-        video_frame.columnconfigure(1, weight=1)
         
-        master.minsize(450, 400)
+        # Configure grid column weights for resizing (already done for main_frame)
+        # For individual LabelFrames, internal column weights are set where needed.
+        
+        master.minsize(600, 700) # Adjusted minsize for better grid layout view
         self.apply_theme()
 
         self.update_service_status()
+
+    def load_users_to_tree(self):
+        for i in self.user_tree.get_children():
+            self.user_tree.delete(i)
+        
+        self.config = load_config() # Reload config
+        users = self.config.get("users", [])
+        for user in users:
+            self.user_tree.insert("", tk.END, values=(user.get("username", "N/A"),))
+
+    def add_user_dialog(self):
+        dialog = AddUserDialog(self.master)
+        # Wait for the dialog to close. The dialog sets self.result before destroying itself.
+        self.master.wait_window(dialog) 
+        
+        if dialog.result: # Now dialog.result will have the value set by the dialog
+            username, password = dialog.result
+            # This is where PasswordConfig.add_user is called
+            success, message = add_user(username, password) 
+            if success:
+                messagebox.showinfo("Success", message)
+                self.load_users_to_tree()
+            else:
+                messagebox.showerror("Error", message)
+
+    def change_password_dialog(self):
+        selected_item = self.user_tree.focus()
+        if not selected_item:
+            messagebox.showwarning("Selection Required", "Please select a user from the table.")
+            return
+        
+        username = self.user_tree.item(selected_item)['values'][0]
+        dialog = ChangePasswordDialog(self.master, username)
+        if dialog.result:
+            old_password, new_password = dialog.result
+            success, message = self._handle_password_change(username, old_password, new_password)
+            if success:
+                messagebox.showinfo("Success", message)
+            else:
+                messagebox.showerror("Error", message)
+    
+    def _handle_password_change(self, username, old_password, new_password):
+        # This function calls the existing change_password from PasswordConfig
+        # It might need adjustment if admin privileges are introduced later
+        # For now, it assumes the user whose password is being changed provides their old password
+        return change_password(username, old_password, new_password)
+
+
+    def delete_user_dialog(self):
+        selected_item = self.user_tree.focus()
+        if not selected_item:
+            messagebox.showwarning("Selection Required", "Please select a user from the table.")
+            return
+        
+        username = self.user_tree.item(selected_item)['values'][0]
+        
+        if len(self.config.get("users", [])) <= 1:
+            messagebox.showerror("Error", "Cannot delete the last user.")
+            return
+
+        if messagebox.askyesno("Confirm Delete", f"Are you sure you want to delete user '{username}'?"):
+            success, message = delete_user(username)
+            if success:
+                messagebox.showinfo("Success", message)
+                self.load_users_to_tree() # Refresh user list
+            else:
+                messagebox.showerror("Error", message)
 
     def setup_styles(self):
         self.style = ttk.Style()
@@ -356,13 +484,12 @@ class ScreenSaverApp:
                        indicatorcolor=[('selected', '#007AFF'), ('!selected', '#555555')],
                        background=[('active', '#444444')])  
 
-
     def apply_theme(self):
         theme = self.current_theme.get()
         if theme == "dark":
             self.master.configure(bg="#333333")
             self.style.configure(".", background="#333333", foreground="#FFFFFF") # Global
-            for widget_class in ["TFrame", "TLabel", "TButton", "TLabelFrame", "TCheckbutton"]:
+            for widget_class in ["TFrame", "TLabel", "TButton", "TLabelFrame", "TCheckbutton", "Treeview"]: # Added Treeview
                 self.style.configure(f"Dark.{widget_class}", background="#333333", foreground="#FFFFFF")
             
             # Configure ttk widget styles for dark mode
@@ -383,9 +510,9 @@ class ScreenSaverApp:
             self.style.configure('TLabelframe.Label', background='#333333', foreground='#FFFFFF')
             
             # Explicitly define and apply dark style for both comboboxes
-            for style_name in ['FontCombo.TCombobox', 'UIFontCombo.TCombobox']:
+            for style_name in ['FontCombo.TCombobox', 'UIFontCombo.TCombobox', 'StockMarketCombo.TCombobox']: # Added StockMarketCombo
                 self.style.configure(style_name, 
-                                    fieldbackground="#222222",
+                                    fieldbackground="#222222", # This matches TSpinbox fieldbackground
                                     background="#222222", 
                                     foreground="#FFFFFF", 
                                     arrowcolor="#FFFFFF",
@@ -398,8 +525,21 @@ class ScreenSaverApp:
             try:
                 self.font_combo.configure(style='FontCombo.TCombobox')
                 self.ui_font_combo.configure(style='UIFontCombo.TCombobox')
+                self.stock_market_combo.configure(style='StockMarketCombo.TCombobox') # Apply the style
             except Exception:
                 pass
+
+            # Treeview specific styles
+            self.style.configure("Treeview.Heading", background="#444444", foreground="#FFFFFF", relief="flat")
+            self.style.map("Treeview.Heading", background=[('active', '#555555')])
+            self.style.configure("Treeview", 
+                                 background="#2C2C2C", 
+                                 fieldbackground="#2C2C2C", 
+                                 foreground="#FFFFFF")
+            self.style.map('Treeview',
+                           background=[('selected', '#0078D7')], 
+                           foreground=[('selected', '#FFFFFF')])
+
 
             self._set_entry_dark(self.master)
             self._set_combobox_dark(self.master)
@@ -421,13 +561,13 @@ class ScreenSaverApp:
             self.master.configure(bg=self.style.lookup('TFrame', 'background')) 
             self.style.configure(".", background=self.style.lookup('TFrame', 'background'), 
                                       foreground=self.style.lookup('TLabel', 'foreground')) 
-            for widget_class in ["TFrame", "TLabel", "TButton", "TEntry", "TLabelFrame", "TCheckbutton", "TCombobox", "TSpinbox"]:
+            for widget_class in ["TFrame", "TLabel", "TButton", "TEntry", "TLabelFrame", "TCheckbutton", "TCombobox", "TSpinbox", "Treeview"]: # Added Treeview
                 self.style.configure(f"{widget_class}")
             
             # Reset the custom style in light mode for both comboboxes
-            for style_name in ['FontCombo.TCombobox', 'UIFontCombo.TCombobox']:
+            for style_name in ['FontCombo.TCombobox', 'UIFontCombo.TCombobox', 'StockMarketCombo.TCombobox']: # Added StockMarketCombo
                 self.style.configure(style_name, 
-                                    fieldbackground="#FFFFFF",
+                                    fieldbackground="#FFFFFF", # This matches TSpinbox fieldbackground
                                     background="#FFFFFF", 
                                     foreground="#000000",
                                     arrowcolor="#000000",
@@ -440,6 +580,7 @@ class ScreenSaverApp:
             try:
                 self.font_combo.configure(style='FontCombo.TCombobox')
                 self.ui_font_combo.configure(style='UIFontCombo.TCombobox')
+                self.stock_market_combo.configure(style='StockMarketCombo.TCombobox') # Apply the style
             except Exception:
                 pass
 
@@ -459,8 +600,21 @@ class ScreenSaverApp:
 
             self.style.configure('TLabelframe.Label', 
                                  background=self.style.lookup('TLabelFrame', 'background'), 
-                                 foreground=self.style.lookup('TLabelFrame.Label', 'foreground'))
+                                 foreground=self.style.lookup('TLabelFrame', 'foreground'))
             
+            self.style.configure("Treeview.Heading", 
+                                 background=self.style.lookup('TButton', 'background'), 
+                                 foreground=self.style.lookup('TButton', 'foreground'), 
+                                 relief="flat") # Or system default
+            self.style.map("Treeview.Heading", background=[('active', self.style.lookup('TButton', 'activebackground'))])
+            self.style.configure("Treeview", 
+                                 background=self.style.lookup('TEntry', 'fieldbackground'), 
+                                 fieldbackground=self.style.lookup('TEntry', 'fieldbackground'), 
+                                 foreground=self.style.lookup('TEntry', 'foreground'))
+            self.style.map('Treeview',
+                           background=[('selected', self.style.lookup('Listbox', 'selectbackground'))],
+                           foreground=[('selected', self.style.lookup('Listbox', 'selectforeground'))])
+
             self._set_entry_light(self.master)
             self._set_combobox_light(self.master)
             self._set_spinbox_light(self.master)
@@ -812,13 +966,126 @@ class ScreenSaverApp:
         
         return "break"
 
-if __name__ == '__main__':
+class AddUserDialog(tk.Toplevel):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.title("Add New User")
+        self.parent = parent
+        self.result = None
+
+        self.geometry("300x120") # Adjusted size
+        self.resizable(False, False)
+        self.transient(parent) # Keep on top of parent
+        self.grab_set() # Modal
+
+        main_frame = ttk.Frame(self, padding="10")
+        main_frame.pack(fill=tk.BOTH, expand=True)
+
+        ttk.Label(main_frame, text="Username:").grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)
+        self.username_entry = ttk.Entry(main_frame, width=30)
+        self.username_entry.grid(row=0, column=1, padx=5, pady=5)
+
+        ttk.Label(main_frame, text="Password:").grid(row=1, column=0, padx=5, pady=5, sticky=tk.W)
+        self.password_entry = ttk.Entry(main_frame, show="*", width=30)
+        self.password_entry.grid(row=1, column=1, padx=5, pady=5)
+
+        # Removed Confirm Password field
+        
+        button_frame = ttk.Frame(main_frame)
+        button_frame.grid(row=2, column=0, columnspan=2, pady=10) # Adjusted row
+        
+        ttk.Button(button_frame, text="Add User", command=self.on_add).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="Cancel", command=self.on_cancel).pack(side=tk.LEFT, padx=5)
+        
+        self.username_entry.focus_set()
+        self.bind("<Return>", lambda e: self.on_add())
+        self.bind("<Escape>", lambda e: self.on_cancel())
+
+    def on_add(self):
+        username = self.username_entry.get().strip()
+        password = self.password_entry.get()
+        # Removed confirm_password
+
+        if not username or not password:
+            messagebox.showerror("Input Error", "Username and password cannot be empty.", parent=self)
+            return
+        # Removed password match check
+        
+        self.result = (username, password)
+        self.destroy()
+
+    def on_cancel(self):
+        self.result = None
+        self.destroy()
+
+class ChangePasswordDialog(tk.Toplevel):
+    def __init__(self, parent, username):
+        super().__init__(parent)
+        self.title(f"Change Password for {username}")
+        self.parent = parent
+        self.username = username
+        self.result = None
+
+        self.geometry("350x150") # Adjusted size
+        self.resizable(False, False)
+        self.transient(parent)
+        self.grab_set()
+
+        main_frame = ttk.Frame(self, padding="10")
+        main_frame.pack(fill=tk.BOTH, expand=True)
+
+        ttk.Label(main_frame, text=f"Changing password for: {username}").grid(row=0, column=0, columnspan=2, padx=5, pady=5, sticky=tk.W)
+
+        ttk.Label(main_frame, text="Old Password:").grid(row=1, column=0, padx=5, pady=5, sticky=tk.W)
+        self.old_password_entry = ttk.Entry(main_frame, show="*", width=30)
+        self.old_password_entry.grid(row=1, column=1, padx=5, pady=5)
+
+        ttk.Label(main_frame, text="New Password:").grid(row=2, column=0, padx=5, pady=5, sticky=tk.W)
+        self.new_password_entry = ttk.Entry(main_frame, show="*", width=30)
+        self.new_password_entry.grid(row=2, column=1, padx=5, pady=5)
+
+        # Removed Confirm New Password field
+        
+        button_frame = ttk.Frame(main_frame)
+        button_frame.grid(row=3, column=0, columnspan=2, pady=10) # Adjusted row
+        
+        ttk.Button(button_frame, text="Change Password", command=self.on_change).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="Cancel", command=self.on_cancel).pack(side=tk.LEFT, padx=5)
+
+        self.old_password_entry.focus_set()
+        self.bind("<Return>", lambda e: self.on_change())
+        self.bind("<Escape>", lambda e: self.on_cancel())
+
+    def on_change(self):
+        old_password = self.old_password_entry.get()
+        new_password = self.new_password_entry.get()
+        # Removed confirm_new_password
+
+        if not old_password or not new_password: # Old password is required by current change_password logic
+            messagebox.showerror("Input Error", "All password fields are required.", parent=self)
+            return
+        # Removed new password match check
+        
+        self.result = (old_password, new_password)
+        self.destroy()
+
+    def on_cancel(self):
+        self.result = None
+        self.destroy()
+
+def main():
     # When running the script directly, adjust sys.path to find the package
     # Get the directory of the current script
     script_dir = os.path.dirname(os.path.abspath(__file__))
     # Add the script's directory to sys.path so relative imports work
-    sys.path.insert(0, script_dir)
+    # This might not be strictly necessary if PasswordConfig is correctly found via PYTHONPATH or package structure
+    # but good for robustness if gui.py is sometimes run directly.
+    if script_dir not in sys.path:
+        sys.path.insert(0, script_dir)
   
     root = tk.Tk()
     app = ScreenSaverApp(root)
     root.mainloop()
+
+if __name__ == '__main__':
+    main()

@@ -367,7 +367,17 @@ class MediaWidget:
                             data_reader.close()
                         stream_ref.close()
                     except Exception as e:
-                        print(f"Error getting thumbnail: {e}")
+                        pass
+                        # print(f"Error getting thumbnail: {e}")
+                        # TODO: Handle thumbnail errors more gracefully
+                        # Error getting thumbnail: a bytes-like object is required, not 'int'
+                        # Error getting thumbnail: a bytes-like object is required, not 'int'
+                        # - Log the error to a file or error reporting service
+                        # - Display a default thumbnail or placeholder image
+                        # - Implement retry logic with exponential backoff
+                        # - Consider using a different thumbnail extraction method
+                        #   (e.g., try different image formats or libraries)
+
                 
                 # Format the display title
                 display_title = title

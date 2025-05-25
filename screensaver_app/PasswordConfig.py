@@ -66,11 +66,33 @@ def save_config(config_data):
     try:
         # Ensure the config directory exists
         os.makedirs(CONFIG_FILE_DIR, exist_ok=True)
+        
+        # Attempt to write to the file
         with open(USER_CONFIG_FILE, 'w') as f:
             json.dump(config_data, f, indent=2)
+        
+        # Verify by trying to read it back (optional, but good for diagnostics)
+        # This step is more for confirming the write was successful immediately.
+        # If this fails, it might indicate a more subtle issue than just permissions.
+        try:
+            with open(USER_CONFIG_FILE, 'r') as f:
+                json.load(f)
+            # print(f"Successfully saved and verified config to {USER_CONFIG_FILE}") # Optional success log
+        except Exception as e_readback:
+            print(f"CRITICAL ERROR: Config saved to {USER_CONFIG_FILE}, but failed to read back immediately: {e_readback}")
+            print(f"This could indicate a problem with file corruption or very intermittent write issues.")
+            # Depending on severity, you might want to return False here or handle it.
+            # For now, we'll assume the primary write was okay if it didn't throw an exception.
+
         return True
+    except IOError as e_io:
+        print(f"IOError saving user config to {USER_CONFIG_FILE}: {e_io}")
+        print(f"Please check file permissions and path.")
+        return False
     except Exception as e:
-        print(f"Error saving user config: {e}")
+        print(f"Unexpected error saving user config to {USER_CONFIG_FILE}: {e}")
+        import traceback
+        traceback.print_exc()
         return False
 
 def verify_password(username_attempt, password_attempt):
@@ -104,6 +126,51 @@ def change_password(username_to_change, old_password, new_password):
     if user_found_and_changed:
         return save_config(config)
     return False
+
+def add_user(username, password):
+    """Add a new user."""
+    config = load_config()
+    users = config.get("users", [])
+    if any(u.get("username") == username for u in users):
+        return False, "Username already exists."
+    
+    new_hash = hashlib.sha256(password.encode()).hexdigest()
+    users.append({"username": username, "password_hash": new_hash})
+    config["users"] = users
+    
+    # If this is the first user being added after a potential empty list (e.g. manual config edit)
+    if len(users) == 1 and not config.get("default_user_for_display"):
+        config["default_user_for_display"] = username
+    print (f"Adding new user: {username}, default_user_for_display: {config.get('default_user_for_display')}")
+    if save_config(config):
+        return True, "User added successfully."
+    return False, "Failed to save configuration."
+
+def delete_user(username_to_delete):
+    """Delete a user."""
+    config = load_config()
+    users = config.get("users", [])
+    
+    if len(users) <= 1:
+        return False, "Cannot delete the last user."
+
+    user_found = any(u.get("username") == username_to_delete for u in users)
+    if not user_found:
+        return False, "User not found."
+
+    users = [user for user in users if user.get("username") != username_to_delete]
+    config["users"] = users
+    
+    # If the deleted user was the default user, set a new default
+    if config.get("default_user_for_display") == username_to_delete:
+        if users: # If there are remaining users
+            config["default_user_for_display"] = users[0].get("username")
+        else: # This case should be prevented by "Cannot delete the last user" check
+            config["default_user_for_display"] = "" 
+
+    if save_config(config):
+        return True, "User deleted successfully."
+    return False, "Failed to save configuration."
 
 def verify_password_hash(password, stored_hash):
     """Verify if the given password matches the stored hash."""

@@ -3,6 +3,7 @@ import argparse
 import os
 from screensaver_app.video_player import VideoClockScreenSaver 
 from screensaver_app.PasswordConfig import verify_password_dialog_macos
+import gui # Import the gui module
 
 def start_screensaver(video_path_override=None): # Modified to accept an optional override
     """Launch the full-screen screen saver directly"""
@@ -53,4 +54,12 @@ def main():
     start_screensaver(args.video)
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description='Video Clock Screen Saver')
+    parser.add_argument('--mode', choices=['saver', 'gui'], default='saver', help='Run mode: saver or gui')
+    parser.add_argument('--video', default=None, help='Path to video file (overrides config)')
+    args = parser.parse_args()
+
+    if args.mode == 'saver':
+        start_screensaver(args.video)
+    elif args.mode == 'gui':
+        gui.main() # Call the main function from the gui module
