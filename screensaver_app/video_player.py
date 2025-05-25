@@ -181,29 +181,51 @@ class FrameReaderThread(threading.Thread):
 
 def find_font_path(font_family):
     """Try to find the font file path for a given font family name."""
-    # Try to find the font in common system font directories
+    import glob
+
     font_dirs = []
     system = platform.system()
     if system == "Windows":
         font_dirs = [os.path.join(os.environ.get("WINDIR", "C:\\Windows"), "Fonts")]
+        # Also check user fonts directory (Windows 10+)
+        user_fonts = os.path.expandvars(r"%LOCALAPPDATA%\Microsoft\Windows\Fonts")
+        if os.path.isdir(user_fonts):
+            font_dirs.append(user_fonts)
     elif system == "Darwin":
         font_dirs = ["/System/Library/Fonts", "/Library/Fonts", os.path.expanduser("~/Library/Fonts")]
     else:  # Linux/Unix
         font_dirs = ["/usr/share/fonts", "/usr/local/share/fonts", os.path.expanduser("~/.fonts")]
 
     # Normalize font family for matching
-    normalized_family = font_family.replace(" ", "").lower()
+    normalized_family = font_family.replace(" ", "").replace("-", "").replace("_", "").lower()
 
-    # Try to find .ttf or .TTF file matching the font family
+    # Try to find .ttf or .otf file matching the font family (exact and partial match, case-insensitive)
     for font_dir in font_dirs:
         if not os.path.isdir(font_dir):
             continue
         for root, dirs, files in os.walk(font_dir):
             for file in files:
-                if file.lower().endswith(".ttf") or file.lower().endswith(".otf"):
-                    file_no_ext = os.path.splitext(file)[0].replace(" ", "").lower()
+                if file.lower().endswith((".ttf", ".otf")):
+                    file_no_ext = os.path.splitext(file)[0].replace(" ", "").replace("-", "").replace("_", "").lower()
+                    # Try exact match first (case-insensitive)
+                    if normalized_family == file_no_ext:
+                        return os.path.join(root, file)
+                    # Then try partial match
                     if normalized_family in file_no_ext:
                         return os.path.join(root, file)
+                    # Try matching with original font_family (for fonts with spaces/case)
+                    if font_family.lower() in file.lower():
+                        return os.path.join(root, file)
+    # Try glob for fonts with spaces or special chars in filename
+    for font_dir in font_dirs:
+        if not os.path.isdir(font_dir):
+            continue
+        for ext in ("*.ttf", "*.otf"):
+            for font_path in glob.glob(os.path.join(font_dir, ext)):
+                base = os.path.splitext(os.path.basename(font_path))[0]
+                base_norm = base.replace(" ", "").replace("-", "").replace("_", "").lower()
+                if normalized_family == base_norm or normalized_family in base_norm or font_family.lower() in base.lower():
+                    return font_path
     # Try to use tkinter's font actual() to get the font file (works on some systems)
     try:
         import tkinter.font as tkfont
