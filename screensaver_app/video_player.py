@@ -106,17 +106,18 @@ class FrameProcessorThread(threading.Thread):
             pass
 
 class FrameReaderThread(threading.Thread):
-    def __init__(self, video_path, frame_queue, target_fps):
+    def __init__(self, video_path, frame_queue, target_fps): # target_fps is the display target
         super().__init__(daemon=True)
         self.video_path = video_path
         self.frame_queue = frame_queue
-        self.target_fps = target_fps 
+        # self.target_fps = target_fps # Not directly used for reader's sleep timing
         self.cap = None
         self.running = False
-        self.frame_interval = 1.0 / self.target_fps
+        # self.frame_interval = 1.0 / self.target_fps # Not used for sleeping
         self.last_frame_time = 0
-        self.frame_skip_threshold = 1
+        self.frame_skip_threshold = 1 
         self.video_fps = None  # Store actual video FPS
+        self.actual_frame_interval = 1.0 / 30.0 # Default if video_fps is not found, ensure float
 
     def run(self):
         self.running = True
@@ -126,23 +127,19 @@ class FrameReaderThread(threading.Thread):
             self.running = False
             return
 
-        # Get actual video FPS to maintain proper playback speed
         self.video_fps = self.cap.get(cv2.CAP_PROP_FPS)
         if self.video_fps <= 0 or self.video_fps > 120:  # Fallback for invalid FPS
-            self.video_fps = 30
+            self.video_fps = 30.0 # Ensure float for division
         
-        print(f"Video FPS: {self.video_fps}, Target FPS: {self.target_fps}")
+        print(f"Video FPS: {self.video_fps:.2f}") # Display actual video FPS
         
-        # Use video's actual FPS for frame timing to maintain proper playback speed
         self.actual_frame_interval = 1.0 / self.video_fps
         
-        # Enhanced optimization settings
         self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
         
-        # Try hardware acceleration settings
         try:
             self.cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'H264'))
-            cv2.setNumThreads(2)  # Reduced to 2 threads to leave room for other processing
+            cv2.setNumThreads(1)  # Reduced to 1 to minimize CPU contention
         except:
             pass
 
@@ -152,30 +149,21 @@ class FrameReaderThread(threading.Thread):
         while self.running:
             current_time = time.perf_counter()
             
-            # Use video's actual frame rate for timing to maintain proper playback speed
             time_since_last = current_time - self.last_frame_time
             if time_since_last < self.actual_frame_interval:
                 sleep_time = self.actual_frame_interval - time_since_last
-                if sleep_time > 0.001:  # Only sleep if significant time left
-                    time.sleep(sleep_time * 0.9)  # Sleep slightly less
+                if sleep_time > 0.001:
+                    time.sleep(sleep_time * 0.9) 
                 continue
-                
-            # Less aggressive frame skipping to maintain video speed
-            if self.frame_queue.qsize() >= self.frame_skip_threshold:
-                frame_count += 1
-                if frame_count % 4 == 0:  # Skip every 4th frame when backed up (less aggressive)
-                    self.last_frame_time = current_time
-                    continue
             
             ret, frame = self.cap.read()
             if not ret:
                 self.cap.set(cv2.CAP_PROP_POS_FRAMES, 0) 
                 ret, frame = self.cap.read()
                 if not ret:
-                    print("Error reading frame in thread, stopping.")
+                    print("Error reading frame in FrameReaderThread, stopping.")
                     break 
             
-            # Optimized conversion
             try:
                 frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 pil_img = Image.fromarray(frame_rgb, mode='RGB').convert("RGBA")
@@ -184,24 +172,23 @@ class FrameReaderThread(threading.Thread):
                     self.frame_queue.put_nowait(pil_img)
                 except queue.Full:
                     try:
-                        self.frame_queue.get_nowait()
-                        self.frame_queue.put_nowait(pil_img)
+                        self.frame_queue.get_nowait() # Drop oldest
+                        self.frame_queue.put_nowait(pil_img) # Put current
                     except queue.Empty:
-                        pass
+                        pass # Queue became empty in between
                 
                 self.last_frame_time = current_time
                 frame_count += 1
                 
-                # Performance monitoring every 120 frames (2 seconds at 60fps)
-                if frame_count % 120 == 0:
+                if frame_count % 120 == 0: # Approx every 2-4 seconds
                     elapsed = current_time - last_perf_time
-                    actual_fps = 120 / elapsed if elapsed > 0 else 0
-                    if actual_fps < self.video_fps * 0.8:  # If below 80% of video FPS
-                        print(f"Frame reader FPS: {actual_fps:.1f} (video: {self.video_fps:.1f})")
+                    actual_read_fps = 120 / elapsed if elapsed > 0 else 0
+                    if actual_read_fps < self.video_fps * 0.8:
+                        print(f"Frame reader read FPS: {actual_read_fps:.1f} (video native: {self.video_fps:.1f})")
                     last_perf_time = current_time
                 
             except Exception as e:
-                print(f"Error processing frame: {e}")
+                print(f"Error processing frame in FrameReaderThread: {e}")
                 continue
         
         if self.cap:
@@ -318,12 +305,12 @@ class VideoClockScreenSaver:
         self.width = master.winfo_screenwidth() 
         self.height = master.winfo_screenheight()
 
-        self.target_fps = 30  # Reduced back to 30 for better performance with widgets
-        self.frame_interval = int(1000 / self.target_fps)
+        self.target_fps = 30
+        self.frame_interval = int(1000 / self.target_fps) # For UI update scheduling if queue empty
         
-        # Smaller queues for lower latency
-        self.raw_frame_queue = queue.Queue(maxsize=1)
-        self.processed_frame_queue = queue.Queue(maxsize=1)
+        # Slightly larger queues for a bit more buffering
+        self.raw_frame_queue = queue.Queue(maxsize=2)
+        self.processed_frame_queue = queue.Queue(maxsize=2)
         
         self.label = tk.Label(master, bg='black')
         self.label.pack(fill=tk.BOTH, expand=True)
@@ -414,46 +401,82 @@ class VideoClockScreenSaver:
         self.master.after(1000, self.init_widgets)  # Use self.master instead of self.root
         
     def init_widgets(self):
-        """Initialize widgets based on configuration"""
+        """Initialize widgets based on configuration - now fully async with priorities"""
         config = load_config()
         
         screen_w = self.master.winfo_screenwidth()
         screen_h = self.master.winfo_screenheight()
         
-        # Stock widget - now a Toplevel
-        if config.get("enable_stock_widget", False) and StockWidget:
+        def create_widgets_async():
+            """Create widgets in separate thread with proper prioritization"""
             try:
-                initial_market_for_widget = config.get("stock_market", "NASDAQ") # Get from config
-                stock_widget_toplevel = StockWidget(
-                    self.master, 
-                    self.TRANSPARENT_KEY, 
-                    screen_width=screen_w,
-                    screen_height=screen_h,
-                    initial_market=initial_market_for_widget # Pass the market
-                )
+                # Longer delay to ensure video pipeline is fully stable
+                time.sleep(0.5)
                 
-                self.widgets.append(stock_widget_toplevel)
-                print(f"Stock widget (Toplevel) for {initial_market_for_widget} created.")
+                widgets_to_create = []
                 
+                # Prepare stock widget creation (higher priority - less resource intensive)
+                if config.get("enable_stock_widget", False) and StockWidget:
+                    widgets_to_create.append(("stock", config.get("stock_market", "NASDAQ")))
+                
+                # Prepare media widget creation (lower priority - more resource intensive)
+                if config.get("enable_media_widget", False) and MediaWidget:
+                    widgets_to_create.append(("media", None))
+                
+                # Create widgets with much longer staggered timing
+                for i, (widget_type, param) in enumerate(widgets_to_create):
+                    # Longer stagger to reduce initial load
+                    if i > 0:
+                        time.sleep(1.0)  # 1 second between widgets
+                    
+                    # Schedule widget creation on main thread
+                    if widget_type == "stock":
+                        self.master.after(0, lambda market=param: self._create_stock_widget(market, screen_w, screen_h))
+                    elif widget_type == "media":
+                        # Extra delay for media widget due to YouTube detection overhead
+                        time.sleep(0.5)
+                        self.master.after(0, lambda: self._create_media_widget(screen_w, screen_h))
+                        
             except Exception as e:
-                print(f"Failed to create stock widget (Toplevel): {e}")
-                
-        # Media widget - now a Toplevel
-        if config.get("enable_media_widget", False) and MediaWidget:
-            try:
-                media_widget_toplevel = MediaWidget(
-                    self.master, 
-                    self.TRANSPARENT_KEY, # Use the same transparent key
-                    screen_width=screen_w,
-                    screen_height=screen_h
-                )
-                
-                self.widgets.append(media_widget_toplevel)
-                print(f"Media widget (Toplevel) created.")
-                
-            except Exception as e:
-                print(f"Failed to create media widget (Toplevel): {e}")
+                print(f"Error in async widget creation: {e}")
+        
+        # Start widget creation in separate thread with lower priority
+        widget_thread = threading.Thread(target=create_widgets_async, daemon=True)
+        widget_thread.start()
+
+    def _create_stock_widget(self, market, screen_w, screen_h):
+        """Create stock widget on main thread"""
+        try:
+            stock_widget_toplevel = StockWidget(
+                self.master, 
+                self.TRANSPARENT_KEY, 
+                screen_width=screen_w,
+                screen_height=screen_h,
+                initial_market=market
+            )
+            
+            self.widgets.append(stock_widget_toplevel)
+            print(f"Stock widget (Toplevel) for {market} created.")
+            
+        except Exception as e:
+            print(f"Failed to create stock widget (Toplevel): {e}")
     
+    def _create_media_widget(self, screen_w, screen_h):
+        """Create media widget on main thread"""
+        try:
+            media_widget_toplevel = MediaWidget(
+                self.master, 
+                self.TRANSPARENT_KEY,
+                screen_width=screen_w,
+                screen_height=screen_h
+            )
+            
+            self.widgets.append(media_widget_toplevel)
+            print(f"Media widget (Toplevel) created.")
+            
+        except Exception as e:
+            print(f"Failed to create media widget (Toplevel): {e}")
+
     def _initialize_ui_elements_after_first_frame(self, frame_width, frame_height):
         self.width = frame_width
         self.height = frame_height
@@ -646,24 +669,26 @@ class VideoClockScreenSaver:
         """Optimized UI thread for better performance with widgets"""
         frame_start_time = time.perf_counter()
         
+        processed_frame = None
         try:
             processed_frame = self.processed_frame_queue.get_nowait()
         except queue.Empty:
-            # Adaptive delay - more responsive when widgets are active
-            delay = max(1, self.frame_interval // 6)
+            # No frame ready, schedule next attempt.
+            # Use a slightly more relaxed delay if the queue is consistently empty.
+            delay = max(1, self.frame_interval // 4) 
             self.after_id = self.master.after(delay, self.update_frame)
             return
 
-        # Initialize UI elements on first frame
-        if not self.first_frame_received:
+        # Initialize UI elements on first frame if a frame was successfully dequeued
+        if not self.first_frame_received and processed_frame:
             self._initialize_ui_elements_after_first_frame(processed_frame.width, processed_frame.height)
 
-        # Fast image conversion
-        try:
-            self.imgtk = ImageTk.PhotoImage(processed_frame)
-            self.label.config(image=self.imgtk)
-        except Exception as e:
-            print(f"Error updating label image: {e}") 
+        if processed_frame:
+            try:
+                self.imgtk = ImageTk.PhotoImage(processed_frame)
+                self.label.config(image=self.imgtk)
+            except Exception as e:
+                print(f"Error updating label image: {e}") 
         
         # Lightweight performance monitoring
         frame_time = time.perf_counter() - frame_start_time
@@ -683,14 +708,14 @@ class VideoClockScreenSaver:
             self.start_time = current_time
             self.last_fps_print = current_time
         
-        # Optimized scheduling
-        processing_time_ms = frame_time * 1000
-        target_frame_time_ms = 1000 / self.target_fps  # ~33ms for 30fps
+        # Optimized scheduling for the next frame
+        ui_update_duration_ms = (time.perf_counter() - frame_start_time) * 1000
+        target_cycle_time_ms = 1000.0 / self.target_fps # e.g., 33.3ms for 30fps
         
-        if processing_time_ms < target_frame_time_ms * 0.7:  # If processing < 70% of target
-            delay = max(1, int(target_frame_time_ms - processing_time_ms))
-        else:
-            delay = 1  # Minimal delay when processing is heavy
+        delay = int(target_cycle_time_ms - ui_update_duration_ms)
+        
+        if delay < 1: # Ensure delay is at least 1ms
+            delay = 1 
         
         self.after_id = self.master.after(delay, self.update_frame)
 
