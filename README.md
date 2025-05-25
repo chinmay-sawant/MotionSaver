@@ -98,7 +98,3 @@ Contributions are welcome! Feel free to fork the repository, make changes, and s
 *   Contribute code, documentation, or translations.
 
 This project is maintained by [Chinmay Sawant](https://github.com/chinmay-sawant).
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
