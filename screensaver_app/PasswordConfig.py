@@ -199,16 +199,26 @@ class MacOSStyleLogin:
         self.password_window.attributes('-topmost', True)
 
         pwd_width = 300
-        pwd_height = 60 # Reduced height since we only show password field now
-        screen_w = self.parent.winfo_screenwidth()
-        screen_h = self.parent.winfo_screenheight()
+        pwd_height = 60 
         
-        profile_elements_bottom_approx = int(screen_h * 0.85) + 50 
-        pos_x = (screen_w - pwd_width) // 2
-        pos_y = profile_elements_bottom_approx + 10 
-        
-        if pos_y + pwd_height > screen_h:
-            pos_y = screen_h - pwd_height - 10 
+        # Get geometry of the parent window (the main screensaver window)
+        # to determine which screen it is on and its dimensions.
+        parent_x = self.parent.winfo_x()
+        parent_y = self.parent.winfo_y()
+        parent_width = self.parent.winfo_width()
+        parent_height = self.parent.winfo_height()
+
+        # Position at bottom-center of the parent's screen area
+        pos_x = parent_x + (parent_width - pwd_width) // 2
+        pos_y = parent_y + parent_height - pwd_height - 20 # 20 pixels from the bottom
+
+        # Ensure it doesn't go off-screen if parent is very small (unlikely for fullscreen)
+        # This basic check might need refinement if parent isn't truly fullscreen on a monitor.
+        if pos_y < parent_y: # If it would be above the parent's top
+            pos_y = parent_y + parent_height - pwd_height - 5 
+        if pos_x < parent_x:
+            pos_x = parent_x + 5
+
 
         self.password_window.geometry(f"{pwd_width}x{pwd_height}+{pos_x}+{pos_y}")
         
