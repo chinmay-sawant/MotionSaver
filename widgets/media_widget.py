@@ -16,19 +16,16 @@ class MediaWidget:
         self.parent_root = parent_root
         self.transparent_key = transparent_key
         
-        # Heavily optimized YouTube integration
-        self.youtube_track_info = None
-        self.youtube_check_interval = 20  # Increased to 20 seconds to reduce overhead
+        self.media_track_info = None # Renamed from youtube_track_info
+        self.media_check_interval = 20 # Renamed from youtube_check_interval
         self.detection_running = False
         self.initialized = False
         self.last_detection_time = 0
         self.detection_cache = None
-        self.cache_timeout = 5  # Cache results for 5 seconds
+        self.cache_timeout = 5
         
-        # Initialize pygame mixer (still needed for potential future use)
         pygame.mixer.init()
 
-        # Create window immediately but defer content creation
         self.window = tk.Toplevel(self.parent_root)
         self.window.overrideredirect(True)
         self.window.attributes('-transparentcolor', self.transparent_key)
@@ -78,21 +75,19 @@ class MediaWidget:
             print(f"Error creating media widget UI: {e}")
     
     def _start_detection_async(self):
-        """Start YouTube detection in completely separate thread"""
+        """Start media detection in completely separate thread""" # Renamed
         try:
-            # Much longer delay before starting detection
-            time.sleep(3.0)  # Wait 3 seconds before starting detection
-            self.start_youtube_detection()
+            time.sleep(3.0)
+            self.start_media_detection() # Renamed
         except Exception as e:
             print(f"Error starting media detection: {e}")
 
     def create_widget_content(self):
         """Create the media widget UI content within its Toplevel window"""
         
-        # YouTube section - simplified with better transparency and text alignment
-        self.youtube_info_label = tk.Label(
+        self.media_info_label = tk.Label( # Renamed from youtube_info_label
             self.window,
-            text="🎵 No YouTube video detected",
+            text="🎵 No media detected", # Generic text
             bg=self.transparent_key, 
             fg='white',
             font=('Arial', 11, 'bold'),
@@ -100,7 +95,7 @@ class MediaWidget:
             anchor='w',
             justify=tk.LEFT
         )
-        self.youtube_info_label.pack(fill=tk.X, pady=5, padx=5)
+        self.media_info_label.pack(fill=tk.X, pady=5, padx=5) # Renamed
         
         # Control buttons - simplified layout with transparent background
         self.control_frame = tk.Frame(self.window, bg=self.transparent_key)
@@ -199,8 +194,8 @@ class MediaWidget:
         
         return False
 
-    def detect_youtube_playback(self):
-        """Ultra-lightweight YouTube detection with caching"""
+    def detect_media_playback(self):
+        """Ultra-lightweight media detection with caching"""
         current_time = time.time()
         
         # Use cached result if still valid
@@ -213,160 +208,218 @@ class MediaWidget:
             result = None
             
             if system == "Windows":
-                # Only use the fastest method - Windows Media Session
+                # Try Windows Media Session first
                 result = self._check_windows_media_session_fast()
                 
-            elif system == "Darwin":  # macOS
-                # Ultra-simplified macOS approach
+                # If no result, try direct window title check as fallback
+                if not result:
+                    result = self._check_browser_window_titles()
+                
+            elif system == "Darwin":
                 result = self._check_macos_chrome_fast()
             
+            # Debug output for troubleshooting
+            if result:
+                print(f"Detected media: {result}")
+                
             # Cache the result
             self.detection_cache = result
             self.last_detection_time = current_time
             return result
             
         except Exception as e:
-            print(f"Error in lightweight YouTube detection: {e}")
+            print(f"Error in media detection: {e}")
             return None
     
     def _check_windows_media_session_fast(self):
-        """Ultra-fast Windows Media Session check"""
+        """Ultra-fast Windows Media Session check for browsers"""
         try:
-            # Simplified PowerShell command with shorter timeout
+            # Version with more extensive debugging
             powershell_cmd = '''
-            $sessions = [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager]::RequestAsync().GetAwaiter().GetResult().GetSessions()
-            foreach ($session in $sessions) {
-                $props = $session.TryGetMediaPropertiesAsync().GetAwaiter().GetResult()
-                if ($props.Title -and $props.Title -ne "") {
-                    $app = $session.SourceAppUserModelId
-                    if ($app -like "*chrome*" -or $app -like "*firefox*" -or $app -like "*edge*") {
-                        Write-Output $props.Title
-                        break
+            try {
+                Add-Type -AssemblyName System.Runtime.WindowsRuntime
+                $asTaskGeneric = ([System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object { $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation`1' })[0]
+
+                Function Await($WinRtTask, $ResultType) {
+                    $asTask = $asTaskGeneric.MakeGenericMethod($ResultType)
+                    $netTask = $asTask.Invoke($null, @($WinRtTask))
+                    $netTask.Wait(-1) | Out-Null
+                    $netTask.Result
+                }
+
+                $sessionManager = [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager]::RequestAsync()
+                $sessionManager = Await $sessionManager ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager])
+                
+                $sessions = $sessionManager.GetSessions()
+                ForEach ($session in $sessions) {
+                    $info = $session.SourceAppUserModelId
+                    $props = $session.TryGetMediaPropertiesAsync()
+                    $props = Await $props ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionMediaProperties])
+                    
+                    if ($props.Title) {
+                        $cleanTitle = $props.Title -replace "[\r\n]", " "
+                        $appIdLower = $info.ToLower()
+                        
+                        # Include all browsers, not just YouTube-specific
+                        if ($appIdLower -like "*chrome*" -or $appIdLower -like "*firefox*" -or $appIdLower -like "*edge*" -or $appIdLower -like "*opera*" -or $appIdLower -like "*brave*") {
+                            Write-Output "MEDIA|$info|$cleanTitle|$($props.Artist)"
+                            break
+                        }
                     }
                 }
+            }
+            catch {
+                Write-Output "ERROR|$_"
             }
             '''
             
             result = subprocess.run(['powershell', '-Command', powershell_cmd], 
-                                  capture_output=True, text=True, timeout=1.5)  # Reduced timeout
+                                  capture_output=True, text=True, timeout=2)
             
             if result.stdout and result.stdout.strip():
-                title = result.stdout.strip()
-                # Basic check if it's likely YouTube
-                if len(title) > 3 and title != "YouTube":
-                    return {"title": title, "source": "YouTube"}
+                output = result.stdout.strip()
+                
+                if output.startswith("ERROR|"):
+                    print(f"PowerShell error: {output[6:]}")
+                    return None
+                
+                if output.startswith("MEDIA|"):
+                    parts = output.split("|", 4)  # Split into parts: MEDIA, AppId, Title, Artist
+                    if len(parts) >= 3:
+                        title = parts[2].strip()
+                        if title:
+                            return {"title": title, "source": "Browser"}
                                 
         except subprocess.TimeoutExpired:
-            pass  # Timeout is expected with heavy loads
+            print("PowerShell media check timed out")
+            pass
         except Exception as e:
-            pass  # Silently handle errors to avoid spam
+            print(f"Windows Media Session error: {e}")
+            pass
         return None
-    
-    def _check_macos_chrome_fast(self):
-        """Ultra-fast macOS Chrome check"""
+        
+    def _check_browser_window_titles(self):
+        """Check browser window titles directly - fallback method for YouTube"""
         try:
-            # Very minimal AppleScript
-            script = '''
-            tell application "Google Chrome"
-                if it is running then
-                    try
-                        set activeTab to active tab of front window
-                        set tabTitle to title of activeTab
-                        if tabTitle contains " - YouTube" then
-                            return tabTitle
-                        end if
-                    end try
-                end if
-            end tell
-            '''
+            import win32gui
             
-            result = subprocess.run(['osascript', '-e', script], 
-                                  capture_output=True, text=True, timeout=1.0)  # Very short timeout
-            if result.stdout and " - YouTube" in result.stdout:
-                title = result.stdout.strip()
-                video_title = title.split(" - YouTube")[0].strip()
+            def enum_windows_callback(hwnd, results):
+                if win32gui.IsWindowVisible(hwnd):
+                    window_title = win32gui.GetWindowText(hwnd)
+                    
+                    # Check for YouTube title format or JioCinema
+                    if " - YouTube" in window_title:
+                        title = window_title.split(" - YouTube")[0].strip()
+                        if title and title != "YouTube":
+                            results.append({"title": title, "source": "YouTube-Window"})
+                    elif " - JioCinema" in window_title:
+                        title = window_title.split(" - JioCinema")[0].strip()
+                        if title:
+                            results.append({"title": title, "source": "JioCinema"})
+                    # Add more streaming services if needed
+                    elif " | Disney+ Hotstar" in window_title:
+                        title = window_title.split(" | Disney+ Hotstar")[0].strip()
+                        if title:
+                            results.append({"title": title, "source": "Hotstar"})
+                    elif " | Netflix" in window_title:
+                        title = window_title.split(" | Netflix")[0].strip()
+                        if title:
+                            results.append({"title": title, "source": "Netflix"})
+                return True
                 
-                if video_title and video_title != "YouTube":
-                    return {"title": video_title, "source": "YouTube"}
-        except subprocess.TimeoutExpired:
-            pass
+            results = []
+            win32gui.EnumWindows(enum_windows_callback, results)
+            
+            if results:
+                print(f"Window title detection found: {results[0]}")
+                return results[0]
+            
+        except ImportError:
+            print("win32gui not available for window title detection")
         except Exception as e:
-            pass
+            print(f"Browser window detection error: {e}")
+        
         return None
 
-    def start_youtube_detection(self):
-        """Optimized YouTube detection with reduced frequency"""
-        def youtube_detection_loop():
+    def start_media_detection(self):
+        """Optimized media detection with reduced frequency"""
+        def media_detection_loop():
             self.detection_running = True
             detection_count = 0
             
+            # Run one detection immediately at start
+            try:
+                detection_thread_job = threading.Thread(
+                    target=self._perform_detection_async, 
+                    daemon=True
+                )
+                detection_thread_job.start()
+                detection_count += 1
+            except Exception as e:
+                print(f"Initial media detection error: {e}")
+            
+            # Then continue with normal detection loop
             while self.detection_running and hasattr(self, 'window'):
                 try:
                     if not self.window.winfo_exists():
                         break
                     
-                    # Progressive interval increase - check less frequently over time
                     if detection_count < 5:
-                        current_interval = self.youtube_check_interval
+                        current_interval = self.media_check_interval # Use renamed variable
                     elif detection_count < 10:
-                        current_interval = self.youtube_check_interval * 1.5
+                        current_interval = self.media_check_interval * 1.5
                     else:
-                        current_interval = self.youtube_check_interval * 2  # Check every 40 seconds after 10 attempts
+                        current_interval = self.media_check_interval * 2
                     
-                    # Run detection in separate thread to avoid blocking even this loop
-                    detection_thread = threading.Thread(
+                    detection_thread_job = threading.Thread( # Renamed variable for clarity
                         target=self._perform_detection_async, 
                         daemon=True
                     )
-                    detection_thread.start()
+                    detection_thread_job.start() # Renamed variable
                     
                     detection_count += 1
                     time.sleep(current_interval)
                     
                 except Exception as e:
                     if hasattr(self, 'window') and self.window.winfo_exists():
-                        print(f"Error in YouTube detection loop: {e}")
+                        print(f"Error in media detection loop: {e}")
                     else:
                         break 
                 
-            print("MediaWidget: YouTube detection loop stopped.")
+            print("MediaWidget: Media detection loop stopped.")
 
         # Run detection in completely separate thread with lower priority
-        detection_thread = threading.Thread(target=youtube_detection_loop, daemon=True)
-        detection_thread.start()
+        main_detection_thread = threading.Thread(target=media_detection_loop, daemon=True) # Renamed
+        main_detection_thread.start() # Renamed
     
     def _perform_detection_async(self):
         """Perform detection in separate thread"""
         try:
-            youtube_info = self.detect_youtube_playback()
+            media_info_result = self.detect_media_playback() # Renamed method call
             
-            # Only update UI if window still exists
             if hasattr(self, 'window') and self.window.winfo_exists():
-                if youtube_info:
-                    self.parent_root.after(0, lambda info=youtube_info: self.update_youtube_track_info(info))
+                if media_info_result:
+                    self.parent_root.after(0, lambda info=media_info_result: self.update_media_track_info(info)) # Renamed
                 else:
-                    self.parent_root.after(0, lambda: self.clear_youtube_track_info())
+                    self.parent_root.after(0, lambda: self.clear_media_track_info()) # Renamed
         except Exception as e:
-            pass  # Silently handle errors in background detection
+            pass
 
-    def update_youtube_track_info(self, youtube_info):
-        """Update UI with YouTube track info - simplified"""
-        if hasattr(self, 'youtube_info_label') and self.youtube_info_label.winfo_exists():
-            # Extract just the title, remove everything after " - "
-            title = youtube_info["title"].split(" - ")[0].strip()
+    def update_media_track_info(self, media_info): # Renamed from update_youtube_track_info
+        """Update UI with media track info"""
+        if hasattr(self, 'media_info_label') and self.media_info_label.winfo_exists(): # Use renamed label
+            title = media_info["title"].strip() 
             
-            # Truncate long titles for performance
             if len(title) > 40:
                 title = title[:37] + "..."
             
-            self.youtube_info_label.config(text=f"🎵 {title}", fg='white')
+            self.media_info_label.config(text=f"🎵 {title}", fg='white') # Use renamed label
     
-    def clear_youtube_track_info(self):
-        """Clear YouTube track info"""
-        if hasattr(self, 'youtube_info_label') and self.youtube_info_label.winfo_exists():
-            self.youtube_info_label.config(text="🎵 No YouTube video detected", fg='#888888')
+    def clear_media_track_info(self): # Renamed from clear_youtube_track_info
+        """Clear media track info"""
+        if hasattr(self, 'media_info_label') and self.media_info_label.winfo_exists(): # Use renamed label
+            self.media_info_label.config(text="🎵 No media detected", fg='#888888') # Use renamed label
 
-    # Media control functions that actually work with browser playback
     def toggle_play_pause(self):
         """Toggle play/pause for browser media"""
         success = self.send_media_key('play_pause')
