@@ -45,7 +45,7 @@ def draw_rounded_rectangle(draw, xy, radius, fill=None, outline=None, width=2):
 
 
 class FrameProcessorThread(threading.Thread):
-    """Thread for preprocessing frames (adding UI elements)"""
+    """Enhanced thread for preprocessing frames with better performance"""
     def __init__(self, raw_frame_queue, processed_frame_queue, ui_elements_callback):
         super().__init__(daemon=True)
         self.raw_frame_queue = raw_frame_queue
@@ -53,31 +53,42 @@ class FrameProcessorThread(threading.Thread):
         self.ui_elements_callback = ui_elements_callback
         self.running = False
         self.frame_skip_counter = 0
+        self.processing_times = collections.deque(maxlen=10)  # Reduced for faster response
         
     def run(self):
         self.running = True
         while self.running:
             try:
-                raw_frame = self.raw_frame_queue.get(timeout=0.05)  # Reduced timeout
+                raw_frame = self.raw_frame_queue.get(timeout=0.01)  # Much shorter timeout
                 if raw_frame is None:  # Shutdown signal
                     break
                     
-                # Skip frames if processing queue is backing up
+                process_start = time.perf_counter()
+                
+                # More aggressive frame skipping based on processing load
                 if self.processed_frame_queue.qsize() > 0:
                     self.frame_skip_counter += 1
-                    if self.frame_skip_counter % 2 == 0:  # Skip every other frame when backed up
-                        continue
+                    # Dynamic skip ratio based on processing times
+                    avg_process_time = sum(self.processing_times) / len(self.processing_times) if self.processing_times else 0
+                    if avg_process_time > 0.012:  # If processing > 12ms (should be ~16ms for 60fps)
+                        if self.frame_skip_counter % 3 == 0:  # Skip 2 out of 3 frames
+                            continue
+                    elif avg_process_time > 0.008:  # If processing > 8ms
+                        if self.frame_skip_counter % 2 == 0:  # Skip every other frame
+                            continue
                 
-                # Process frame with UI elements in background thread
+                # Process frame with UI elements
                 processed_frame = self.ui_elements_callback(raw_frame)
                 
+                process_time = time.perf_counter() - process_start
+                self.processing_times.append(process_time)
+                
                 try:
-                    # Use put_nowait to avoid blocking
                     self.processed_frame_queue.put_nowait(processed_frame)
                 except queue.Full:
                     # Drop oldest frame and add new one
                     try:
-                        self.processed_frame_queue.get_nowait()  # Remove oldest
+                        self.processed_frame_queue.get_nowait()
                         self.processed_frame_queue.put_nowait(processed_frame)
                     except queue.Empty:
                         pass
@@ -90,7 +101,7 @@ class FrameProcessorThread(threading.Thread):
     def stop(self):
         self.running = False
         try:
-            self.raw_frame_queue.put(None, timeout=0.05)  # Shutdown signal
+            self.raw_frame_queue.put(None, timeout=0.01)
         except queue.Full:
             pass
 
@@ -104,7 +115,8 @@ class FrameReaderThread(threading.Thread):
         self.running = False
         self.frame_interval = 1.0 / self.target_fps
         self.last_frame_time = 0
-        self.frame_skip_threshold = 2  # Skip frames if queue is backing up
+        self.frame_skip_threshold = 1
+        self.video_fps = None  # Store actual video FPS
 
     def run(self):
         self.running = True
@@ -114,31 +126,44 @@ class FrameReaderThread(threading.Thread):
             self.running = False
             return
 
-        # Aggressive optimization for video capture
+        # Get actual video FPS to maintain proper playback speed
+        self.video_fps = self.cap.get(cv2.CAP_PROP_FPS)
+        if self.video_fps <= 0 or self.video_fps > 120:  # Fallback for invalid FPS
+            self.video_fps = 30
+        
+        print(f"Video FPS: {self.video_fps}, Target FPS: {self.target_fps}")
+        
+        # Use video's actual FPS for frame timing to maintain proper playback speed
+        self.actual_frame_interval = 1.0 / self.video_fps
+        
+        # Enhanced optimization settings
         self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-        self.cap.set(cv2.CAP_PROP_FPS, self.target_fps)
-        # Try to set hardware acceleration if available
+        
+        # Try hardware acceleration settings
         try:
             self.cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'H264'))
+            cv2.setNumThreads(2)  # Reduced to 2 threads to leave room for other processing
         except:
             pass
 
         frame_count = 0
+        last_perf_time = time.perf_counter()
+        
         while self.running:
             current_time = time.perf_counter()
             
-            # Precise frame timing
+            # Use video's actual frame rate for timing to maintain proper playback speed
             time_since_last = current_time - self.last_frame_time
-            if time_since_last < self.frame_interval:
-                sleep_time = self.frame_interval - time_since_last
+            if time_since_last < self.actual_frame_interval:
+                sleep_time = self.actual_frame_interval - time_since_last
                 if sleep_time > 0.001:  # Only sleep if significant time left
-                    time.sleep(sleep_time * 0.9)  # Sleep slightly less to avoid overshooting
+                    time.sleep(sleep_time * 0.9)  # Sleep slightly less
                 continue
                 
-            # Skip frames if queue is backing up to maintain real-time performance
+            # Less aggressive frame skipping to maintain video speed
             if self.frame_queue.qsize() >= self.frame_skip_threshold:
                 frame_count += 1
-                if frame_count % 2 == 0:  # Skip every other frame when backed up
+                if frame_count % 4 == 0:  # Skip every 4th frame when backed up (less aggressive)
                     self.last_frame_time = current_time
                     continue
             
@@ -150,15 +175,14 @@ class FrameReaderThread(threading.Thread):
                     print("Error reading frame in thread, stopping.")
                     break 
             
-            # Direct conversion without ThreadPoolExecutor for better performance
+            # Optimized conversion
             try:
                 frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                pil_img = Image.fromarray(frame_rgb).convert("RGBA")
+                pil_img = Image.fromarray(frame_rgb, mode='RGB').convert("RGBA")
                 
                 try:
                     self.frame_queue.put_nowait(pil_img)
                 except queue.Full:
-                    # Drop oldest frame
                     try:
                         self.frame_queue.get_nowait()
                         self.frame_queue.put_nowait(pil_img)
@@ -167,6 +191,14 @@ class FrameReaderThread(threading.Thread):
                 
                 self.last_frame_time = current_time
                 frame_count += 1
+                
+                # Performance monitoring every 120 frames (2 seconds at 60fps)
+                if frame_count % 120 == 0:
+                    elapsed = current_time - last_perf_time
+                    actual_fps = 120 / elapsed if elapsed > 0 else 0
+                    if actual_fps < self.video_fps * 0.8:  # If below 80% of video FPS
+                        print(f"Frame reader FPS: {actual_fps:.1f} (video: {self.video_fps:.1f})")
+                    last_perf_time = current_time
                 
             except Exception as e:
                 print(f"Error processing frame: {e}")
@@ -237,11 +269,31 @@ def find_font_path(font_family):
         pass
     return None  # Font not found
 
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+try:
+    from widgets.stock_widget import StockWidget
+    from widgets.media_widget import MediaWidget
+except ImportError as e:
+    print(f"Widget import error: {e}")
+    StockWidget = None
+    MediaWidget = None
+
 class VideoClockScreenSaver:
     def __init__(self, master, video_path_arg=None): # video_path_arg is for CLI override
         self.master = master
+        self.root = master  # Add this line to fix the AttributeError
         master.attributes('-fullscreen', True)
         master.configure(bg='black')
+        
+        # Define transparent key for widgets
+        self.TRANSPARENT_KEY = '#123456'
+        
+        # Store screen dimensions for widget positioning
+        self.screen_width = master.winfo_screenwidth()
+        self.screen_height = master.winfo_screenheight()
         
         self.user_config = load_config()
         
@@ -266,12 +318,12 @@ class VideoClockScreenSaver:
         self.width = master.winfo_screenwidth() 
         self.height = master.winfo_screenheight()
 
-        self.target_fps = 30
+        self.target_fps = 30  # Reduced back to 30 for better performance with widgets
         self.frame_interval = int(1000 / self.target_fps)
         
-        # Optimized queues with smaller sizes for lower latency
-        self.raw_frame_queue = queue.Queue(maxsize=1)  # Reduced queue size
-        self.processed_frame_queue = queue.Queue(maxsize=1)  # Reduced queue size
+        # Smaller queues for lower latency
+        self.raw_frame_queue = queue.Queue(maxsize=1)
+        self.processed_frame_queue = queue.Queue(maxsize=1)
         
         self.label = tk.Label(master, bg='black')
         self.label.pack(fill=tk.BOTH, expand=True)
@@ -332,6 +384,11 @@ class VideoClockScreenSaver:
         self.current_time_text = time.strftime('%I:%M:%S %p')
         self.last_clock_update = 0
         
+        # Initialize clock positioning variables to prevent AttributeError
+        self.clock_x = 0
+        self.clock_y = 0
+        self.clock_text_width = 0
+        
         # Performance tracking with moving average
         self.start_time = time.perf_counter()
         self.frames_processed_in_ui = 0 
@@ -352,6 +409,51 @@ class VideoClockScreenSaver:
         self.first_frame_received = False
         self.update_frame()
 
+        # Initialize widgets based on config
+        self.widgets = []
+        self.master.after(1000, self.init_widgets)  # Use self.master instead of self.root
+        
+    def init_widgets(self):
+        """Initialize widgets based on configuration"""
+        config = load_config()
+        
+        screen_w = self.master.winfo_screenwidth()
+        screen_h = self.master.winfo_screenheight()
+        
+        # Stock widget - now a Toplevel
+        if config.get("enable_stock_widget", False) and StockWidget:
+            try:
+                initial_market_for_widget = config.get("stock_market", "NASDAQ") # Get from config
+                stock_widget_toplevel = StockWidget(
+                    self.master, 
+                    self.TRANSPARENT_KEY, 
+                    screen_width=screen_w,
+                    screen_height=screen_h,
+                    initial_market=initial_market_for_widget # Pass the market
+                )
+                
+                self.widgets.append(stock_widget_toplevel)
+                print(f"Stock widget (Toplevel) for {initial_market_for_widget} created.")
+                
+            except Exception as e:
+                print(f"Failed to create stock widget (Toplevel): {e}")
+                
+        # Media widget - now a Toplevel
+        if config.get("enable_media_widget", False) and MediaWidget:
+            try:
+                media_widget_toplevel = MediaWidget(
+                    self.master, 
+                    self.TRANSPARENT_KEY, # Use the same transparent key
+                    screen_width=screen_w,
+                    screen_height=screen_h
+                )
+                
+                self.widgets.append(media_widget_toplevel)
+                print(f"Media widget (Toplevel) created.")
+                
+            except Exception as e:
+                print(f"Failed to create media widget (Toplevel): {e}")
+    
     def _initialize_ui_elements_after_first_frame(self, frame_width, frame_height):
         self.width = frame_width
         self.height = frame_height
@@ -365,6 +467,17 @@ class VideoClockScreenSaver:
         self.profile_pic_pos = (self.profile_center_x - self.profile_pic_size // 2, self.profile_pic_y_base)
         label_width = self.pre_rendered_username_label.width
         self.username_label_pos = (self.profile_center_x - label_width // 2, self.profile_name_y_base)
+        
+        # Calculate initial clock position here, now that frame dimensions are known
+        try: 
+            clock_bbox = self.clock_font.getbbox(self.current_time_text) # Use current_time_text from __init__
+            self.clock_text_width = clock_bbox[2] - clock_bbox[0]
+        except AttributeError: 
+            self.clock_text_width, _ = self.clock_font.getsize(self.current_time_text)
+        
+        self.clock_x = (self.width - self.clock_text_width) // 2
+        self.clock_y = int(self.height * 0.1)
+        
         self.first_frame_received = True
 
 
@@ -476,53 +589,68 @@ class VideoClockScreenSaver:
         return image
 
     def _process_frame_with_ui(self, pil_img):
-        """Process frame with UI elements in background thread - optimized"""
+        """Optimized frame processing with minimal overhead"""
         if not self.first_frame_received:
+            # This path is taken for the very first frame.
+            # self.clock_x and self.clock_y are not used yet for drawing here.
             return pil_img
             
-        # Work directly on the image instead of copying for better performance
+        # Work directly on the image for better performance
         frame = pil_img
         
-        # Add profile elements (these are pre-rendered, so it's fast)
+        # Add profile elements with minimal processing
         if self.pre_rendered_profile_pic and self.pre_rendered_username_label:
             profile_pic_pos_int = (int(self.profile_pic_pos[0]), int(self.profile_pic_pos[1]))
             username_label_pos_int = (int(self.username_label_pos[0]), int(self.username_label_pos[1]))
             frame.paste(self.pre_rendered_profile_pic, profile_pic_pos_int, self.pre_rendered_profile_pic)
             frame.paste(self.pre_rendered_username_label, username_label_pos_int, self.pre_rendered_username_label)
 
-        # Cache clock rendering to avoid redrawing every frame
+        # Highly optimized clock rendering - update less frequently
         current_time_ms = int(time.time() * 1000)
-        if current_time_ms - self.last_clock_update >= 1000:
-            self.current_time_text = time.strftime('%I:%M:%S %p')
+        if current_time_ms - self.last_clock_update >= 1000:  # Update every second
+            new_time_text = time.strftime('%I:%M:%S %p')
+            if new_time_text != self.current_time_text:  # Only update if time actually changed
+                self.current_time_text = new_time_text
+                
+                # Cache clock dimensions - ensure we have width and height before calculating position
+                try: 
+                    clock_bbox = self.clock_font.getbbox(self.current_time_text)
+                    self.clock_text_width = clock_bbox[2] - clock_bbox[0]
+                except AttributeError: 
+                    self.clock_text_width, _ = self.clock_font.getsize(self.current_time_text)
+                
+                # Only calculate position if we have valid frame dimensions
+                # self.width and self.height should be correctly set by _initialize_ui_elements_after_first_frame
+                if self.width > 0 and self.height > 0:
+                    self.clock_x = (self.width - self.clock_text_width) // 2
+                    self.clock_y = int(self.height * 0.1)
+                # The else fallback for clock_x=50 is less likely to be needed now for initial positioning.
+                # else:
+                #     self.clock_x = 50 
+                #     self.clock_y = 50
+            
             self.last_clock_update = current_time_ms
-            
-            # Pre-calculate clock position (cache this)
-            try: 
-                clock_bbox = self.clock_font.getbbox(self.current_time_text)
-                self.clock_text_width = clock_bbox[2] - clock_bbox[0]
-            except AttributeError: 
-                self.clock_text_width, _ = self.clock_font.getsize(self.current_time_text)
-            
-            self.clock_x = (self.width - self.clock_text_width) // 2
-            self.clock_y = int(self.height * 0.1)
         
-        # Draw clock with cached positions
+        # Draw clock with cached positions - self.clock_x and self.clock_y should be correctly initialized
+        # by _initialize_ui_elements_after_first_frame before this drawing part is reached for the first time with UI.
         draw = ImageDraw.Draw(frame)
-        draw.text((int(self.clock_x+2), int(self.clock_y+2)), self.current_time_text, font=self.clock_font, fill=(0,0,0,128))
-        draw.text((int(self.clock_x), int(self.clock_y)), self.current_time_text, font=self.clock_font, fill=(255,255,255,220))
+        shadow_offset = 2
+        draw.text((int(self.clock_x + shadow_offset), int(self.clock_y + shadow_offset)), 
+                 self.current_time_text, font=self.clock_font, fill=(0,0,0,128))
+        draw.text((int(self.clock_x), int(self.clock_y)), 
+                 self.current_time_text, font=self.clock_font, fill=(255,255,255,220))
         
         return frame
 
     def update_frame(self):
-        """Main UI thread - optimized for performance"""
+        """Optimized UI thread for better performance with widgets"""
         frame_start_time = time.perf_counter()
         
         try:
-            # Get processed frame (non-blocking)
             processed_frame = self.processed_frame_queue.get_nowait()
         except queue.Empty:
-            # No processed frame ready, schedule next update with adaptive delay
-            delay = max(1, self.frame_interval // 8)  # Faster polling when no frames
+            # Adaptive delay - more responsive when widgets are active
+            delay = max(1, self.frame_interval // 6)
             self.after_id = self.master.after(delay, self.update_frame)
             return
 
@@ -530,40 +658,51 @@ class VideoClockScreenSaver:
         if not self.first_frame_received:
             self._initialize_ui_elements_after_first_frame(processed_frame.width, processed_frame.height)
 
-        # Convert to Tkinter format and display
+        # Fast image conversion
         try:
             self.imgtk = ImageTk.PhotoImage(processed_frame)
             self.label.config(image=self.imgtk)
         except Exception as e:
             print(f"Error updating label image: {e}") 
         
-        # Performance monitoring with moving average
+        # Lightweight performance monitoring
         frame_time = time.perf_counter() - frame_start_time
         self.fps_history.append(frame_time)
         self.frames_processed_in_ui += 1
         current_time = time.perf_counter()
         
-        if current_time - self.last_fps_print >= 3.0:  # Print every 3 seconds
+        # Less frequent performance logging to reduce overhead
+        if current_time - self.last_fps_print >= 5.0:  # Every 5 seconds
             if self.fps_history:
                 avg_frame_time = sum(self.fps_history) / len(self.fps_history)
                 estimated_fps = 1.0 / avg_frame_time if avg_frame_time > 0 else 0
-                print(f"UI FPS: {estimated_fps:.1f} (avg frame time: {avg_frame_time*1000:.1f}ms), Raw Queue: {self.raw_frame_queue.qsize()}, Processed Queue: {self.processed_frame_queue.qsize()}")
+                queue_info = f"Raw: {self.raw_frame_queue.qsize()}, Processed: {self.processed_frame_queue.qsize()}"
+                widget_count = len(self.widgets)
+                print(f"UI FPS: {estimated_fps:.1f}, Widgets: {widget_count}, Queues: {queue_info}")
             self.frames_processed_in_ui = 0
             self.start_time = current_time
             self.last_fps_print = current_time
         
-        # Adaptive scheduling based on performance
+        # Optimized scheduling
         processing_time_ms = frame_time * 1000
-        if processing_time_ms < self.frame_interval * 0.5:
-            # We're running fast, normal delay
-            delay = max(1, int(self.frame_interval - processing_time_ms))
+        target_frame_time_ms = 1000 / self.target_fps  # ~33ms for 30fps
+        
+        if processing_time_ms < target_frame_time_ms * 0.7:  # If processing < 70% of target
+            delay = max(1, int(target_frame_time_ms - processing_time_ms))
         else:
-            # We're running slow, minimal delay
-            delay = 1
+            delay = 1  # Minimal delay when processing is heavy
         
         self.after_id = self.master.after(delay, self.update_frame)
 
     def close(self):
+        """Clean shutdown of the screensaver"""
+        print("Closing VideoClockScreenSaver and its widgets...")
+        # Clean up widgets
+        for widget in self.widgets:
+            if hasattr(widget, 'destroy') and callable(widget.destroy):
+                widget.destroy()
+        self.widgets.clear()
+        
         print("Closing VideoClockScreenSaver...")
         if self.after_id:
             self.master.after_cancel(self.after_id)

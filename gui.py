@@ -5,6 +5,8 @@ import os
 import json
 import sys # Import sys
 import time # Import time for typeahead timeout
+import subprocess
+import win32serviceutil
 
 # Assuming PasswordConfig.py is in the same directory (package)
 # This will work when gui.py is imported as part of the package
@@ -141,6 +143,12 @@ class ScreenSaverApp:
         self.selected_clock_font_size = tk.IntVar(value=self.config.get("clock_font_size", 64))
         self.selected_ui_font_family = tk.StringVar(value=self.config.get("ui_font_family", "Arial"))
         self.selected_ui_font_size = tk.IntVar(value=self.config.get("ui_font_size", 18))
+        
+        # New variables for additional features
+        self.screensaver_timer = tk.IntVar(value=self.config.get("screensaver_timer_minutes", 10))
+        self.enable_stock_widget = tk.BooleanVar(value=self.config.get("enable_stock_widget", False))
+        self.enable_media_widget = tk.BooleanVar(value=self.config.get("enable_media_widget", False))
+        self.stock_market = tk.StringVar(value=self.config.get("stock_market", "NASDAQ"))
 
         # For combobox typeahead
         self.combo_typeahead_state = {} 
@@ -267,6 +275,56 @@ class ScreenSaverApp:
         )
         self.theme_toggle_button.pack(anchor=tk.W, padx=5, pady=5)
         
+        # --- Timer Configuration ---
+        timer_frame = ttk.LabelFrame(main_frame, text="Screensaver Timer", padding="10")
+        timer_frame.pack(fill=tk.X, pady=5)
+
+        ttk.Label(timer_frame, text="Start after (minutes):").grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)
+        self.timer_spinbox = ttk.Spinbox(timer_frame, from_=1, to=120, increment=1, textvariable=self.screensaver_timer, width=10)
+        self.timer_spinbox.grid(row=0, column=1, padx=5, pady=5, sticky=tk.W)
+
+        # --- Service Management ---
+        service_frame = ttk.LabelFrame(main_frame, text="Windows Service", padding="10")
+        service_frame.pack(fill=tk.X, pady=5)
+
+        self.service_status_label = ttk.Label(service_frame, text="Service Status: Unknown")
+        self.service_status_label.grid(row=0, column=0, columnspan=3, padx=5, pady=5, sticky=tk.W)
+
+        ttk.Button(service_frame, text="Install Service", command=self.install_service).grid(row=1, column=0, padx=5, pady=5)
+        ttk.Button(service_frame, text="Start Service", command=self.start_service).grid(row=1, column=1, padx=5, pady=5)
+        ttk.Button(service_frame, text="Stop Service", command=self.stop_service).grid(row=1, column=2, padx=5, pady=5)
+        ttk.Button(service_frame, text="Uninstall Service", command=self.uninstall_service).grid(row=2, column=0, padx=5, pady=5)
+
+        # --- Widget Configuration ---
+        widget_frame = ttk.LabelFrame(main_frame, text="Widgets", padding="10")
+        widget_frame.pack(fill=tk.X, pady=5)
+
+        # Stock widget
+        self.stock_check = ttk.Checkbutton(
+            widget_frame, 
+            text="Enable Stock Market Widget", 
+            variable=self.enable_stock_widget
+        )
+        self.stock_check.grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)
+
+        ttk.Label(widget_frame, text="Market:").grid(row=0, column=1, padx=5, pady=5, sticky=tk.W)
+        self.stock_market_combo = ttk.Combobox(
+            widget_frame, 
+            textvariable=self.stock_market,
+            values=["NASDAQ", "NYSE", "CRYPTO"],
+            state="readonly",
+            width=15
+        )
+        self.stock_market_combo.grid(row=0, column=2, padx=5, pady=5)
+
+        # Media widget
+        self.media_check = ttk.Checkbutton(
+            widget_frame, 
+            text="Enable Media Player Widget", 
+            variable=self.enable_media_widget
+        )
+        self.media_check.grid(row=1, column=0, padx=5, pady=5, sticky=tk.W)
+
         # --- Save Button ---
         save_button = ttk.Button(main_frame, text="Save Settings", command=self.save_settings)
         save_button.pack(pady=20)
@@ -277,6 +335,8 @@ class ScreenSaverApp:
         
         master.minsize(450, 400)
         self.apply_theme()
+
+        self.update_service_status()
 
     def setup_styles(self):
         self.style = ttk.Style()
@@ -578,6 +638,57 @@ class ScreenSaverApp:
             except ValueError:
                  self.video_path_var.set(filepath)
 
+    def update_service_status(self):
+        """Update service status display"""
+        try:
+            status = win32serviceutil.QueryServiceStatus("ScreenSaverService")[1]
+            if status == win32service.SERVICE_RUNNING:
+                self.service_status_label.config(text="Service Status: Running", foreground="green")
+            elif status == win32service.SERVICE_STOPPED:
+                self.service_status_label.config(text="Service Status: Stopped", foreground="red")
+            else:
+                self.service_status_label.config(text="Service Status: Unknown", foreground="orange")
+        except:
+            self.service_status_label.config(text="Service Status: Not Installed", foreground="gray")
+
+    def install_service(self):
+        """Install the Windows service"""
+        try:
+            script_path = os.path.join(os.path.dirname(__file__), "screensaver_service.py")
+            subprocess.run([sys.executable, script_path, "install"], check=True)
+            messagebox.showinfo("Success", "Service installed successfully!")
+            self.update_service_status()
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to install service: {e}")
+
+    def start_service(self):
+        """Start the Windows service"""
+        try:
+            win32serviceutil.StartService("ScreenSaverService")
+            messagebox.showinfo("Success", "Service started successfully!")
+            self.update_service_status()
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to start service: {e}")
+
+    def stop_service(self):
+        """Stop the Windows service"""
+        try:
+            win32serviceutil.StopService("ScreenSaverService")
+            messagebox.showinfo("Success", "Service stopped successfully!")
+            self.update_service_status()
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to stop service: {e}")
+
+    def uninstall_service(self):
+        """Uninstall the Windows service"""
+        try:
+            script_path = os.path.join(os.path.dirname(__file__), "screensaver_service.py")
+            subprocess.run([sys.executable, script_path, "remove"], check=True)
+            messagebox.showinfo("Success", "Service uninstalled successfully!")
+            self.update_service_status()
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to uninstall service: {e}")
+
     def save_settings(self):
         self.config["profile_pic_path"] = self.profile_pic_path_var.get()
         self.config["profile_pic_path_crop"] = self.profile_pic_path_crop_var.get()
@@ -587,6 +698,10 @@ class ScreenSaverApp:
         self.config["clock_font_size"] = self.selected_clock_font_size.get()
         self.config["ui_font_family"] = self.selected_ui_font_family.get()
         self.config["ui_font_size"] = self.selected_ui_font_size.get()
+        self.config["screensaver_timer_minutes"] = self.screensaver_timer.get()
+        self.config["enable_stock_widget"] = self.enable_stock_widget.get()
+        self.config["enable_media_widget"] = self.enable_media_widget.get()
+        self.config["stock_market"] = self.stock_market.get()
         
         if save_config(self.config):
             messagebox.showinfo("Success", "Settings saved successfully.")

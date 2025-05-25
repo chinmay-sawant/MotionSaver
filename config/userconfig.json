@@ -17,5 +17,9 @@
   "clock_font_family": "MINECRAFT PE",
   "clock_font_size": 64,
   "ui_font_family": "Segoe UI",
-  "ui_font_size": 30
+  "ui_font_size": 30,
+  "screensaver_timer_minutes": 10,
+  "enable_stock_widget": true,
+  "enable_media_widget": true,
+  "stock_market": "NSE"
 }
