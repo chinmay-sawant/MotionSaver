@@ -4,6 +4,7 @@ from PIL import Image, ImageTk, ImageDraw
 import os
 import json
 import sys # Import sys
+import time # Import time for typeahead timeout
 
 # Assuming PasswordConfig.py is in the same directory (package)
 # This will work when gui.py is imported as part of the package
@@ -141,6 +142,9 @@ class ScreenSaverApp:
         self.selected_ui_font_family = tk.StringVar(value=self.config.get("ui_font_family", "Arial"))
         self.selected_ui_font_size = tk.IntVar(value=self.config.get("ui_font_size", 18))
 
+        # For combobox typeahead
+        self.combo_typeahead_state = {} 
+
         self.setup_styles()
        
 
@@ -203,6 +207,11 @@ class ScreenSaverApp:
         # Bind combobox selection to update preview
         self.font_combo.bind("<<ComboboxSelected>>", self.update_font_preview)
 
+        # Enable keyboard navigation for font_combo
+        self.font_combo.bind("<Up>", lambda e: self._combo_nav(self.font_combo, -1) or "break")
+        self.font_combo.bind("<Down>", lambda e: self._combo_nav(self.font_combo, 1) or "break")
+        self.font_combo.bind("<Key>", lambda e: self._combo_typeahead(self.font_combo, e))
+
         ttk.Label(font_frame, text="Font Size:").grid(row=1, column=0, padx=5, pady=5, sticky=tk.W)
         self.font_size_spinbox = ttk.Spinbox(font_frame, from_=10, to=200, increment=2, textvariable=self.selected_clock_font_size, width=5)
         self.font_size_spinbox.grid(row=1, column=1, padx=5, pady=5, sticky=tk.W)
@@ -237,6 +246,11 @@ class ScreenSaverApp:
         
         # Bind combobox selection to update preview
         self.ui_font_combo.bind("<<ComboboxSelected>>", self.update_ui_font_preview)
+
+        # Enable keyboard navigation for ui_font_combo
+        self.ui_font_combo.bind("<Up>", lambda e: self._combo_nav(self.ui_font_combo, -1) or "break")
+        self.ui_font_combo.bind("<Down>", lambda e: self._combo_nav(self.ui_font_combo, 1) or "break")
+        self.ui_font_combo.bind("<Key>", lambda e: self._combo_typeahead(self.ui_font_combo, e))
 
         ttk.Label(ui_font_frame, text="Font Size:").grid(row=1, column=0, padx=5, pady=5, sticky=tk.W)
         self.ui_font_size_spinbox = ttk.Spinbox(ui_font_frame, from_=10, to=200, increment=2, textvariable=self.selected_ui_font_size, width=5)
@@ -597,319 +611,104 @@ class ScreenSaverApp:
             print(f"Error updating font preview: {e}")
             self.ui_font_preview_label.configure(font=("TkDefaultFont", 12)) # Fallback
 
-    def apply_theme(self):
-        theme = self.current_theme.get()
-        if theme == "dark":
-            self.master.configure(bg="#333333")
-            self.style.configure(".", background="#333333", foreground="#FFFFFF") # Global
-            for widget_class in ["TFrame", "TLabel", "TButton", "TLabelFrame", "TCheckbutton"]:
-                self.style.configure(f"Dark.{widget_class}", background="#333333", foreground="#FFFFFF")
-            
-            # Configure ttk widget styles for dark mode
-            self.style.configure("TEntry", fieldbackground="#222222", foreground="#FFFFFF", insertbackground="#FFFFFF")
-            self.style.configure("TCombobox", 
-                                 fieldbackground="#222222", 
-                                 foreground="#FFFFFF", 
-                                 selectbackground="#222222",
-                                 selectforeground="#FFFFFF",
-                                 background="#222222")
-            self.style.configure("TSpinbox", 
-                                 fieldbackground="#222222", 
-                                 foreground="#FFFFFF", 
-                                 insertbackground="#FFFFFF",
-                                 background="#222222",
-                                 arrowcolor="#FFFFFF")
-
-            self.style.configure('TLabelframe.Label', background='#333333', foreground='#FFFFFF')
-            
-            # Explicitly define and apply dark style for both comboboxes
-            for style_name in ['FontCombo.TCombobox', 'UIFontCombo.TCombobox']:
-                self.style.configure(style_name, 
-                                    fieldbackground="#222222",
-                                    background="#222222", 
-                                    foreground="#FFFFFF", 
-                                    arrowcolor="#FFFFFF",
-                                    selectbackground="#333333", 
-                                    selectforeground="#FFFFFF")
-                self.style.map(style_name,
-                               fieldbackground=[('readonly', '#222222')],
-                               selectbackground=[('readonly', '#333333')],
-                               background=[('readonly', '#222222')])
-            try:
-                self.font_combo.configure(style='FontCombo.TCombobox')
-                self.ui_font_combo.configure(style='UIFontCombo.TCombobox')
-            except Exception:
-                pass
-
-            self._set_entry_dark(self.master)
-            self._set_combobox_dark(self.master)
-            self._set_spinbox_dark(self.master)
-            try:
-                self.font_combo.configure(background="#222222", foreground="#FFFFFF", fieldbackground="#222222")
-            except Exception:
-                pass
-            try:
-                self.font_size_spinbox.configure(fieldbackground="#222222", foreground="#FFFFFF", background="#222222", insertbackground="#FFFFFF")
-            except Exception:
-                pass
-            try:
-                self.ui_font_combo.configure(background="#222222", foreground="#FFFFFF", fieldbackground="#222222")
-                self.ui_font_preview_label.configure(background="#333333", foreground="#FFFFFF")
-            except Exception:
-                pass
-        else: # Light theme
-            self.master.configure(bg=self.style.lookup('TFrame', 'background')) 
-            self.style.configure(".", background=self.style.lookup('TFrame', 'background'), 
-                                      foreground=self.style.lookup('TLabel', 'foreground')) 
-            for widget_class in ["TFrame", "TLabel", "TButton", "TEntry", "TLabelFrame", "TCheckbutton", "TCombobox", "TSpinbox"]:
-                self.style.configure(f"{widget_class}")
-            
-            # Reset the custom style in light mode for both comboboxes
-            for style_name in ['FontCombo.TCombobox', 'UIFontCombo.TCombobox']:
-                self.style.configure(style_name, 
-                                    fieldbackground="#FFFFFF",
-                                    background="#FFFFFF", 
-                                    foreground="#000000",
-                                    arrowcolor="#000000",
-                                    selectbackground="#CCCCCC", 
-                                    selectforeground="#000000")
-                self.style.map(style_name,
-                               fieldbackground=[('readonly', '#FFFFFF')],
-                               selectbackground=[('readonly', '#CCCCCC')],
-                               background=[('readonly', '#FFFFFF')])
-            try:
-                self.font_combo.configure(style='FontCombo.TCombobox')
-                self.ui_font_combo.configure(style='UIFontCombo.TCombobox')
-            except Exception:
-                pass
-
-            self.style.configure("TEntry", fieldbackground="#FFFFFF", foreground="#000000", insertbackground="#000000")
-            self.style.configure("TCombobox", 
-                                 fieldbackground="#FFFFFF", 
-                                 foreground="#000000", 
-                                 selectbackground=self.style.lookup('TCombobox', 'selectbackground'),
-                                 selectforeground=self.style.lookup('TCombobox', 'selectforeground'),
-                                 background=self.style.lookup('TCombobox', 'background'))
-            self.style.configure("TSpinbox", 
-                                 fieldbackground="#FFFFFF", 
-                                 foreground="#000000", 
-                                 insertbackground="#000000",
-                                 background=self.style.lookup('TSpinbox', 'background'),
-                                 arrowcolor=self.style.lookup('TSpinbox', 'arrowcolor'))
-
-            self.style.configure('TLabelframe.Label', 
-                                 background=self.style.lookup('TLabelFrame', 'background'), 
-                                 foreground=self.style.lookup('TLabelFrame.Label', 'foreground'))
-            
-            self._set_entry_light(self.master)
-            self._set_combobox_light(self.master)
-            self._set_spinbox_light(self.master)
-            try:
-                self.font_combo.configure(background="#FFFFFF", foreground="#000000", fieldbackground="#FFFFFF")
-            except Exception:
-                pass
-            try:
-                self.font_size_spinbox.configure(fieldbackground="#FFFFFF", foreground="#000000", background="#FFFFFF", insertbackground="#000000")
-            except Exception:
-                pass
-            try:
-                self.ui_font_combo.configure(background="#FFFFFF", foreground="#000000", fieldbackground="#FFFFFF")
-                self.ui_font_preview_label.configure(background=self.style.lookup('TFrame', 'background'), foreground="#000000")
-            except Exception:
-                pass
-        self.update_font_preview()
-        self.update_ui_font_preview()
-
-    def _set_entry_dark(self, widget):
-        # Recursively set all Entry widgets to dark mode
-        if isinstance(widget, (tk.Entry, ttk.Entry)):
-            try:
-                widget.configure(background="#222222", foreground="#FFFFFF", insertbackground="#FFFFFF")
-            except Exception:
-                pass
-        if hasattr(widget, "winfo_children"):
-            for child in widget.winfo_children():
-                self._set_entry_dark(child)
-
-    def _set_entry_light(self, widget):
-        # Recursively set all Entry widgets to light mode (system default)
-        if isinstance(widget, (tk.Entry, ttk.Entry)):
-            try:
-                widget.configure(background="#FFFFFF", foreground="#000000", insertbackground="#000000")
-            except Exception:
-                pass
-        if hasattr(widget, "winfo_children"):
-            for child in widget.winfo_children():
-                self._set_entry_light(child)
-
-    def _set_combobox_dark(self, widget):
-        # Recursively set all Combobox widgets to dark mode
-        if isinstance(widget, ttk.Combobox):
-            try:
-                # fieldbackground for the entry part, background for the widget frame
-                widget.configure(fieldbackground="#222222", foreground="#FFFFFF", background="#222222")
-            except Exception:
-                pass
-        if hasattr(widget, "winfo_children"):
-            for child in widget.winfo_children():
-                self._set_combobox_dark(child)
-
-    def _set_combobox_light(self, widget):
-        # Recursively set all Combobox widgets to light mode
-        if isinstance(widget, ttk.Combobox):
-            try:
-                widget.configure(fieldbackground="#FFFFFF", foreground="#000000", background="#FFFFFF")
-            except Exception:
-                pass
-        if hasattr(widget, "winfo_children"):
-            for child in widget.winfo_children():
-                self._set_combobox_light(child)
-
-    def _set_spinbox_dark(self, widget):
-        # Recursively set all Spinbox widgets to dark mode
-        if isinstance(widget, ttk.Spinbox):
-            try:
-                # For ttk.Spinbox, fieldbackground is key for the entry part
-                widget.configure(fieldbackground="#222222", foreground="#FFFFFF", background="#222222", insertbackground="#FFFFFF")
-            except Exception:
-                pass
-        elif isinstance(widget, tk.Spinbox): # Standard tk.Spinbox
-            try:
-                widget.configure(background="#222222", foreground="#FFFFFF", insertbackground="#FFFFFF")
-            except Exception:
-                pass
-        if hasattr(widget, "winfo_children"):
-            for child in widget.winfo_children():
-                self._set_spinbox_dark(child)
-
-    def _set_spinbox_light(self, widget):
-        # Recursively set all Spinbox widgets to light mode
-        if isinstance(widget, ttk.Spinbox):
-            try:
-                widget.configure(fieldbackground="#FFFFFF", foreground="#000000", background="#FFFFFF", insertbackground="#000000")
-            except Exception:
-                pass
-        elif isinstance(widget, tk.Spinbox): # Standard tk.Spinbox
-            try:
-                widget.configure(background="#FFFFFF", foreground="#000000", insertbackground="#000000")
-            except Exception:
-                pass
-        if hasattr(widget, "winfo_children"):
-            for child in widget.winfo_children():
-                self._set_spinbox_light(child)
-
-    def toggle_theme(self):
-        self.config["theme"] = self.current_theme.get()
-        save_config(self.config)
-        # Restart the application to fully apply theme changes
-        self.master.destroy()
-        os.execl(sys.executable, sys.executable, *sys.argv)
-
-    def browse_profile_pic(self):
-        filepath = filedialog.askopenfilename(
-            title="Select Profile Picture",
-            filetypes=[("Image files", "*.png *.jpg *.jpeg *.gif *.bmp"), ("All files", "*.*")]
-        )
-        if filepath:
-            # Store relative path if possible, or absolute if on different drive
-            try:
-                rel_path = os.path.relpath(filepath, PROJECT_ROOT)
-                if ".." not in rel_path: # Check if it's within project or its subdirs
-                    self.profile_pic_path_var.set(rel_path)
-                else: # Different drive or far outside project
-                    self.profile_pic_path_var.set(filepath)
-            except ValueError: # Paths are on different drives (Windows)
-                 self.profile_pic_path_var.set(filepath)
-
-
-    def crop_profile_pic(self):
-        current_path = self.profile_pic_path_var.get()
-        if not current_path:
-            messagebox.showwarning("No Image", "Please select a profile picture first.")
-            return
+    def _combo_nav(self, combo, direction):
+        """Navigate combobox values with up/down arrow keys."""
+        values = combo['values']
+        if not values:
+            return "break" # No values to navigate
+        try:
+            idx = values.index(combo.get())
+        except ValueError:
+            # If current value not in list, or list is empty, decide a starting point
+            idx = 0 if direction == 1 else len(values) -1 
         
-        abs_path = current_path
-        if not os.path.isabs(abs_path):
-            abs_path = os.path.join(PROJECT_ROOT, abs_path)
+        new_idx = (idx + direction) % len(values)
+        combo.current(new_idx) # Use current() to set by index
+        combo.event_generate("<<ComboboxSelected>>")
+        return "break" # Prevent default behavior
 
-        if not os.path.exists(abs_path):
-            messagebox.showerror("Error", f"Image not found: {abs_path}")
-            return
+    def _combo_typeahead(self, combo, event):
+        """Jump to value in combobox starting with typed character(s), with cycling."""
         
-        # Create a cropped filename by adding _crop before the extension
-        filename, ext = os.path.splitext(abs_path)
-        crop_filename = f"{filename}_crop{ext}"
+        if event.keysym in ('Tab', 'Return', 'Escape', 'BackSpace', 'Up', 'Down', 'Left', 'Right'):
+            if combo in self.combo_typeahead_state:
+                self.combo_typeahead_state[combo] = {'buffer': '', 'last_time': 0, 'last_selected_idx_for_buffer': -1}
+            return 
+
+        if not event.char or not event.char.isprintable():
+            if combo in self.combo_typeahead_state: # Reset buffer on other non-printable
+                self.combo_typeahead_state[combo]['buffer'] = ""
+                self.combo_typeahead_state[combo]['last_selected_idx_for_buffer'] = -1
+            return "break"
+
+        if combo not in self.combo_typeahead_state:
+            self.combo_typeahead_state[combo] = {'buffer': '', 'last_time': 0, 'last_selected_idx_for_buffer': -1}
         
-        # Create a temporary cropper window that will let the user crop the image
-        cropper = CroppingWindow(self.master, abs_path, crop_filename)
+        state = self.combo_typeahead_state[combo]
+        current_time = time.time()
+        typed_char = event.char.lower()
+
+        previous_buffer = state['buffer']
         
-        # Only process if the crop was actually saved (not cancelled)
-        if hasattr(cropper, 'crop_saved') and cropper.crop_saved and hasattr(cropper, 'image_path') and os.path.exists(cropper.image_path):
+        if current_time - state['last_time'] > 1.2: # Timeout
+            state['buffer'] = typed_char
+            state['last_selected_idx_for_buffer'] = -1
+        else: # Within timeout
+            if len(typed_char) == 1 and state['buffer'] == typed_char:
+                # Same single character pressed again - buffer remains, for cycling.
+                # last_selected_idx_for_buffer is preserved to find the next item.
+                pass
+            elif len(typed_char) == 1 and len(state['buffer']) == 1 and state['buffer'] != typed_char:
+                # Different single character typed (e.g., was 'a', now 'b')
+                state['buffer'] = typed_char
+                state['last_selected_idx_for_buffer'] = -1
+            else:
+                # Appending to buffer or starting a new multi-char sequence
+                state['buffer'] += typed_char
+                # If buffer fundamentally changed (not just a cycle attempt on single char)
+                # reset last_selected_idx so search for new buffer starts from beginning of matches.
+                if not previous_buffer or not state['buffer'].startswith(previous_buffer) or len(previous_buffer) != len(state['buffer']) -1 :
+                     state['last_selected_idx_for_buffer'] = -1
+
+
+        state['last_time'] = current_time
+        target_buffer = state['buffer']
+        values = combo['values']
+        
+        possible_matches_indices = [idx for idx, val in enumerate(values) if val.lower().startswith(target_buffer)]
+
+        if not possible_matches_indices:
+            # No match for the current buffer.
+            # Optionally, revert buffer or clear selection. For now, do nothing to selection.
+            # Reset last_selected_idx if current buffer is new and failed.
+            if target_buffer != previous_buffer : # if buffer changed and failed
+                 state['last_selected_idx_for_buffer'] = -1
+            # state['buffer'] = "" # Or revert to previous_buffer if desired
+            return "break"
+
+        new_selection_idx = -1
+
+        if state['last_selected_idx_for_buffer'] != -1 and \
+           state['last_selected_idx_for_buffer'] in possible_matches_indices:
+            # Current buffer still matches the prefix of the last selected item,
+            # or the buffer is a single char and we are cycling.
             try:
-                rel_path = os.path.relpath(cropper.image_path, PROJECT_ROOT)
-                if ".." not in rel_path:
-                    self.profile_pic_path_crop_var.set(rel_path)
-                else:
-                    self.profile_pic_path_crop_var.set(cropper.image_path)
-                    
-                # Update config immediately so the cropped image is used
-                self.config["profile_pic_path_crop"] = self.profile_pic_path_crop_var.get()
-                save_config(self.config)
-                messagebox.showinfo("Success", "Cropped image saved and will be used for the screensaver.")
-                
-            except ValueError:
-                self.profile_pic_path_crop_var.set(cropper.image_path)
-                self.config["profile_pic_path_crop"] = self.profile_pic_path_crop_var.get()
-                save_config(self.config)
-                messagebox.showinfo("Success", "Cropped image saved and will be used for the screensaver.")
-
-    def browse_video(self):
-        filepath = filedialog.askopenfilename(
-            title="Select Video File",
-            filetypes=[("Video files", "*.mp4 *.avi *.mkv"), ("All files", "*.*")]
-        )
-        if filepath:
-            try:
-                rel_path = os.path.relpath(filepath, PROJECT_ROOT)
-                if ".." not in rel_path:
-                    self.video_path_var.set(rel_path)
-                else:
-                    self.video_path_var.set(filepath)
-            except ValueError:
-                 self.video_path_var.set(filepath)
-
-    def save_settings(self):
-        self.config["profile_pic_path"] = self.profile_pic_path_var.get()
-        self.config["profile_pic_path_crop"] = self.profile_pic_path_crop_var.get()
-        self.config["video_path"] = self.video_path_var.get()
-        self.config["theme"] = self.current_theme.get()
-        self.config["clock_font_family"] = self.selected_clock_font_family.get()
-        self.config["clock_font_size"] = self.selected_clock_font_size.get()
-        self.config["ui_font_family"] = self.selected_ui_font_family.get()
-        self.config["ui_font_size"] = self.selected_ui_font_size.get()
-        
-        if save_config(self.config):
-            messagebox.showinfo("Success", "Settings saved successfully.")
+                current_match_list_idx = possible_matches_indices.index(state['last_selected_idx_for_buffer'])
+                next_match_list_idx = (current_match_list_idx + 1) % len(possible_matches_indices)
+                new_selection_idx = possible_matches_indices[next_match_list_idx]
+            except ValueError: # Should not happen if last_selected_idx_for_buffer is in possible_matches_indices
+                new_selection_idx = possible_matches_indices[0]
         else:
-            messagebox.showerror("Error", "Failed to save settings.")
+            # First match for this buffer, or previous selection no longer relevant.
+            new_selection_idx = possible_matches_indices[0]
 
-    def update_font_preview(self, event=None):
-        """Updates the font preview label with the selected font."""
-        selected_font = self.selected_clock_font_family.get()
-        try:
-            self.font_preview_label.configure(font=(selected_font, 12))
-        except Exception as e:
-            print(f"Error updating font preview: {e}")
-            self.font_preview_label.configure(font=("TkDefaultFont", 12)) # Fallback
-
-    def update_ui_font_preview(self, event=None):
-        """Updates the font preview label with the selected font."""
-        selected_font = self.selected_ui_font_family.get()
-        try:
-            self.ui_font_preview_label.configure(font=(selected_font, 12))
-        except Exception as e:
-            print(f"Error updating font preview: {e}")
-            self.ui_font_preview_label.configure(font=("TkDefaultFont", 12)) # Fallback
+        if new_selection_idx != -1:
+            if combo.current() != new_selection_idx: # Avoid redundant updates if already selected
+                 combo.current(new_selection_idx)
+                 combo.event_generate("<<ComboboxSelected>>")
+            state['last_selected_idx_for_buffer'] = new_selection_idx
+        
+        return "break"
 
 if __name__ == '__main__':
     # When running the script directly, adjust sys.path to find the package
