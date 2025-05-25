@@ -2,7 +2,9 @@
 
 A modern, customizable screensaver that displays a video background with an elegant overlay showing the current time, user profile, and username.
 
-![VideoClockScreenSaver Preview](screenshots/preview.png)
+## Demo
+
+[![VideoClockScreenSaver Demo](http://img.youtube.com/vi/VIDEO_ID_HERE/0.jpg)](https://github.com/chinmay-sawant/MotionSaver/blob/master/screenshots/demo.mp4)
 
 ## Features
 
@@ -96,6 +98,3 @@ d:\Chinmay_Personal_Projects\ScreenSaver\
     ├── default_video.mp4     # Default background video
     └── default_profile.png   # Default profile image
 ```
-
-## Demo
-[Watch the Demo](screenshots/demo.mp4)
