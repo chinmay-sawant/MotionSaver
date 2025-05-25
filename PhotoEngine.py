@@ -2,9 +2,18 @@ import tkinter as tk
 import argparse
 import os
 import platform 
+import sys
 from screensaver_app.video_player import VideoClockScreenSaver 
 from screensaver_app.PasswordConfig import verify_password_dialog_macos
 import gui 
+
+# Import PyUAC for UAC elevation
+try:
+    import pyuac
+except ImportError:
+    print("PyUAC not installed. Please install with: pip install pyuac")
+    print("For elevation capability, also install: pip install pypiwin32")
+    pyuac = None
 
 # For multi-monitor black-out and event hooking on Windows
 WINDOWS_MULTI_MONITOR_SUPPORT = False
@@ -20,6 +29,7 @@ if platform.system() == "Windows":
         import win32api
         import win32con
         import win32gui
+        import winreg
         # Import additional Windows modules for event hooking
         import win32event
         from ctypes import windll, CFUNCTYPE, c_int, c_uint, c_void_p, POINTER, Structure
@@ -65,6 +75,38 @@ if platform.system() == "Windows":
         print("pywin32 not installed, multi-monitor features and dynamic updates will be limited.")
 else:
     pass # No specific multi-monitor black-out for other OS in this version
+
+# Functions to disable/enable Task Manager (Ctrl+Alt+Del)
+def disable_ctrl_alt_del():
+    """Disable Task Manager by modifying registry (requires admin privileges)"""
+    if platform.system() == "Windows":
+        try:
+            key = winreg.CreateKey(winreg.HKEY_CURRENT_USER,
+                                  r"Software\Microsoft\Windows\CurrentVersion\Policies\System")
+            winreg.SetValueEx(key, "DisableTaskMgr", 0, winreg.REG_DWORD, 1)
+            winreg.CloseKey(key)
+            print("Task Manager disabled")
+            return True
+        except Exception as e:
+            print(f"Failed to disable Task Manager: {e}")
+            print("This feature requires administrative privileges")
+            return False
+    return False
+
+def enable_ctrl_alt_del():
+    """Re-enable Task Manager by modifying registry"""
+    if platform.system() == "Windows":
+        try:
+            key = winreg.CreateKey(winreg.HKEY_CURRENT_USER,
+                                  r"Software\Microsoft\Windows\CurrentVersion\Policies\System")
+            winreg.SetValueEx(key, "DisableTaskMgr", 0, winreg.REG_DWORD, 0)
+            winreg.CloseKey(key)
+            print("Task Manager re-enabled")
+            return True
+        except Exception as e:
+            print(f"Failed to re-enable Task Manager: {e}")
+            return False
+    return False
 
 secondary_screen_windows = [] 
 
@@ -143,6 +185,9 @@ def start_screensaver(video_path_override=None):
     secondary_screen_windows = [] 
     hWinEventHook = None
     
+    # Disable Task Manager at startup (requires admin privileges)
+    task_manager_disabled = disable_ctrl_alt_del()
+    
     root = tk.Tk()
     root_ref_for_hook = root # Store root for the callback
     root.attributes('-fullscreen', True) 
@@ -191,6 +236,10 @@ def start_screensaver(video_path_override=None):
                 hWinEventHook = None
             root_ref_for_hook = None
 
+            # Re-enable Task Manager if it was disabled
+            if task_manager_disabled:
+                enable_ctrl_alt_del()
+
             for sec_win in secondary_screen_windows:
                 if sec_win.winfo_exists():
                     sec_win.destroy()
@@ -224,29 +273,61 @@ def start_screensaver(video_path_override=None):
             except Exception as e_unhook:
                 print(f"Error unhooking display event on close: {e_unhook}")
             hWinEventHook = None
+            
+        # Re-enable Task Manager if it was disabled
+        if task_manager_disabled:
+            enable_ctrl_alt_del()
+            
         root_ref_for_hook = None
         if root.winfo_exists():
             root.destroy()
 
     root.protocol("WM_DELETE_WINDOW", on_closing_main_window)
-    root.mainloop()
+    
+    # Ensure Task Manager is always re-enabled even if the app crashes
+    try:
+        root.mainloop()
+    finally:
+        # Re-enable Task Manager in case of crash or exception
+        if task_manager_disabled:
+            enable_ctrl_alt_del()
 
 def main():
     parser = argparse.ArgumentParser(description='Video Clock Screen Saver')
-    # The default for --video here is just for the help message and if used as an override.
-    # If --video is not provided, VideoClockScreenSaver will use its internal logic (config or its own default).
     parser.add_argument('--video', default=None, help='Path to video file (overrides config)')
     args = parser.parse_args()
     
     start_screensaver(args.video)
 
-if __name__ == "__main__":
+def admin_main():
+    """Main function that will check for admin rights and restart if needed"""
     parser = argparse.ArgumentParser(description='Video Clock Screen Saver')
     parser.add_argument('--mode', choices=['saver', 'gui'], default='saver', help='Run mode: saver or gui')
     parser.add_argument('--video', default=None, help='Path to video file (overrides config)')
     args = parser.parse_args()
-
+    
     if args.mode == 'saver':
         start_screensaver(args.video)
     elif args.mode == 'gui':
         gui.main() # Call the main function from the gui module
+
+if __name__ == "__main__":
+    # Request admin privileges when running on Windows
+    if platform.system() == "Windows" and pyuac:
+        if not pyuac.isUserAdmin():
+            print("Restarting with admin privileges...")
+            # The script will be rerun with elevated privileges
+            try:
+                pyuac.runAsAdmin()
+            except Exception as e:
+                print(f"Failed to restart with admin privileges: {e}")
+                print("Continuing without admin privileges. Some features may be limited.")
+                admin_main()
+            # Exit this instance of the script
+            sys.exit(0)
+        else:
+            # Already running with admin privileges
+            admin_main()
+    else:
+        # Not on Windows or PyUAC not available, run normally
+        admin_main()

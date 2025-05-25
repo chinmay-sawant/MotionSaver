@@ -12,3 +12,5 @@ pygame>=2.0.0
 mutagen>=1.45.0
 winsdk>=1.0.0b9
 pywin32>=300
+pyuac>=0.0.5
+pypiwin32>=223
