@@ -3,7 +3,7 @@
 A modern, customizable screensaver that displays a video background with an elegant overlay showing the current time, user profile, and username.
 
 ## Demo
-
+[![MotionSaver Demo](http://img.youtube.com/vi/8JzlZ49vus4/0.jpg)](https://www.youtube.com/watch?v=8JzlZ49vus4)
 [![MotionSaver Demo](http://img.youtube.com/vi/3UxKSrSMv0o/0.jpg)](https://www.youtube.com/watch?v=3UxKSrSMv0o)
 
 ## Features
