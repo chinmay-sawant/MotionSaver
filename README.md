@@ -4,7 +4,7 @@ A modern, customizable screensaver that displays a video background with an eleg
 
 ## Demo
 
-[![VideoClockScreenSaver Demo](http://img.youtube.com/vi/VIDEO_ID_HERE/0.jpg)](https://github.com/chinmay-sawant/MotionSaver/blob/master/screenshots/demo.mp4)
+[![VideoClockScreenSaver Demo](http://img.youtube.com/vi/3UxKSrSMv0o/0.jpg)](https://www.youtube.com/watch?v=3UxKSrSMv0o)
 
 ## Features
 
