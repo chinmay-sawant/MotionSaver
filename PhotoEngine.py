@@ -6,6 +6,7 @@ import sys
 from screensaver_app.video_player import VideoClockScreenSaver 
 from screensaver_app.PasswordConfig import verify_password_dialog_macos
 import gui 
+import json
 
 # Import PyUAC for UAC elevation
 try:
@@ -185,8 +186,11 @@ def start_screensaver(video_path_override=None):
     secondary_screen_windows = [] 
     hWinEventHook = None
     
+    config = load_config()
+    task_manager_disabled = False
     # Disable Task Manager at startup (requires admin privileges)
-    task_manager_disabled = disable_ctrl_alt_del()
+    if config.get("run_as_admin", False):
+        task_manager_disabled = disable_ctrl_alt_del()
     
     root = tk.Tk()
     root_ref_for_hook = root # Store root for the callback
@@ -292,6 +296,40 @@ def start_screensaver(video_path_override=None):
         if task_manager_disabled:
             enable_ctrl_alt_del()
 
+def load_config():
+    """Load configuration from userconfig.json"""
+    # Correct path to userconfig.json, assuming it's in a 'config' subdirectory
+    # relative to PhotoEngine.py's location.
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    config_path = os.path.join(script_dir, 'config', 'userconfig.json')
+    
+    default_config = {
+        "run_as_admin": False,
+        "video_path": None, # Ensure other relevant defaults are present
+        # Add other essential default values here if necessary
+    }
+    
+    try:
+        if os.path.exists(config_path):
+            with open(config_path, 'r') as f:
+                config_data = json.load(f)
+                # Ensure all default keys are present in the loaded config
+                for key, value in default_config.items():
+                    if key not in config_data:
+                        config_data[key] = value
+                return config_data
+        else:
+            print(f"[PhotoEngine] Config file not found at {config_path}. Using defaults.")
+            return default_config
+    except Exception as e:
+        print(f"[PhotoEngine] Error loading config: {e}. Using defaults.")
+        return default_config
+
+def check_admin_requirement():
+    """Check if app should run as admin based on config"""
+    config = load_config()
+    return config.get("run_as_admin", False)
+
 def main():
     parser = argparse.ArgumentParser(description='Video Clock Screen Saver')
     parser.add_argument('--video', default=None, help='Path to video file (overrides config)')
@@ -312,22 +350,36 @@ def admin_main():
         gui.main() # Call the main function from the gui module
 
 if __name__ == "__main__":
+    print("[PhotoEngine] Starting PhotoEngine...") # Debug
     # Request admin privileges when running on Windows
     if platform.system() == "Windows" and pyuac:
-        if not pyuac.isUserAdmin():
-            print("Restarting with admin privileges...")
-            # The script will be rerun with elevated privileges
-            try:
-                pyuac.runAsAdmin()
-            except Exception as e:
-                print(f"Failed to restart with admin privileges: {e}")
-                print("Continuing without admin privileges. Some features may be limited.")
+        current_config = load_config()
+        print(f"[PhotoEngine] Loaded config for admin check: run_as_admin = {current_config.get('run_as_admin')}") # Debug
+        
+        if current_config.get("run_as_admin", False):
+            if not pyuac.isUserAdmin():
+                print("[PhotoEngine] Admin privileges required, but not currently running as admin.") # Debug
+                print("[PhotoEngine] Attempting to restart with admin privileges...") # Debug
+                try:
+                    pyuac.runAsAdmin()  # This will restart the script with sys.argv
+                    print("[PhotoEngine] runAsAdmin called. Exiting current non-admin instance.") # Debug
+                    sys.exit(0)  # Crucial: Exit the current non-admin instance immediately
+                except Exception as e:
+                    print(f"[PhotoEngine] Failed to restart with admin privileges: {e}")
+                    print("[PhotoEngine] Continuing without admin privileges. Some features may be limited.")
+                    # Fallback to running admin_main without elevated privileges if restart fails
+                    admin_main() 
+                    sys.exit(1) # Exit after fallback attempt if it also has issues or to signify failure
+            else:
+                print("[PhotoEngine] Already running with admin privileges.") # Debug
                 admin_main()
-            # Exit this instance of the script
-            sys.exit(0)
         else:
-            # Already running with admin privileges
+            print("[PhotoEngine] Admin privileges not required by configuration.") # Debug
             admin_main()
     else:
-        # Not on Windows or PyUAC not available, run normally
+        if platform.system() != "Windows":
+            print("[PhotoEngine] Not running on Windows. Admin check skipped.") # Debug
+        elif not pyuac:
+            print("[PhotoEngine] PyUAC module not available. Admin check skipped.") # Debug
         admin_main()
+    print("[PhotoEngine] PhotoEngine finished.") # Debug

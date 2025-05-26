@@ -153,6 +153,11 @@ class ScreenSaverApp:
         self.enable_stock_widget = tk.BooleanVar(value=self.config.get("enable_stock_widget", False))
         self.enable_media_widget = tk.BooleanVar(value=self.config.get("enable_media_widget", False))
         self.stock_market = tk.StringVar(value=self.config.get("stock_market", "NASDAQ"))
+        self.weather_widget_var = tk.BooleanVar(value=self.config.get("enable_weather_widget", True))
+        self.weather_pincode_var = tk.StringVar(value=self.config.get("weather_pincode", "400068"))
+        self.weather_country_var = tk.StringVar(value=self.config.get("weather_country", "IN"))
+        self.admin_mode_var = tk.BooleanVar(value=self.config.get("run_as_admin", False))
+
 
         # For combobox typeahead
         self.combo_typeahead_state = {} 
@@ -343,9 +348,92 @@ class ScreenSaverApp:
         )
         self.media_check.grid(row=1, column=0, columnspan=3, padx=5, pady=5, sticky=tk.W) # Span for better layout
 
+        # Media Widget Toggle
+        media_frame = ttk.Frame(widget_frame)
+        media_frame.grid(row=2, column=0, columnspan=3, pady=5, sticky="ew")
+        
+        self.media_widget_var = tk.BooleanVar(value=self.config.get("enable_media_widget", False))
+        media_check = ttk.Checkbutton(media_frame, text="Enable Media Widget", variable=self.media_widget_var)
+        media_check.pack(side=tk.LEFT, padx=5)
+        
+        # Weather Widget Toggle
+        weather_frame = ttk.Frame(widget_frame)
+        weather_frame.grid(row=3, column=0, columnspan=3, pady=5, sticky="ew")
+        
+        self.weather_widget_var = tk.BooleanVar(value=self.config.get("enable_weather_widget", True))
+        weather_check = ttk.Checkbutton(weather_frame, text="Enable Weather Widget", variable=self.weather_widget_var)
+        weather_check.pack(side=tk.LEFT, padx=5)
+        
+        # Weather settings sub-frame
+        weather_settings_frame = ttk.Frame(weather_frame)
+        weather_settings_frame.pack(side=tk.LEFT, padx=(20, 0))
+        
+        ttk.Label(weather_settings_frame, text="Pincode:").pack(side=tk.LEFT, padx=(0, 5))
+        self.weather_pincode_var = tk.StringVar(value=self.config.get("weather_pincode", "400068"))
+        pincode_entry = ttk.Entry(weather_settings_frame, textvariable=self.weather_pincode_var, width=10)
+        pincode_entry.pack(side=tk.LEFT, padx=(0, 10))
+        
+        ttk.Label(weather_settings_frame, text="Country:").pack(side=tk.LEFT, padx=(0, 5))
+        self.weather_country_var = tk.StringVar(value=self.config.get("weather_country", "IN"))
+        country_entry = ttk.Entry(weather_settings_frame, textvariable=self.weather_country_var, width=5)
+        country_entry.pack(side=tk.LEFT)
+
+        # --- System Settings (Admin Toggle) ---
+        system_settings_frame = ttk.LabelFrame(main_frame, text="System Settings", padding="10")
+        system_settings_frame.grid(row=current_row, column=current_col, padx=5, pady=5, sticky="nsew")
+        # If current_col was 0 after widget_frame, this new frame might go to column 0 or 1
+        # depending on how you want the layout. Let's assume it takes the next available slot.
+        # If widget_frame took current_row, col 0, then this could be current_row, col 1
+        # Or if widget_frame spanned, this is next_row, col 0.
+        # Based on previous grid, widget_frame was (current_row, col 0). So this is (current_row, col 1)
+        # Or if widget_frame was the last in its row, this starts a new row:
+        # current_col = 0 # Reset column for new conceptual row if needed
+        # current_row +=1 # Increment row
+        # system_settings_frame.grid(row=current_row, column=0, columnspan=2, padx=5, pady=5, sticky="nsew")
+
+        # Let's assume it's placed after widget_frame in the grid flow
+        # If widget_frame was at (current_row, 0) and was the only item in that column for that row:
+        current_col +=1 # Move to next column if previous was single column
+        if current_col >= 2: # Max 2 columns, so start new row
+            current_col = 0
+            current_row +=1
+        system_settings_frame.grid(row=current_row, column=current_col, padx=5, pady=5, sticky="nsew")
+        # And then the user management frame would follow.
+        # This logic depends heavily on the exact state of current_row and current_col before this block.
+        # A simpler approach is to just increment current_row if the previous section filled the columns.
+        # Let's assume widget_frame was at (current_row, 0). If it's the only thing in that row,
+        # then system_settings_frame can go to (current_row, 1).
+        # If widget_frame spanned 2 columns, then system_settings_frame must go to (current_row + 1, 0).
+
+        # Given the previous structure, widget_frame was at (current_row, 0).
+        # Let's put System Settings next to it if there's space, or on a new row.
+        # If current_col was 0 after widget_frame, this means widget_frame was the start of a row.
+        # So, system_settings_frame can go to (current_row, 1)
+        # system_settings_frame.grid(row=current_row, column=1, padx=5, pady=5, sticky="nsew")
+        # current_col = 0 # Reset for next row
+        # current_row += 1 # Next section will be on a new row
+
+        # Simpler: Assume each major section gets its own row or pair.
+        # If widget_frame was the last item on its row:
+        # current_row += 1
+        # current_col = 0
+        # system_settings_frame.grid(row=current_row, column=0, columnspan=2, padx=5, pady=5, sticky="nsew")
+
+
+        admin_check = ttk.Checkbutton(system_settings_frame, text="Run as Administrator (requires app restart)",
+                                      variable=self.admin_mode_var)
+        admin_check.pack(anchor=tk.W, padx=5, pady=5)
+        admin_info_label = ttk.Label(system_settings_frame,
+                                     text="Enable if certain features require admin rights (e.g., service management, task manager control).",
+                                     font=('Arial', 8), wraplength=300, justify=tk.LEFT)
+        admin_info_label.pack(anchor=tk.W, padx=5, pady=(0,5))
+
+
         # --- User Management ---
         user_mgmt_frame = ttk.LabelFrame(main_frame, text="User Management", padding="10")
-        # Make User Management span both columns for more space
+        # Ensure user_mgmt_frame is placed correctly after system_settings_frame
+        current_row += 1 # Increment row after the row containing system_settings_frame
+        current_col = 0  # Reset column for the new row
         user_mgmt_frame.grid(row=current_row, column=0, columnspan=2, padx=5, pady=5, sticky="nsew")
         current_row += 1 # current_row is now the row *after* user_mgmt_frame
         # current_col is implicitly 0 after a columnspan
@@ -841,8 +929,12 @@ class ScreenSaverApp:
         self.config["ui_font_size"] = self.selected_ui_font_size.get()
         self.config["screensaver_timer_minutes"] = self.screensaver_timer.get()
         self.config["enable_stock_widget"] = self.enable_stock_widget.get()
-        self.config["enable_media_widget"] = self.enable_media_widget.get()
+        self.config["enable_media_widget"] = self.media_widget_var.get() # Use the correct var
         self.config["stock_market"] = self.stock_market.get()
+        self.config["enable_weather_widget"] = self.weather_widget_var.get()
+        self.config["weather_pincode"] = self.weather_pincode_var.get()
+        self.config["weather_country"] = self.weather_country_var.get()
+        self.config["run_as_admin"] = self.admin_mode_var.get()
         
         if save_config(self.config):
             messagebox.showinfo("Success", "Settings saved successfully.")
@@ -877,7 +969,6 @@ class ScreenSaverApp:
         except ValueError:
             # If current value not in list, or list is empty, decide a starting point
             idx = 0 if direction == 1 else len(values) -1 
-        
         new_idx = (idx + direction) % len(values)
         combo.current(new_idx) # Use current() to set by index
         combo.event_generate("<<ComboboxSelected>>")

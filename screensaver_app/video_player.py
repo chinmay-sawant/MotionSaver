@@ -263,10 +263,12 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try:
     from widgets.stock_widget import StockWidget
     from widgets.media_widget import MediaWidget
+    from widgets.weather_widget import WeatherWidget
 except ImportError as e:
     print(f"Widget import error: {e}")
     StockWidget = None
     MediaWidget = None
+    WeatherWidget = None
 
 class VideoClockScreenSaver:
     def __init__(self, master, video_path_arg=None): # video_path_arg is for CLI override
@@ -415,7 +417,13 @@ class VideoClockScreenSaver:
                 
                 widgets_to_create = []
                 
-                # Prepare stock widget creation (higher priority - less resource intensive)
+                # Prepare weather widget creation (highest priority - lightweight)
+                if config.get("enable_weather_widget", True) and WeatherWidget:
+                    pincode = config.get("weather_pincode", "400068")
+                    country = config.get("weather_country", "IN")
+                    widgets_to_create.append(("weather", (pincode, country)))
+                
+                # Prepare stock widget creation (medium priority)
                 if config.get("enable_stock_widget", False) and StockWidget:
                     widgets_to_create.append(("stock", config.get("stock_market", "NASDAQ")))
                 
@@ -423,26 +431,45 @@ class VideoClockScreenSaver:
                 if config.get("enable_media_widget", False) and MediaWidget:
                     widgets_to_create.append(("media", None))
                 
-                # Create widgets with much longer staggered timing
+                # Create widgets with staggered timing
                 for i, (widget_type, param) in enumerate(widgets_to_create):
-                    # Longer stagger to reduce initial load
                     if i > 0:
-                        time.sleep(1.0)  # 1 second between widgets
+                        time.sleep(0.8)  # Stagger widget creation
                     
                     # Schedule widget creation on main thread
-                    if widget_type == "stock":
+                    if widget_type == "weather":
+                        pincode, country = param
+                        self.master.after(0, lambda p=pincode, c=country: self._create_weather_widget(p, c, screen_w, screen_h))
+                    elif widget_type == "stock":
                         self.master.after(0, lambda market=param: self._create_stock_widget(market, screen_w, screen_h))
                     elif widget_type == "media":
-                        # Extra delay for media widget due to YouTube detection overhead
-                        time.sleep(0.5)
+                        time.sleep(0.5)  # Extra delay for media widget
                         self.master.after(0, lambda: self._create_media_widget(screen_w, screen_h))
                         
             except Exception as e:
                 print(f"Error in async widget creation: {e}")
         
-        # Start widget creation in separate thread with lower priority
+        # Start widget creation in separate thread
         widget_thread = threading.Thread(target=create_widgets_async, daemon=True)
         widget_thread.start()
+
+    def _create_weather_widget(self, pincode, country, screen_w, screen_h):
+        """Create weather widget on main thread"""
+        try:
+            weather_widget_toplevel = WeatherWidget(
+                self.master, 
+                self.TRANSPARENT_KEY, 
+                screen_width=screen_w,
+                screen_height=screen_h,
+                pincode=pincode,
+                country_code=country
+            )
+            
+            self.widgets.append(weather_widget_toplevel)
+            print(f"Weather widget created for {pincode}, {country}.")
+            
+        except Exception as e:
+            print(f"Failed to create weather widget: {e}")
 
     def _create_stock_widget(self, market, screen_w, screen_h):
         """Create stock widget on main thread"""

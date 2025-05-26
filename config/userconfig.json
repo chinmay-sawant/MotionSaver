@@ -17,5 +17,9 @@
   "screensaver_timer_minutes": 10,
   "enable_stock_widget": true,
   "enable_media_widget": true,
-  "stock_market": "NSE"
+  "stock_market": "NSE",
+  "run_as_admin": false,
+  "enable_weather_widget": true,
+  "weather_pincode": "400068",
+  "weather_country": "IN"
 }
