@@ -1,5 +1,10 @@
+# Bytecode cache
 __pycache__/
 
+# Misc
 ideas.txt
 video.mp4
+.cache.sqlite
+
+#Temporary files
 t2.py

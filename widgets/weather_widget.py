@@ -21,9 +21,9 @@ class WeatherWidget:
         self.window.configure(bg=transparent_key)
         self.window.overrideredirect(True)
         
-        # Position in top-right corner with margin
+        # Position in top-right corner with margin - Increase height for forecast
         widget_width = 300
-        widget_height = 200
+        widget_height = 280  # Increased from 200 to accommodate forecast
         x_pos = screen_width - widget_width - 20
         y_pos = 20
         
@@ -97,47 +97,83 @@ class WeatherWidget:
             self.wind_label.config(text="Wind: -- km/h")
             self.precip_label.config(text="Precipitation: -- mm")
             self.status_label.config(text="Error loading weather")
-            
-            # Clear forecast on error
             for widget in self.forecast_frame.winfo_children():
                 widget.destroy()
             return
-        
+
         current = self.weather_data["current"]
-        
-        # Update current weather
         self.icon_label.config(text=current["icon"])
         temp_range = f"{current['temperature_min']:.0f}-{current['temperature_max']:.0f}°C"
         self.temp_label.config(text=temp_range)
         self.desc_label.config(text=current["description"])
-        
-        # Update details
         self.wind_label.config(text=f"Wind: {current['wind_speed']:.0f} km/h")
         self.precip_label.config(text=f"Precipitation: {current['precipitation']:.1f} mm")
-        
+
         # Clear and update forecast
         for widget in self.forecast_frame.winfo_children():
             widget.destroy()
-        
-        # Add forecast if available
-        if self.weather_data.get("forecast") and len(self.weather_data["forecast"]) > 0:
-            forecast_title = tk.Label(self.forecast_frame, text="Forecast:", font=('Arial', 9, 'bold'), 
-                                    fg='white', bg=self.transparent_key)
-            forecast_title.pack(anchor=tk.W, pady=(2, 1))
-            
-            for forecast in self.weather_data["forecast"][:2]:  # Show only next 2 days
-                forecast_item = tk.Frame(self.forecast_frame, bg=self.transparent_key)
-                forecast_item.pack(fill=tk.X, pady=1)
+
+        # --- DEBUG: Print forecast data ---
+        forecast_data = self.weather_data.get("forecast")
+        print("Forecast data:", forecast_data)
+        print(f"Forecast data type: {type(forecast_data)}, length: {len(forecast_data) if forecast_data else 0}")
+        # ----------------------------------
+
+        if isinstance(forecast_data, list) and len(forecast_data) > 0:
+            forecast_title = tk.Label(
+                self.forecast_frame, text="Forecast:", font=('Arial', 10, 'bold'),
+                fg='white', bg=self.transparent_key
+            )
+            forecast_title.pack(anchor=tk.W, pady=(5, 3))
+
+            # Show only next 2 days but with better spacing and larger fonts
+            for i, forecast in enumerate(forecast_data[:2]):  # Limit to 2 days
+                print(f"Creating forecast item {i}: {forecast.get('day_name', 'N/A')}")  # Debug
                 
-                day_text = f"{forecast['day_name'][:3]}: {forecast['icon']} {forecast['temperature_min']:.0f}-{forecast['temperature_max']:.0f}°C"
-                tk.Label(forecast_item, text=day_text, font=('Arial', 8), 
-                        fg='#cccccc', bg=self.transparent_key).pack(anchor=tk.W)
+                forecast_item_frame = tk.Frame(self.forecast_frame, bg=self.transparent_key)
+                forecast_item_frame.pack(fill=tk.X, pady=3, padx=5)  # Increased padding
+
+                # Create a container for better control
+                content_frame = tk.Frame(forecast_item_frame, bg=self.transparent_key)
+                content_frame.pack(fill=tk.X)
+
+                # Icon with larger font
+                icon_text = forecast.get('icon', '❓')
+                icon_label = tk.Label(
+                    content_frame, text=icon_text, font=('Arial', 16),  # Larger icon
+                    fg='white', bg=self.transparent_key
+                )
+                icon_label.pack(side=tk.LEFT, padx=(0, 8))
+
+                # Day and temperature info
+                day_name_short = forecast.get('day_name', 'N/A')[:3]
+                temp_min = forecast.get('temperature_min', 0)
+                temp_max = forecast.get('temperature_max', 0)
+                
+                # Create separate line for better readability
+                day_label = tk.Label(
+                    content_frame, text=day_name_short, font=('Arial', 10, 'bold'),
+                    fg='white', bg=self.transparent_key, anchor=tk.W
+                )
+                day_label.pack(side=tk.LEFT, padx=(0, 5))
+                
+                temp_text = f"{temp_min:.0f}-{temp_max:.0f}°C"
+                temp_label = tk.Label(
+                    content_frame, text=temp_text, font=('Arial', 10),
+                    fg='#cccccc', bg=self.transparent_key, anchor=tk.W
+                )
+                temp_label.pack(side=tk.LEFT)
+                
+                print(f"Forecast item {i} created successfully")  # Debug
+
         else:
-            # Show message if no forecast available
-            no_forecast_label = tk.Label(self.forecast_frame, text="Forecast: Not available", 
-                                        font=('Arial', 8), fg='#888888', bg=self.transparent_key)
-            no_forecast_label.pack(anchor=tk.W, pady=2)
-        
+            print("No forecast data available or empty list")  # Debug
+            no_forecast_label = tk.Label(
+                self.forecast_frame, text="Forecast: Not available",
+                font=('Arial', 9), fg='#888888', bg=self.transparent_key
+            )
+            no_forecast_label.pack(anchor=tk.W, pady=5)
+
         self.status_label.config(text=f"Updated: {time.strftime('%H:%M')}")
     
     def fetch_weather_data(self):
