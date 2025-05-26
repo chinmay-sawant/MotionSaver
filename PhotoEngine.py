@@ -7,7 +7,7 @@ from screensaver_app.video_player import VideoClockScreenSaver
 from screensaver_app.PasswordConfig import verify_password_dialog_macos
 import gui 
 import json
-
+import time 
 # Import PyUAC for UAC elevation
 try:
     import pyuac
@@ -33,7 +33,7 @@ if platform.system() == "Windows":
         import winreg
         # Import additional Windows modules for event hooking
         import win32event
-        from ctypes import windll, CFUNCTYPE, c_int, c_uint, c_void_p, POINTER, Structure
+        from ctypes import windll, CFUNCTYPE, c_int, c_uint, c_void_p, POINTER, Structure, c_size_t, byref, c_wchar_p
         
         # Flag for multi-monitor support
         WINDOWS_MULTI_MONITOR_SUPPORT = True
@@ -67,6 +67,18 @@ if platform.system() == "Windows":
         # Define UnhookWinEvent function prototype
         user32.UnhookWinEvent.argtypes = [c_void_p]  # hWinEventHook
         user32.UnhookWinEvent.restype = c_int        # BOOL
+        
+        # Define SendMessageTimeoutW function prototype for broadcasting setting changes
+        user32.SendMessageTimeoutW.argtypes = [
+            c_void_p,  # HWND
+            c_uint,    # MSG
+            c_void_p,  # WPARAM
+            c_wchar_p, # LPARAM (string)
+            c_uint,    # fuFlags
+            c_uint,    # uTimeout
+            POINTER(c_size_t) # LPDWORD_PTR lpdwResult
+        ]
+        user32.SendMessageTimeoutW.restype = c_void_p # LRESULT (LONG_PTR)
         
         # Use the properly defined functions
         SetWinEventHook = user32.SetWinEventHook
@@ -106,6 +118,214 @@ def enable_ctrl_alt_del():
             return True
         except Exception as e:
             print(f"Failed to re-enable Task Manager: {e}")
+            return False
+    return False
+
+def disable_windows_hotkeys():
+    """Disable various Windows hotkeys by modifying registry (requires admin privileges)"""
+    if platform.system() == "Windows":
+        disabled_count = 0
+        try:
+            # Disable Windows key combinations - Use HKEY_LOCAL_MACHINE for system-wide effect
+            key_explorer_lm = winreg.CreateKey(winreg.HKEY_LOCAL_MACHINE,
+                                  r"SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer")
+            
+            # Disable Win+R (Run dialog)
+            winreg.SetValueEx(key_explorer_lm, "NoRun", 0, winreg.REG_DWORD, 1)
+            disabled_count += 1
+            
+            # Disable Win+X (Quick Link menu) and other Win+<key> combinations
+            winreg.SetValueEx(key_explorer_lm, "NoWinKeys", 0, winreg.REG_DWORD, 1)
+            disabled_count += 1
+            
+            # Disable Alt+Tab (Task switcher)
+            winreg.SetValueEx(key_explorer_lm, "AltTabSettings", 0, winreg.REG_DWORD, 1)
+            disabled_count += 1
+            
+            winreg.CloseKey(key_explorer_lm)
+            
+            # Also set in HKEY_CURRENT_USER for additional coverage
+            key_explorer_cu = winreg.CreateKey(winreg.HKEY_CURRENT_USER,
+                                  r"Software\Microsoft\Windows\CurrentVersion\Policies\Explorer")
+            
+            winreg.SetValueEx(key_explorer_cu, "NoRun", 0, winreg.REG_DWORD, 1)
+            winreg.SetValueEx(key_explorer_cu, "NoWinKeys", 0, winreg.REG_DWORD, 1)
+            winreg.SetValueEx(key_explorer_cu, "AltTabSettings", 0, winreg.REG_DWORD, 1)
+            disabled_count += 3
+            
+            winreg.CloseKey(key_explorer_cu)
+            
+            # Disable Win+Tab (Task view) through Desktop Window Manager
+            dwm_key = winreg.CreateKey(winreg.HKEY_CURRENT_USER,
+                                      r"Software\Microsoft\Windows\CurrentVersion\Policies\System")
+            winreg.SetValueEx(dwm_key, "DisableTaskMgr", 0, winreg.REG_DWORD, 1)
+            winreg.CloseKey(dwm_key)
+            disabled_count += 1
+            
+            # Disable Win+S (Search) - Multiple approaches for better coverage
+            # Method 1: Disable search entirely
+            try:
+                search_key_lm = winreg.CreateKey(winreg.HKEY_LOCAL_MACHINE,
+                                             r"SOFTWARE\Policies\Microsoft\Windows\Windows Search")
+                winreg.SetValueEx(search_key_lm, "DisableWebSearch", 0, winreg.REG_DWORD, 1)
+                winreg.SetValueEx(search_key_lm, "AllowSearchToUseLocation", 0, winreg.REG_DWORD, 0)
+                winreg.CloseKey(search_key_lm)
+                disabled_count += 2
+            except Exception as e:
+                print(f"Warning: Could not disable web search: {e}")
+            
+            # Method 2: Hide search box
+            search_key_cu = winreg.CreateKey(winreg.HKEY_CURRENT_USER,
+                                         r"Software\Microsoft\Windows\CurrentVersion\Search")
+            winreg.SetValueEx(search_key_cu, "SearchboxTaskbarMode", 0, winreg.REG_DWORD, 0)
+            winreg.SetValueEx(search_key_cu, "BingSearchEnabled", 0, winreg.REG_DWORD, 0)
+            winreg.CloseKey(search_key_cu)
+            disabled_count += 2
+            
+            # Additional Win+X blocking through System policy
+            try:
+                system_key_lm = winreg.CreateKey(winreg.HKEY_LOCAL_MACHINE,
+                                             r"SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System")
+                winreg.SetValueEx(system_key_lm, "DisableLockWorkstation", 0, winreg.REG_DWORD, 1)
+                winreg.CloseKey(system_key_lm)
+                disabled_count += 1
+            except Exception as e:
+                print(f"Warning: Could not disable lock workstation: {e}")
+            
+            print(f"Windows hotkeys disabled ({disabled_count} registry entries modified)")
+
+            # Lightweight registry refresh without blocking
+            try:
+                # Just notify the system of changes without waiting
+                import subprocess
+                subprocess.Popen(['gpupdate', '/force'], 
+                               creationflags=subprocess.CREATE_NO_WINDOW,
+                               stdout=subprocess.DEVNULL, 
+                               stderr=subprocess.DEVNULL)
+                print("Group policy update initiated (non-blocking).")
+            except Exception as e:
+                print(f"Note: Could not initiate group policy update: {e}")
+            
+            return True
+            
+        except Exception as e:
+            print(f"Failed to disable Windows hotkeys: {e}")
+            print("This feature requires administrative privileges")
+            return False
+    return False
+
+def enable_windows_hotkeys():
+    """Re-enable Windows hotkeys by restoring registry values"""
+    if platform.system() == "Windows":
+        enabled_count = 0
+        try:
+            # Re-enable Windows key combinations - HKEY_LOCAL_MACHINE
+            key_explorer_lm = winreg.CreateKey(winreg.HKEY_LOCAL_MACHINE,
+                                  r"SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer")
+            
+            try:
+                winreg.DeleteValue(key_explorer_lm, "NoRun")
+                enabled_count += 1
+            except FileNotFoundError:
+                pass
+            
+            try:
+                winreg.DeleteValue(key_explorer_lm, "NoWinKeys")
+                enabled_count += 1
+            except FileNotFoundError:
+                pass
+            
+            try:
+                winreg.DeleteValue(key_explorer_lm, "AltTabSettings")
+                enabled_count += 1
+            except FileNotFoundError:
+                pass
+            
+            winreg.CloseKey(key_explorer_lm)
+            
+            # Re-enable in HKEY_CURRENT_USER
+            key_explorer_cu = winreg.CreateKey(winreg.HKEY_CURRENT_USER,
+                                  r"Software\Microsoft\Windows\CurrentVersion\Policies\Explorer")
+            
+            try:
+                winreg.DeleteValue(key_explorer_cu, "NoRun")
+                enabled_count += 1
+            except FileNotFoundError:
+                pass
+            
+            try:
+                winreg.DeleteValue(key_explorer_cu, "NoWinKeys")
+                enabled_count += 1
+            except FileNotFoundError:
+                pass
+            
+            try:
+                winreg.DeleteValue(key_explorer_cu, "AltTabSettings")
+                enabled_count += 1
+            except FileNotFoundError:
+                pass
+            
+            winreg.CloseKey(key_explorer_cu)
+            
+            # Re-enable Win+S (Search)
+            try:
+                search_key_lm = winreg.CreateKey(winreg.HKEY_LOCAL_MACHINE,
+                                             r"SOFTWARE\Policies\Microsoft\Windows\Windows Search")
+                try:
+                    winreg.DeleteValue(search_key_lm, "DisableWebSearch")
+                    enabled_count += 1
+                except FileNotFoundError:
+                    pass
+                
+                try:
+                    winreg.DeleteValue(search_key_lm, "AllowSearchToUseLocation")
+                    enabled_count += 1
+                except FileNotFoundError:
+                    pass
+                
+                winreg.CloseKey(search_key_lm)
+            except Exception as e:
+                print(f"Warning: Could not re-enable web search: {e}")
+            
+            # Restore search box visibility
+            search_key_cu = winreg.CreateKey(winreg.HKEY_CURRENT_USER,
+                                         r"Software\Microsoft\Windows\CurrentVersion\Search")
+            winreg.SetValueEx(search_key_cu, "SearchboxTaskbarMode", 0, winreg.REG_DWORD, 1)
+            winreg.SetValueEx(search_key_cu, "BingSearchEnabled", 0, winreg.REG_DWORD, 1)
+            winreg.CloseKey(search_key_cu)
+            enabled_count += 2
+            
+            # Re-enable system functions
+            try:
+                system_key_lm = winreg.CreateKey(winreg.HKEY_LOCAL_MACHINE,
+                                             r"SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System")
+                try:
+                    winreg.DeleteValue(system_key_lm, "DisableLockWorkstation")
+                    enabled_count += 1
+                except FileNotFoundError:
+                    pass
+                
+                winreg.CloseKey(system_key_lm)
+            except Exception as e:
+                print(f"Warning: Could not re-enable lock workstation: {e}")
+
+            print(f"Windows hotkeys re-enabled ({enabled_count} registry entries restored)")
+
+            # Lightweight registry refresh without blocking
+            try:
+                import subprocess
+                subprocess.Popen(['gpupdate', '/force'],
+                               creationflags=subprocess.CREATE_NO_WINDOW,
+                               stdout=subprocess.DEVNULL,
+                               stderr=subprocess.DEVNULL)
+                print("Group policy restore initiated (non-blocking).")
+            except Exception as e:
+                print(f"Note: Could not initiate group policy update: {e}")
+            
+            return True
+            
+        except Exception as e:
+            print(f"Failed to re-enable Windows hotkeys: {e}")
             return False
     return False
 
@@ -163,6 +383,16 @@ def update_secondary_monitor_blackouts(main_tk_window):
                 black_screen_window.overrideredirect(True)
                 black_screen_window.geometry(f"{width}x{height}+{mx1}+{my1}")
                 black_screen_window.attributes('-topmost', True)
+                
+                # Protect secondary windows from Alt+F4 by requiring password
+                def secondary_window_close_handler():
+                    success = verify_password_dialog_macos(main_tk_window)
+                    if success:
+                        # If password is correct, trigger main window closure
+                        main_tk_window.event_generate('<Escape>')
+                    # If password fails, do nothing - keep window open
+                
+                black_screen_window.protocol("WM_DELETE_WINDOW", secondary_window_close_handler)
                 secondary_screen_windows.append(black_screen_window)
     
     for old_win in old_black_windows_to_process:
@@ -188,9 +418,14 @@ def start_screensaver(video_path_override=None):
     
     config = load_config()
     task_manager_disabled = False
-    # Disable Task Manager at startup (requires admin privileges)
+    hotkeys_disabled = False
+    
+    # Disable Task Manager and hotkeys at startup (requires admin privileges)
     if config.get("run_as_admin", False):
+        print("Disabling system hotkeys...")
         task_manager_disabled = disable_ctrl_alt_del()
+        hotkeys_disabled = disable_windows_hotkeys()
+        print("Hotkey disabling completed.")
     
     root = tk.Tk()
     root_ref_for_hook = root # Store root for the callback
@@ -199,6 +434,100 @@ def start_screensaver(video_path_override=None):
     TRANSPARENT_KEY_FOR_LOGIN_TOPLEVEL = '#123456' 
     root.attributes('-transparentcolor', TRANSPARENT_KEY_FOR_LOGIN_TOPLEVEL)
     root.configure(bg='black') 
+
+    app = VideoClockScreenSaver(root, video_path_override) 
+    
+    def on_escape(event):
+        global secondary_screen_windows, hWinEventHook, root_ref_for_hook
+        success = verify_password_dialog_macos(root)
+        if success: 
+            app.close()
+            
+            if hWinEventHook: # Unhook before destroying windows
+                try:
+                    UnhookWinEvent(hWinEventHook)  # Use ctypes function
+                except Exception as e_unhook:
+                    print(f"Error unhooking display event: {e_unhook}")
+                hWinEventHook = None
+            root_ref_for_hook = None
+
+            # Re-enable Task Manager and hotkeys if they were disabled
+            if task_manager_disabled:
+                enable_ctrl_alt_del()
+            if hotkeys_disabled:
+                enable_windows_hotkeys()
+
+            for sec_win in secondary_screen_windows:
+                if sec_win.winfo_exists():
+                    sec_win.destroy()
+            secondary_screen_windows = []
+            if root.winfo_exists():
+                root.destroy()
+        else:
+            try:
+                if root and root.winfo_exists():
+                    root.focus_set()
+            except tk.TclError:
+                print("Root window already destroyed.")
+            print("Login cancelled or failed.")
+
+    # Block hotkeys at application level as additional protection
+    def block_hotkey(event):
+        return "break"  # Prevent the event from propagating
+    
+    # Bind hotkeys to password dialog - Using correct Tkinter syntax
+    # Note: Tkinter has limited support for Windows key detection
+    # These bindings may not work perfectly for all Windows key combinations
+    try:
+        root.bind("<Alt-Tab>", on_escape)
+        root.bind("<Shift-Alt-Tab>", on_escape)  # Reverse Alt+Tab
+    except tk.TclError:
+        print("Warning: Could not bind Alt+Tab keys")
+    
+    # Try alternative approaches for Windows key combinations
+    try:
+        # These may not work on all systems due to Tkinter limitations
+        root.bind("<Control-Escape>", on_escape)  # Sometimes captures Win key
+        root.bind("<Alt-F4>", on_escape)  # Alt+F4
+    except tk.TclError:
+        print("Warning: Could not bind Windows key combinations")
+    
+    # Focus capture to intercept other key combinations
+    def on_key_press(event):
+        # Log key presses for debugging
+        key_name = event.keysym
+        key_code = event.keycode
+        
+        # Check for common escape sequences
+        if key_name in ['r', 'R'] and (event.state & 0x40000):  # Win key modifier
+            print("Win+R detected, showing password dialog")
+            on_escape(event)
+            return "break"
+        elif key_name in ['x', 'X'] and (event.state & 0x40000):  # Win key modifier
+            print("Win+X detected, showing password dialog") 
+            on_escape(event)
+            return "break"
+        elif key_name in ['s', 'S'] and (event.state & 0x40000):  # Win key modifier
+            print("Win+S detected, showing password dialog")
+            on_escape(event)
+            return "break"
+        elif key_name == 'Tab' and (event.state & 0x40000):  # Win+Tab
+            print("Win+Tab detected, showing password dialog")
+            on_escape(event)
+            return "break"
+        elif key_name == 'Tab' and (event.state & 0x20000):  # Alt+Tab
+            print("Alt+Tab detected, showing password dialog")
+            on_escape(event)
+            return "break"
+        elif key_name == 'F4' and (event.state & 0x20000):  # Alt+F4
+            print("Alt+F4 detected, showing password dialog")
+            on_escape(event)
+            return "break"
+        
+        return None
+    
+    # Bind key press event
+    root.bind("<KeyPress>", on_key_press)
 
     # Initial call to black out monitors, delayed slightly for fullscreen to establish
     if WINDOWS_MULTI_MONITOR_SUPPORT:
@@ -223,40 +552,6 @@ def start_screensaver(video_path_override=None):
         except Exception as e:
             print(f"Error setting up display change event hook: {e}")
             hWinEventHook = None
-
-    app = VideoClockScreenSaver(root, video_path_override) 
-    
-    def on_escape(event):
-        global secondary_screen_windows, hWinEventHook, root_ref_for_hook
-        success = verify_password_dialog_macos(root)
-        if success: 
-            app.close()
-            
-            if hWinEventHook: # Unhook before destroying windows
-                try:
-                    UnhookWinEvent(hWinEventHook)  # Use ctypes function
-                except Exception as e_unhook:
-                    print(f"Error unhooking display event: {e_unhook}")
-                hWinEventHook = None
-            root_ref_for_hook = None
-
-            # Re-enable Task Manager if it was disabled
-            if task_manager_disabled:
-                enable_ctrl_alt_del()
-
-            for sec_win in secondary_screen_windows:
-                if sec_win.winfo_exists():
-                    sec_win.destroy()
-            secondary_screen_windows = []
-            if root.winfo_exists():
-                root.destroy()
-        else:
-            try:
-                if root and root.winfo_exists():
-                    root.focus_set()
-            except tk.TclError:
-                print("Root window already destroyed.")
-            print("Login cancelled or failed.")
     
     # Bind multiple keys and mouse click to trigger password prompt
     root.bind("<Escape>", on_escape)
@@ -270,31 +565,60 @@ def start_screensaver(video_path_override=None):
     
     # Ensure hook is unhooked if window is closed by other means (though less likely for fullscreen)
     def on_closing_main_window():
-        global hWinEventHook, root_ref_for_hook
-        if hWinEventHook:
+        global secondary_screen_windows, hWinEventHook, root_ref_for_hook # Ensure all globals used are listed
+        
+        # Attempt to verify password before closing
+        success = verify_password_dialog_macos(root) # 'root' is from the outer scope
+        
+        if success:
+            if app: # 'app' is from the outer scope
+                app.close()
+
+            if hWinEventHook:
+                try:
+                    UnhookWinEvent(hWinEventHook)
+                except Exception as e_unhook:
+                    print(f"Error unhooking display event on close: {e_unhook}")
+                hWinEventHook = None
+            
+            # Re-enable Task Manager and hotkeys if they were disabled
+            # 'task_manager_disabled' and 'hotkeys_disabled' are from the outer scope
+            if task_manager_disabled:
+                enable_ctrl_alt_del()
+            if hotkeys_disabled:
+                enable_windows_hotkeys()
+            
+            root_ref_for_hook = None # Clear the global reference
+
+            for sec_win in secondary_screen_windows:
+                if sec_win.winfo_exists():
+                    sec_win.destroy()
+            secondary_screen_windows.clear() # Clear the list
+
+            if root.winfo_exists():
+                root.destroy()
+        else:
+            # Password verification failed or was cancelled, keep screensaver active
+            print("Close attempt cancelled or password failed. Screensaver remains active.")
             try:
-                UnhookWinEvent(hWinEventHook)  # Use ctypes function
-            except Exception as e_unhook:
-                print(f"Error unhooking display event on close: {e_unhook}")
-            hWinEventHook = None
-            
-        # Re-enable Task Manager if it was disabled
-        if task_manager_disabled:
-            enable_ctrl_alt_del()
-            
-        root_ref_for_hook = None
-        if root.winfo_exists():
-            root.destroy()
+                if root and root.winfo_exists():
+                    root.focus_set() # Ensure screensaver window regains focus
+            except tk.TclError:
+                # This might happen if the window is somehow already gone
+                print("Root window was already destroyed during close attempt with failed password.")
+            # Do not destroy the window or re-enable hotkeys if password fails
 
     root.protocol("WM_DELETE_WINDOW", on_closing_main_window)
     
-    # Ensure Task Manager is always re-enabled even if the app crashes
+    # Ensure Task Manager and hotkeys are always re-enabled even if the app crashes
     try:
         root.mainloop()
     finally:
-        # Re-enable Task Manager in case of crash or exception
+        # Re-enable Task Manager and hotkeys in case of crash or exception
         if task_manager_disabled:
             enable_ctrl_alt_del()
+        if hotkeys_disabled:
+            enable_windows_hotkeys()
 
 def load_config():
     """Load configuration from userconfig.json"""
@@ -324,18 +648,6 @@ def load_config():
     except Exception as e:
         print(f"[PhotoEngine] Error loading config: {e}. Using defaults.")
         return default_config
-
-def check_admin_requirement():
-    """Check if app should run as admin based on config"""
-    config = load_config()
-    return config.get("run_as_admin", False)
-
-def main():
-    parser = argparse.ArgumentParser(description='Video Clock Screen Saver')
-    parser.add_argument('--video', default=None, help='Path to video file (overrides config)')
-    args = parser.parse_args()
-    
-    start_screensaver(args.video)
 
 def admin_main():
     """Main function that will check for admin rights and restart if needed"""

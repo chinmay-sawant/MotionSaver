@@ -18,7 +18,7 @@
   "enable_stock_widget": true,
   "enable_media_widget": true,
   "stock_market": "NSE",
-  "run_as_admin": false,
+  "run_as_admin": true,
   "enable_weather_widget": true,
   "weather_pincode": "400068",
   "weather_country": "IN"
