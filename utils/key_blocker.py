@@ -36,14 +36,18 @@ class KeyBlocker:
         self.hooks_active = False
         self.blocked_combinations = {
             'alt+tab': "Alt+Tab",
-            'shift+alt+tab': "Shift+Alt+Tab", 
+            'shift+alt+tab': "Shift+Alt+Tab",
             'win+tab': "Win+Tab",
             'win': "Windows Key (Standalone)",
             'win+r': "Win+R (Run)",
             'win+x': "Win+X (Quick Menu)",
             'win+s': "Win+S (Search)",
             'alt+f4': "Alt+F4",
-            'ctrl+shift+esc': "Ctrl+Shift+Esc (Task Manager)"
+            'ctrl+shift+esc': "Ctrl+Shift+Esc (Task Manager)",
+            'ctrl+alt+del': "Ctrl+Alt+Del (Security Screen)",
+            'altgr+tab': "AltGr+Tab",
+            'ctrl+esc': "Ctrl+Esc (Start Menu)",
+            'ctrl+alt+esc': "Ctrl+Alt+Esc (Task Manager)"
         }
     
     def _print_debug(self, message):
@@ -54,6 +58,16 @@ class KeyBlocker:
     def _on_block_action(self, combo_name):
         """Action to perform when a key combination is blocked."""
         self._print_debug(f"Blocked: {combo_name}")
+        # Detect Ctrl+Alt+Del and call LockWorkStation
+        if combo_name.lower() in ["ctrl+alt+del", "ctrl+alt+del (security screen)"]:
+            self._print_debug("Ctrl+Alt+Del detected! Locking workstation...")
+            print("Ctrl+Alt+Del detected! Locking workstation...")
+            try:
+                import ctypes
+                ctypes.windll.user32.LockWorkStation()
+                self._print_debug("LockWorkStation() executed from Python.")
+            except Exception as e:
+                self._print_debug(f"LockWorkStation() failed: {e}")
         return True
     
     def disable_task_manager_registry(self):

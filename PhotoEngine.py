@@ -5,10 +5,17 @@ import platform
 import sys
 from screensaver_app.video_player import VideoClockScreenSaver 
 from screensaver_app.PasswordConfig import verify_password_dialog_macos
-from blockit import KeyBlocker
+
+# Try to import enhanced blocker first, fallback to basic blocker
+try:
+    from enhanced_key_blocker import EnhancedKeyBlocker as KeyBlocker
+    print("[PhotoEngine] Using enhanced key blocker with C++ hooks")
+except ImportError:
+    from blockit import KeyBlocker
+    print("[PhotoEngine] Using basic key blocker")
 import gui 
 import json
-import time 
+import time
 # Import PyUAC for UAC elevation
 try:
     import pyuac
@@ -124,23 +131,29 @@ def update_secondary_monitor_blackouts(main_tk_window):
                     old_black_windows_to_process.pop(i) 
                     found_and_reused_existing = True
                     break
-            
             if not found_and_reused_existing:
                 black_screen_window = tk.Toplevel(main_tk_window)
                 black_screen_window.configure(bg='black')
                 black_screen_window.overrideredirect(True)
                 black_screen_window.geometry(f"{width}x{height}+{mx1}+{my1}")
                 black_screen_window.attributes('-topmost', True)
+                # black_screen_window.attributes('-fullscreen', True)  # Removed: not supported for Toplevel on Windows
                 
-                # Protect secondary windows from Alt+F4 by requiring password
-                def secondary_window_close_handler():
-                    success = verify_password_dialog_macos(main_tk_window)
-                    if success:
-                        # If password is correct, trigger main window closure
-                        main_tk_window.event_generate('<Escape>')
-                    # If password fails, do nothing - keep window open
+                # Make window completely uninteractable - no close button, no taskbar
+                black_screen_window.wm_attributes("-disabled", True)
                 
-                black_screen_window.protocol("WM_DELETE_WINDOW", secondary_window_close_handler)
+                # Block all input events on secondary windows
+                black_screen_window.bind("<Key>", lambda e: "break")
+                black_screen_window.bind("<Button>", lambda e: "break")
+                black_screen_window.bind("<Motion>", lambda e: "break")
+                
+                # Completely disable window closing - no protocol handler
+                black_screen_window.protocol("WM_DELETE_WINDOW", lambda: None)
+                
+                # Ensure window cannot be minimized or moved
+                black_screen_window.resizable(False, False)
+                black_screen_window.focus_set()
+                
                 secondary_screen_windows.append(black_screen_window)
     
     for old_win in old_black_windows_to_process:
@@ -163,20 +176,34 @@ def start_screensaver(video_path_override=None):
     global secondary_screen_windows, hWinEventHook, root_ref_for_hook, callback_ref
     secondary_screen_windows = [] 
     hWinEventHook = None
-    
     config = load_config()
+    
     key_blocker = None
+    ctrl_alt_del_detector = None
     
     # Initialize key blocker if admin mode is enabled
     if config.get("run_as_admin", False):
-        print("Initializing key blocking...")
+        print("Initializing enhanced key blocking...")
         key_blocker = KeyBlocker(debug_print=True)
-        # Force hooks to be used since they work better for this use case
-        blocking_success = key_blocker.enable_all_blocking(use_registry=True, use_hooks=True)
-        if blocking_success:
-            print("Key blocking enabled successfully.")
+        # Check if this is the enhanced blocker or basic blocker
+        if hasattr(key_blocker, 'start_blocking'):
+            # Enhanced blocker
+            blocking_success = key_blocker.start_blocking()
+            if blocking_success:
+                print("Enhanced key blocking enabled successfully.")
+                status = key_blocker.get_status()
+                print(f"Blocking status: {status}")
+            else:
+                print("Enhanced key blocking failed to start.")
+                # Even if C++ hooks fail, we can still use Python hooks
+                print("Attempting to use Python-only blocking...")
         else:
-            print("Some key blocking methods failed. Check permissions.")
+            # Basic blocker fallback
+            blocking_success = key_blocker.enable_all_blocking(use_registry=True, use_hooks=True)
+            if blocking_success:
+                print("Basic key blocking enabled successfully.")
+            else:
+                print("Some key blocking methods failed. Check permissions.")
     
     root = tk.Tk()
     root_ref_for_hook = root # Store root for the callback
@@ -204,7 +231,14 @@ def start_screensaver(video_path_override=None):
 
             # Disable key blocking
             if key_blocker:
-                key_blocker.disable_all_blocking()
+                if hasattr(key_blocker, 'stop_blocking'):
+                    key_blocker.stop_blocking()
+                else:
+                    key_blocker.disable_all_blocking()
+                    
+            # Stop Ctrl+Alt+Del detector
+            if ctrl_alt_del_detector:
+                ctrl_alt_del_detector.restart_pending = True  # Prevent restart during shutdown
 
             for sec_win in secondary_screen_windows:
                 if sec_win.winfo_exists():
@@ -271,10 +305,12 @@ def start_screensaver(video_path_override=None):
                 except Exception as e_unhook:
                     print(f"Error unhooking display event on close: {e_unhook}")
                 hWinEventHook = None
-            
-            # Disable key blocking
+              # Disable key blocking
             if key_blocker:
-                key_blocker.disable_all_blocking()
+                if hasattr(key_blocker, 'stop_blocking'):
+                    key_blocker.stop_blocking()
+                else:
+                    key_blocker.disable_all_blocking()
             
             root_ref_for_hook = None # Clear the global reference
 
@@ -297,14 +333,20 @@ def start_screensaver(video_path_override=None):
             # Do not destroy the window or re-enable hotkeys if password fails
 
     root.protocol("WM_DELETE_WINDOW", on_closing_main_window)
-    
-    # Ensure key blocking is always disabled even if the app crashes
+      # Ensure key blocking is always disabled even if the app crashes
     try:
-        root.mainloop()
+        root.mainloop()    
     finally:
         # Disable key blocking in case of crash or exception
         if key_blocker:
-            key_blocker.disable_all_blocking()
+            if hasattr(key_blocker, 'stop_blocking'):
+                key_blocker.stop_blocking()
+            else:
+                key_blocker.disable_all_blocking()
+                
+        # Stop Ctrl+Alt+Del detector
+        if ctrl_alt_del_detector:
+            ctrl_alt_del_detector.restart_pending = True
 
 def load_config():
     """Load configuration from userconfig.json"""
