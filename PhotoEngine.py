@@ -3,19 +3,22 @@ import argparse
 import os
 import platform 
 import sys
+import subprocess # Added for service registration
 from screensaver_app.video_player import VideoClockScreenSaver 
 from screensaver_app.PasswordConfig import verify_password_dialog_macos
 
 # Try to import enhanced blocker first, fallback to basic blocker
 try:
     from enhanced_key_blocker import EnhancedKeyBlocker as KeyBlocker
-    print("[PhotoEngine] Using enhanced key blocker with C++ hooks")
+    print("[PhotoEngine] Using enhanced key blocker") # Removed "with C++ hooks" as it's Python-only now
 except ImportError:
-    from blockit import KeyBlocker
-    print("[PhotoEngine] Using basic key blocker")
+    from blockit import KeyBlocker # Assuming blockit.py contains a basic KeyBlocker
+    print("[PhotoEngine] Using basic key blocker from blockit.py") 
 import gui 
 import json
 import time
+from PIL import Image, ImageDraw # Added for system tray icon
+import pystray # Added for system tray functionality
 # Import PyUAC for UAC elevation
 try:
     import pyuac
@@ -382,9 +385,18 @@ def admin_main():
     parser = argparse.ArgumentParser(description='Video Clock Screen Saver')
     parser.add_argument('--mode', choices=['saver', 'gui'], default='saver', help='Run mode: saver or gui')
     parser.add_argument('--video', default=None, help='Path to video file (overrides config)')
+    parser.add_argument('--min', action='store_true', help='Run in minimized system tray window')
+    parser.add_argument('--register-service', action='store_true', help='Register the application as a Windows service')
     args = parser.parse_args()
     
-    if args.mode == 'saver':
+    if args.register_service:
+        register_service()
+        sys.exit(0) # Exit after service registration attempt
+
+    if args.min:
+        run_in_system_tray()
+        sys.exit(0) # Exit after starting tray icon (tray icon runs its own loop)
+    elif args.mode == 'saver':
         start_screensaver(args.video)
     elif args.mode == 'gui':
         gui.main() # Call the main function from the gui module
@@ -423,3 +435,97 @@ if __name__ == "__main__":
             print("[PhotoEngine] PyUAC module not available. Admin check skipped.") # Debug
         admin_main()
     print("[PhotoEngine] PhotoEngine finished.") # Debug
+
+def create_image(width, height, color1, color2):
+    # Create a simple icon for the system tray
+    image = Image.new('RGB', (width, height), color1)
+    dc = ImageDraw.Draw(image)
+    dc.rectangle(
+        (width // 2, 0, width, height // 2),
+        fill=color2)
+    dc.rectangle(
+        (0, height // 2, width // 2, height),
+        fill=color2)
+    return image
+
+def run_in_system_tray():
+    print("Running in system tray mode...")
+    icon_image = create_image(64, 64, 'black', 'blue') # Example icon
+
+    def on_open_screensaver(icon, item):
+        print("Starting screensaver from tray...")
+        # Run start_screensaver in a new thread to avoid blocking the tray icon
+        import threading
+        thread = threading.Thread(target=start_screensaver)
+        thread.daemon = True 
+        thread.start()
+
+    def on_exit_app(icon, item):
+        print("Exiting application from tray...")
+        icon.stop()
+
+    menu = (pystray.MenuItem('Open Screensaver', on_open_screensaver),
+            pystray.MenuItem('Exit', on_exit_app))
+
+    icon = pystray.Icon("PhotoEngine", icon_image, "PhotoEngine Screensaver", menu)
+    
+    # Ensure the icon's event loop doesn't block if other Tkinter windows are managed
+    # For simple tray-only mode, icon.run() is fine.
+    # If integrating with an existing Tkinter app, icon.run_detached() might be needed.
+    icon.run()
+
+
+def register_service():
+    print("Attempting to register application as a Windows service...")
+    if platform.system() != "Windows":
+        print("Service registration is only supported on Windows.")
+        return
+
+    try:
+        # Ensure running as admin for service creation
+        if pyuac and not pyuac.isUserAdmin():
+            print("Admin privileges are required to register the service. Please re-run as administrator.")
+            # Optionally, try to elevate again, but for a specific action like this,
+            # it's often better to instruct the user.
+            # pyuac.runAsAdmin() 
+            # sys.exit(0)
+            return
+
+        service_name = "PhotoEngineService"
+        script_path = os.path.abspath(__file__)
+        python_exe = sys.executable 
+        # Command to run the screensaver mode. Ensure paths are quoted.
+        command = f'"{python_exe}" "{script_path}" --mode saver'
+        
+        # Check if service exists
+        check_service_cmd = f'sc query "{service_name}"'
+        try:
+            service_query_output = subprocess.check_output(check_service_cmd, shell=True, text=True, stderr=subprocess.STDOUT)
+            if "STATE" in service_query_output: # A simple check to see if query returned service info
+                 print(f"Service '{service_name}' already exists.")
+                 print(f"To manage it, use 'sc start {service_name}', 'sc stop {service_name}', or 'sc delete {service_name}'.")
+                 return
+        except subprocess.CalledProcessError as e:
+            # Error 1060: The specified service does not exist as an installed service.
+            # This is expected if the service is not yet created.
+            if "1060" not in e.output: 
+                print(f"Error checking service status: {e.output}")
+                # return # Decide if other errors during check should halt registration
+
+        create_cmd = f'sc create "{service_name}" binPath= "{command}" start= auto DisplayName= "PhotoEngine Screensaver Service"'
+        print(f"Executing: {create_cmd}")
+        subprocess.run(create_cmd, check=True, shell=True, text=True)
+        print(f"Service '{service_name}' created successfully.")
+        print(f"  To start it: sc start {service_name}")
+        print(f"  To stop it:  sc stop {service_name}")
+        print(f"  To delete it: sc delete {service_name}")
+
+    except subprocess.CalledProcessError as e:
+        print(f"Failed to register service: {e}")
+        if e.stderr:
+            print(f"Error details: {e.stderr}")
+        print("Make sure you are running this script as an administrator.")
+    except FileNotFoundError: # For 'sc' command not found, though unlikely on Windows
+        print("Error: 'sc' command not found. Is your Windows environment correctly set up?")
+    except Exception as e:
+        print(f"An unexpected error occurred during service registration: {e}")

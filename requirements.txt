@@ -14,3 +14,4 @@ winsdk>=1.0.0b9
 pywin32>=300
 pyuac>=0.0.5
 pypiwin32>=223
+pystray>=0.19.0
