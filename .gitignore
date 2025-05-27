@@ -1,6 +1,8 @@
 # Bytecode cache
 __pycache__/
-
+build 
+dist 
+MotionSaver
 # Misc
 ideas.txt
 video.mp4
