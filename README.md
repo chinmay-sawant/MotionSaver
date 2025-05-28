@@ -68,7 +68,7 @@ This approach transformed the security implementation from a complex, unreliable
 - Hook-based input interception
 - Ctrl+Alt+Del detection and handling
 
-**Total Achievement:** A fully-featured screensaver application some security, real-time widgets, and professional UI - all completed in just **20 hours** thanks to AI assistance.
+**Total Achievement:** A fully-featured screensaver application some basic security, real-time widgets, and professional UI - all completed in just **20 hours** thanks to AI assistance.
 
 ### Personal Note
 
