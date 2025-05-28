@@ -32,6 +32,10 @@ WINDOWS_MULTI_MONITOR_SUPPORT = False
 hWinEventHook = None
 root_ref_for_hook = None # Global reference to the root window for the hook callback
 
+# Global variables for tray mode
+tray_running = False
+win_s_blocker = None
+
 # Define missing Windows constants
 # From winuser.h: EVENT_SYSTEM_DISPLAYSETTINGSCHANGED = 0x000F
 EVENT_SYSTEM_DISPLAYSETTINGSCHANGED = 0x000F
@@ -380,6 +384,185 @@ def load_config():
         print(f"[PhotoEngine] Error loading config: {e}. Using defaults.")
         return default_config
 
+def create_image(width, height, color1, color2):
+    # Create a simple icon for the system tray
+    image = Image.new('RGB', (width, height), color1)
+    dc = ImageDraw.Draw(image)
+    dc.rectangle(
+        (width // 2, 0, width, height // 2),
+        fill=color2)
+    dc.rectangle(
+        (0, height // 2, width // 2, height),
+        fill=color2)
+    return image
+
+def run_in_system_tray():
+    print("Running in system tray mode...")
+    icon_image = create_image(64, 64, 'black', 'blue') # Example icon
+    
+    # Global variables for managing the tray mode
+    global tray_running, win_s_blocker
+    tray_running = True
+    win_s_blocker = None
+
+    def on_open_screensaver(icon, item):
+        print("Starting screensaver from tray...")
+        # Run start_screensaver_with_return in a new thread to avoid blocking the tray icon
+        import threading
+        thread = threading.Thread(target=start_screensaver_with_return)
+        thread.daemon = True        
+        thread.start()
+    
+    def on_open_gui(icon, item):
+        print("Opening GUI from tray...")
+        # Run GUI in a new thread to avoid blocking the tray icon
+        import threading
+        thread = threading.Thread(target=gui.main)
+        thread.daemon = True
+        thread.start()
+
+    def on_exit_app(icon, item):
+        print("Exiting application from tray...")
+        global tray_running, win_s_blocker
+        tray_running = False
+        if win_s_blocker:
+            # Handle both EnhancedKeyBlocker and basic KeyBlocker
+            if hasattr(win_s_blocker, 'stop_blocking'):
+                # EnhancedKeyBlocker
+                win_s_blocker.stop_blocking()
+            elif hasattr(win_s_blocker, 'disable_all_blocking'):
+                # Basic KeyBlocker
+                win_s_blocker.disable_all_blocking()
+            elif hasattr(win_s_blocker, 'python_blocker') and win_s_blocker.python_blocker:
+                # EnhancedKeyBlocker with internal python_blocker
+                win_s_blocker.python_blocker.disable_all_blocking()
+        icon.stop()
+
+    def start_screensaver_with_return():
+        """Start screensaver and return to tray mode after authentication."""
+        print("Win + S detected or manual start. Starting screensaver...")
+        
+        # Temporarily disable Win+S detection
+        global win_s_blocker
+        if win_s_blocker:
+            # Handle both EnhancedKeyBlocker and basic KeyBlocker
+            if hasattr(win_s_blocker, 'stop_blocking'):
+                # EnhancedKeyBlocker
+                win_s_blocker.stop_blocking()
+            elif hasattr(win_s_blocker, 'disable_all_blocking'):
+                # Basic KeyBlocker
+                win_s_blocker.disable_all_blocking()
+            elif hasattr(win_s_blocker, 'python_blocker') and win_s_blocker.python_blocker:
+                # EnhancedKeyBlocker with internal python_blocker
+                win_s_blocker.python_blocker.disable_all_blocking()
+        
+        # Start the screensaver normally
+        start_screensaver()
+          # After screensaver exits, restart Win+S detection
+        print("Screensaver closed. Returning to minimized mode...")
+        start_win_s_detection()
+
+    def start_win_s_detection():
+        """Start Win+S key detection and blocking using the same logic as key blocking."""
+        global win_s_blocker
+        
+        try:
+            # Try to import the same KeyBlocker that's being used in the main script
+            try:
+                from enhanced_key_blocker import EnhancedKeyBlocker as CurrentKeyBlocker
+                is_enhanced = True
+            except ImportError:
+                from utils.key_blocker import KeyBlocker as CurrentKeyBlocker
+                is_enhanced = False
+            
+            win_s_blocker = CurrentKeyBlocker(debug_print=True)
+            
+            if is_enhanced:
+                # For EnhancedKeyBlocker, we need to work with the internal python_blocker
+                if hasattr(win_s_blocker, 'python_blocker') and win_s_blocker.python_blocker is None:
+                    # Initialize the internal blocker
+                    from utils.key_blocker import KeyBlocker
+                    win_s_blocker.python_blocker = KeyBlocker(debug_print=True)
+                
+                # Get the actual blocker to customize
+                actual_blocker = win_s_blocker.python_blocker
+            else:
+                # For basic KeyBlocker
+                actual_blocker = win_s_blocker
+            
+            if actual_blocker:
+                # Override the _on_block_action method to trigger screensaver AND block the key
+                original_on_block_action = getattr(actual_blocker, '_on_block_action', None)
+                
+                def custom_on_block_action(combo_name):
+                    if "win+s" in combo_name.lower():
+                        print(f"Win+S detected and blocked: {combo_name}")
+                        # Start screensaver in a new thread
+                        import threading
+                        thread = threading.Thread(target=start_screensaver_with_return)
+                        thread.daemon = True
+                        thread.start()
+                        return True  # This blocks the key combination from reaching Windows
+                    else:
+                        # For other combinations, use original behavior if it exists
+                        if original_on_block_action:
+                            return original_on_block_action(combo_name)
+                        return False
+                
+                actual_blocker._on_block_action = custom_on_block_action
+                
+                # Enable full blocking mode for Win+S only
+                if hasattr(actual_blocker, 'enable_all_blocking'):
+                    # Temporarily modify blocked_combinations to only include Win+S
+                    original_combinations = actual_blocker.blocked_combinations.copy()
+                    actual_blocker.blocked_combinations = {'win+s': "Win+S (Search)"}
+                    
+                    success = actual_blocker.enable_all_blocking(use_registry=False, use_hooks=True)
+                    
+                    # Restore original combinations for reference
+                    actual_blocker.blocked_combinations = original_combinations
+                    
+                    if success:
+                        print("Win+S detection and blocking active in tray mode")
+                    else:
+                        print("Failed to start Win+S detection and blocking")
+                elif hasattr(actual_blocker, 'start_hook_blocking'):
+                    # Fallback to hook-only blocking
+                    original_combinations = actual_blocker.blocked_combinations.copy()
+                    actual_blocker.blocked_combinations = {'win+s': "Win+S (Search)"}
+                    
+                    success = actual_blocker.start_hook_blocking()
+                    
+                    # Restore original combinations for reference
+                    actual_blocker.blocked_combinations = original_combinations
+                    
+                    if success:
+                        print("Win+S hook detection active in tray mode")
+                    else:
+                        print("Failed to start Win+S hook detection")
+                else:
+                    print("Hook blocking not available")
+            else:
+                print("Could not initialize key blocker for Win+S detection")
+                
+        except Exception as e:
+            print(f"Error starting Win+S detection: {e}")
+
+    # Create system tray menu with GUI option
+    menu = (pystray.MenuItem('Open Screensaver', on_open_screensaver),
+            pystray.MenuItem('Open GUI', on_open_gui),
+            pystray.MenuItem('Exit', on_exit_app))
+
+    icon = pystray.Icon("PhotoEngine", icon_image, "PhotoEngine Screensaver", menu)
+
+    # Start Win+S detection
+    start_win_s_detection()
+
+    # Run the icon - this will block until exit is called
+    print("System tray mode active. Press Win+S to activate screensaver.")
+    icon.run()
+
+
 def admin_main():
     """Main function that will check for admin rights and restart if needed"""
     parser = argparse.ArgumentParser(description='Video Clock Screen Saver')
@@ -435,45 +618,6 @@ if __name__ == "__main__":
             print("[PhotoEngine] PyUAC module not available. Admin check skipped.") # Debug
         admin_main()
     print("[PhotoEngine] PhotoEngine finished.") # Debug
-
-def create_image(width, height, color1, color2):
-    # Create a simple icon for the system tray
-    image = Image.new('RGB', (width, height), color1)
-    dc = ImageDraw.Draw(image)
-    dc.rectangle(
-        (width // 2, 0, width, height // 2),
-        fill=color2)
-    dc.rectangle(
-        (0, height // 2, width // 2, height),
-        fill=color2)
-    return image
-
-def run_in_system_tray():
-    print("Running in system tray mode...")
-    icon_image = create_image(64, 64, 'black', 'blue') # Example icon
-
-    def on_open_screensaver(icon, item):
-        print("Starting screensaver from tray...")
-        # Run start_screensaver in a new thread to avoid blocking the tray icon
-        import threading
-        thread = threading.Thread(target=start_screensaver)
-        thread.daemon = True 
-        thread.start()
-
-    def on_exit_app(icon, item):
-        print("Exiting application from tray...")
-        icon.stop()
-
-    menu = (pystray.MenuItem('Open Screensaver', on_open_screensaver),
-            pystray.MenuItem('Exit', on_exit_app))
-
-    icon = pystray.Icon("PhotoEngine", icon_image, "PhotoEngine Screensaver", menu)
-    
-    # Ensure the icon's event loop doesn't block if other Tkinter windows are managed
-    # For simple tray-only mode, icon.run() is fine.
-    # If integrating with an existing Tkinter app, icon.run_detached() might be needed.
-    icon.run()
-
 
 def register_service():
     print("Attempting to register application as a Windows service...")
