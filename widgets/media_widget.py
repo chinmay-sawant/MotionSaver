@@ -537,14 +537,13 @@ class MediaWidget:
                     
                     detection_count += 1
                     time.sleep(current_interval)
-                    
                 except Exception as e:
                     if hasattr(self, 'window') and self.window.winfo_exists():
-                        print(f"Error in media detection loop: {e}")
+                        logger.error(f"Error in media detection loop: {e}")
                     else:
                         break 
                 
-            print("MediaWidget: Media detection loop stopped.")
+            logger.debug("MediaWidget: Media detection loop stopped.")
 
         # Run detection in completely separate thread with lower priority
         main_detection_thread = threading.Thread(target=media_detection_loop, daemon=True) # Renamed
@@ -607,9 +606,8 @@ class MediaWidget:
                 self.thumbnail_label.config(image='', text='🎵', fg='white', bg=self.transparent_key, 
                                           font=('Arial', 20))
                 self.current_thumbnail = None
-                
         except Exception as e:
-            print(f"Error updating thumbnail: {e}")
+            logger.error(f"Error updating thumbnail: {e}")
             # Fallback to music note emoji
             if hasattr(self, 'thumbnail_label'):
                 self.thumbnail_label.config(image='', text='🎵', fg='white', bg=self.transparent_key,
@@ -637,9 +635,9 @@ class MediaWidget:
                 self.is_playing = True
             else:
                 self.play_pause_btn.config(text="▶")
-                self.is_playing = False
+                self.is_playing = False        
         else:
-            print("Failed to send play/pause command")
+            logger.debug("Failed to send play/pause command")
             
     def previous_track(self):
         """Previous track for browser media"""

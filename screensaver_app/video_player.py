@@ -749,28 +749,28 @@ class VideoClockScreenSaver:
     def close(self):        
         """Clean shutdown of the screensaver"""
         logger.info("Closing VideoClockScreenSaver and its widgets...")
-        # Clean up widgets
+        # Clean up widgets        
         for widget in self.widgets:
             if hasattr(widget, 'destroy') and callable(widget.destroy):
                 widget.destroy()
         self.widgets.clear()
         
-        print("Closing VideoClockScreenSaver...")
+        logger.info("Closing VideoClockScreenSaver...")
         if self.after_id:
             self.master.after_cancel(self.after_id)
             self.after_id = None 
         
         # Stop processor thread first
         if hasattr(self, 'frame_processor_thread') and self.frame_processor_thread.is_alive():
-            print("Stopping frame processor thread...")
+            logger.debug("Stopping frame processor thread...")
             self.frame_processor_thread.stop()
             self.frame_processor_thread.join(timeout=2)
         
         # Then stop reader thread
         if hasattr(self, 'frame_reader_thread') and self.frame_reader_thread.is_alive():
-            print("Stopping frame reader thread...")
+            logger.debug("Stopping frame reader thread...")
             self.frame_reader_thread.stop()
             self.frame_reader_thread.join(timeout=2) 
             if self.frame_reader_thread.is_alive():
-                print("Frame reader thread did not stop in time.")
-        print("VideoClockScreenSaver closed.")
+                logger.warning("Frame reader thread did not stop in time.")
+        logger.info("VideoClockScreenSaver closed.")

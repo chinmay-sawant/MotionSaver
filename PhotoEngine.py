@@ -372,16 +372,16 @@ def start_screensaver(video_path_override=None):
             secondary_screen_windows.clear() # Clear the list
 
             if root.winfo_exists():
-                root.destroy()
+                root.destroy()        
         else:
             # Password verification failed or was cancelled, keep screensaver active
-            print("Close attempt cancelled or password failed. Screensaver remains active.")
+            logger.info("Close attempt cancelled or password failed. Screensaver remains active.")
             try:
                 if root and root.winfo_exists():
                     root.focus_set() # Ensure screensaver window regains focus
             except tk.TclError:
                 # This might happen if the window is somehow already gone
-                print("Root window was already destroyed during close attempt with failed password.")
+                logger.warning("Root window was already destroyed during close attempt with failed password.")
             # Do not destroy the window or re-enable hotkeys if password fails
 
     root.protocol("WM_DELETE_WINDOW", on_closing_main_window)
@@ -421,10 +421,10 @@ def load_config():
                 for key, value in default_config.items():
                     if key not in config_data:
                         config_data[key] = value
-                return config_data
+                return config_data        
         else:
-            print(f"[PhotoEngine] Config file not found at {config_path}. Using defaults.")
-            return default_config    
+            logger.info(f"[PhotoEngine] Config file not found at {config_path}. Using defaults.")
+            return default_config
     
     except Exception as e:
         logger.error(f"Error loading config: {e}. Using defaults.")
