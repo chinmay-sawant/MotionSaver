@@ -7,6 +7,7 @@ import sys # Import sys
 import time # Import time for typeahead timeout
 import subprocess
 import win32serviceutil
+import win32service
 
 # Assuming PasswordConfig.py is in the same directory (package)
 # This will work when gui.py is imported as part of the package

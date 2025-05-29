@@ -9,78 +9,86 @@ import time
 import threading
 import subprocess
 from screensaver_app.PasswordConfig import load_config
+import logging
+import traceback
+
+# Setup logging
+log_file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "service_debug.log")
+logging.basicConfig(filename=log_file_path, level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
 class ScreenSaverService(win32serviceutil.ServiceFramework):
     _svc_name_ = "ScreenSaverService"
     _svc_display_name_ = "Custom Screen Saver Service"
-    _svc_description_ = "Automatically starts screensaver after configured idle time"
+    _svc_description_ = "Runs PhotoEngine in system tray mode for Win+S screensaver activation"
+    
+    # REMOVED _exe_name_ and _exe_args_ to use win32serviceutil defaults
+    # This means this script (screensaver_service.py) will be run by the service,
+    # and its SvcDoRun method will be called.
 
     def __init__(self, args):
         win32serviceutil.ServiceFramework.__init__(self, args)
         self.hWaitStop = win32event.CreateEvent(None, 0, 0, None)
         self.running = True
-        self.screensaver_process = None
-        self.last_activity_time = time.time()
-        
+        self.tray_process = None
+
     def SvcStop(self):
         self.ReportServiceStatus(win32service.SERVICE_STOP_PENDING)
         win32event.SetEvent(self.hWaitStop)
         self.running = False
-        if self.screensaver_process:
-            self.screensaver_process.terminate()
+        servicemanager.LogInfoMsg("Service stop requested")
 
     def SvcDoRun(self):
         servicemanager.LogMsg(servicemanager.EVENTLOG_INFORMATION_TYPE,
                               servicemanager.PYS_SERVICE_STARTED,
                               (self._svc_name_, ''))
-        self.main()
+        logging.info("Service SvcDoRun called.")
+        try:
+            self.main()
+            logging.info("Service main function completed.")
+        except Exception as e:
+            logging.error(f"Exception in SvcDoRun trying to call self.main(): {e}")
+            logging.error(traceback.format_exc())
+            self.SvcStop()
 
     def main(self):
-        """Main service loop"""
-        import win32gui
-        import win32api
-        
-        while self.running:
-            try:
-                config = load_config()
-                timer_minutes = config.get("screensaver_timer_minutes", 10)
-                timer_seconds = timer_minutes * 60
-                
-                # Check for user activity
-                current_time = time.time()
-                
-                # Get cursor position and check if it changed
-                cursor_pos = win32gui.GetCursorPos()
-                if hasattr(self, 'last_cursor_pos') and cursor_pos != self.last_cursor_pos:
-                    self.last_activity_time = current_time
-                self.last_cursor_pos = cursor_pos
-                
-                # Check if screensaver should start
-                if (current_time - self.last_activity_time) >= timer_seconds:
-                    if not self.screensaver_process or self.screensaver_process.poll() is not None:
-                        self.start_screensaver()
-                        self.last_activity_time = current_time  # Reset timer
-                
-                # Check every 5 seconds
-                if win32event.WaitForSingleObject(self.hWaitStop, 5000) == win32event.WAIT_OBJECT_0:
-                    break
-                    
-            except Exception as e:
-                servicemanager.LogErrorMsg(f"Service error: {e}")
-                time.sleep(10)
-
-    def start_screensaver(self):
-        """Start the screensaver process"""
+        """Main service - runs PhotoEngine in tray mode directly"""
+        logging.info("Service main function started.")
         try:
-            script_dir = os.path.dirname(os.path.abspath(__file__))
-            photo_engine_path = os.path.join(script_dir, "PhotoEngine.py")
+            # Import and run PhotoEngine's tray mode directly
+            import sys
+            import os
             
-            self.screensaver_process = subprocess.Popen([
-                sys.executable, photo_engine_path
-            ], cwd=script_dir)
+            logging.info("Service main: Imported sys and os.")
+            # Add the current directory to Python path
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            logging.info(f"Service main: script_dir is {script_dir}")
+            if script_dir not in sys.path:
+                sys.path.insert(0, script_dir)
+                logging.info(f"Service main: Added {script_dir} to sys.path.")
+            
+            servicemanager.LogInfoMsg("Starting PhotoEngine tray mode directly")
+            logging.info("Service main: Logged 'Starting PhotoEngine tray mode directly' to servicemanager.")
+            
+            # Import PhotoEngine and run tray mode
+            logging.info("Service main: Attempting to import PhotoEngine.")
+            import PhotoEngine
+            logging.info("Service main: Successfully imported PhotoEngine.")
+            
+            # Set up command line arguments for tray mode
+            sys.argv = ['PhotoEngine.py', '-min']
+            logging.info(f"Service main: Set sys.argv to {sys.argv}")
+            
+            # Run PhotoEngine's main function
+            logging.info("Service main: Attempting to run PhotoEngine.main().")
+            PhotoEngine.main()
+            logging.info("Service main: PhotoEngine.main() completed without raising an immediate exception.")
             
         except Exception as e:
-            servicemanager.LogErrorMsg(f"Failed to start screensaver: {e}")
+            servicemanager.LogErrorMsg(f"Service main error: {e}")
+            logging.error(f"Exception in service main: {e}")
+            logging.error(traceback.format_exc())
+            # Optionally, re-raise or handle to ensure service stops if PhotoEngine crashes
+            raise
 
 if __name__ == '__main__':
     if len(sys.argv) == 1:
