@@ -33,9 +33,34 @@ class ScreenSaverService(win32serviceutil.ServiceFramework):
 
     def SvcStop(self):
         self.ReportServiceStatus(win32service.SERVICE_STOP_PENDING)
-        win32event.SetEvent(self.hWaitStop)
-        self.running = False
-        servicemanager.LogInfoMsg("Service stop requested")
+        logging.info("Service SvcStop called.")
+        
+        # Attempt to gracefully shut down PhotoEngine's tray mode
+        try:
+            # Ensure PhotoEngine is imported if not already
+            # This might be redundant if SvcDoRun has already imported it,
+            # but good for safety if SvcStop could be called independently.
+            if 'PhotoEngine' not in sys.modules:
+                script_dir = os.path.dirname(os.path.abspath(__file__))
+                if script_dir not in sys.path:
+                    sys.path.insert(0, script_dir)
+                import PhotoEngine
+                logging.info("SvcStop: Imported PhotoEngine.")
+
+            if hasattr(sys.modules['PhotoEngine'], 'shutdown_system_tray'):
+                logging.info("SvcStop: Calling PhotoEngine.shutdown_system_tray().")
+                sys.modules['PhotoEngine'].shutdown_system_tray()
+                logging.info("SvcStop: PhotoEngine.shutdown_system_tray() called.")
+            else:
+                logging.warning("SvcStop: PhotoEngine.shutdown_system_tray function not found.")
+        except Exception as e:
+            logging.error(f"SvcStop: Error calling PhotoEngine.shutdown_system_tray(): {e}")
+            logging.error(traceback.format_exc())
+
+        win32event.SetEvent(self.hWaitStop) # Signal the SvcDoRun loop to exit
+        self.running = False # Redundant if hWaitStop is primary, but good practice
+        servicemanager.LogInfoMsg("Service stop requested and processed by SvcStop.")
+        logging.info("Service SvcStop completed.")
 
     def SvcDoRun(self):
         servicemanager.LogMsg(servicemanager.EVENTLOG_INFORMATION_TYPE,
@@ -45,6 +70,17 @@ class ScreenSaverService(win32serviceutil.ServiceFramework):
         try:
             self.main()
             logging.info("Service main function completed.")
+            # After self.main() completes (i.e., PhotoEngine.main() returns),
+            # the service should wait for a stop signal if it hasn't received one.
+            # If PhotoEngine.main() (specifically icon.run()) is blocking,
+            # this part is only reached when the icon stops.
+            logging.info("Service SvcDoRun: self.main() completed. Waiting for stop event if not already set.")
+            # Wait for the SvcStop to signal exit, or if PhotoEngine exits by itself.
+            # If PhotoEngine.main() (icon.run()) exits, SvcDoRun will proceed.
+            # If SvcStop is called, hWaitStop is set, and this wait will also unblock.
+            win32event.WaitForSingleObject(self.hWaitStop, win32event.INFINITE)
+            logging.info("Service SvcDoRun: Stop event received or main loop exited. Proceeding to stop.")
+            
         except Exception as e:
             logging.error(f"Exception in SvcDoRun trying to call self.main(): {e}")
             logging.error(traceback.format_exc())
@@ -75,13 +111,13 @@ class ScreenSaverService(win32serviceutil.ServiceFramework):
             logging.info("Service main: Successfully imported PhotoEngine.")
             
             # Set up command line arguments for tray mode
-            sys.argv = ['PhotoEngine.py', '-min']
+            sys.argv = ['PhotoEngine.py', '--min']
             logging.info(f"Service main: Set sys.argv to {sys.argv}")
             
             # Run PhotoEngine's main function
-            logging.info("Service main: Attempting to run PhotoEngine.main().")
-            PhotoEngine.main()
-            logging.info("Service main: PhotoEngine.main() completed without raising an immediate exception.")
+            logging.info("Service main: Attempting to run PhotoEngine.admin_main().")
+            PhotoEngine.admin_main()
+            logging.info("Service main: PhotoEngine.admin_main() completed without raising an immediate exception.")
             
         except Exception as e:
             servicemanager.LogErrorMsg(f"Service main error: {e}")

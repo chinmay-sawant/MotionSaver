@@ -1,6 +1,7 @@
 # Core dependencies
 opencv-python>=4.5.0
 Pillow>=9.0.0
+olefile>=0.46
 tk>=0.1.0
 numpy>=1.20.0
 screeninfo>=0.8
@@ -12,6 +13,6 @@ pygame>=2.0.0
 mutagen>=1.45.0
 winsdk>=1.0.0b9
 pywin32>=300
-pyuac>=0.0.5
+pyuac==0.0.3
 pypiwin32>=223
 pystray>=0.19.0

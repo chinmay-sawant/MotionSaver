@@ -35,6 +35,7 @@ root_ref_for_hook = None # Global reference to the root window for the hook call
 # Global variables for tray mode
 tray_running = False
 win_s_blocker = None
+tray_icon_instance = None # Add this global variable
 
 # Define missing Windows constants
 # From winuser.h: EVENT_SYSTEM_DISPLAYSETTINGSCHANGED = 0x000F
@@ -445,7 +446,7 @@ def run_in_system_tray():
     icon_image = create_image(64, 64, 'black', 'blue') # Example icon
     
     # Global variables for managing the tray mode
-    global tray_running, win_s_blocker
+    global tray_running, win_s_blocker, tray_icon_instance # Add tray_icon_instance here
     tray_running = True
     win_s_blocker = None
 
@@ -467,20 +468,7 @@ def run_in_system_tray():
 
     def on_exit_app(icon, item):
         print("Exiting application from tray...")
-        global tray_running, win_s_blocker
-        tray_running = False
-        if win_s_blocker:
-            # Handle both EnhancedKeyBlocker and basic KeyBlocker
-            if hasattr(win_s_blocker, 'stop_blocking'):
-                # EnhancedKeyBlocker
-                win_s_blocker.stop_blocking()
-            elif hasattr(win_s_blocker, 'disable_all_blocking'):
-                # Basic KeyBlocker
-                win_s_blocker.disable_all_blocking()
-            elif hasattr(win_s_blocker, 'python_blocker') and win_s_blocker.python_blocker:
-                # EnhancedKeyBlocker with internal python_blocker
-                win_s_blocker.python_blocker.disable_all_blocking()
-        icon.stop()
+        shutdown_system_tray() # Call the centralized shutdown
 
     def start_screensaver_with_return():
         """Start screensaver and return to tray mode after authentication."""
@@ -598,6 +586,7 @@ def run_in_system_tray():
             pystray.MenuItem('Exit', on_exit_app))
 
     icon = pystray.Icon("PhotoEngine", icon_image, "PhotoEngine Screensaver", menu)
+    tray_icon_instance = icon # Store the icon instance
 
     # Start Win+S detection
     start_win_s_detection()
@@ -605,6 +594,48 @@ def run_in_system_tray():
     # Run the icon - this will block until exit is called
     print("System tray mode active. Press Win+S to activate screensaver.")
     icon.run()
+    print("[PhotoEngine] Tray icon.run() has finished.") # Add log to see when it exits
+
+
+def shutdown_system_tray():
+    """Handles the clean shutdown of the system tray icon and related resources."""
+    print("[PhotoEngine] shutdown_system_tray called.")
+    global tray_running, win_s_blocker, tray_icon_instance
+    
+    if not tray_running:
+        print("[PhotoEngine] Tray not running or already shut down.")
+        return
+
+    tray_running = False
+    
+    if win_s_blocker:
+        print("[PhotoEngine] Stopping Win+S blocker...")
+        if hasattr(win_s_blocker, 'stop_blocking'):
+            win_s_blocker.stop_blocking()
+        elif hasattr(win_s_blocker, 'disable_all_blocking'):
+            win_s_blocker.disable_all_blocking()
+        elif hasattr(win_s_blocker, 'python_blocker') and win_s_blocker.python_blocker:
+            win_s_blocker.python_blocker.disable_all_blocking()
+        win_s_blocker = None
+        print("[PhotoEngine] Win+S blocker stopped.")
+
+    if tray_icon_instance:
+        print("[PhotoEngine] Stopping tray icon instance...")
+        tray_icon_instance.stop()
+        tray_icon_instance = None
+        print("[PhotoEngine] Tray icon instance stopped.")
+    else:
+        print("[PhotoEngine] No tray icon instance to stop.")
+    
+    # If there are any screensaver windows open, try to close them.
+    # This is a bit tricky as they are managed by start_screensaver.
+    # For now, focus on stopping the tray icon. A more robust solution
+    # might involve PhotoEngine.start_screensaver returning its root window
+    # or having a global reference to it that can be destroyed.
+    # However, the screensaver should ideally close itself upon authentication.
+    # If the service stops it abruptly, it might bypass password.
+
+    print("[PhotoEngine] System tray shutdown process complete.")
 
 
 def admin_main():
@@ -621,7 +652,14 @@ def admin_main():
         sys.exit(0) # Exit after service registration attempt
 
     if args.min:
-        run_in_system_tray()
+        try:
+            run_in_system_tray()
+        except Exception as e:
+            print(f"[PhotoEngine] Exception in run_in_system_tray: {e}")
+            # Ensure cleanup if run_in_system_tray crashes
+            shutdown_system_tray() 
+        finally:
+            print("[PhotoEngine] admin_main: run_in_system_tray finished or exited.")
         sys.exit(0) # Exit after starting tray icon (tray icon runs its own loop)
     elif args.mode == 'saver':
         start_screensaver(args.video)
