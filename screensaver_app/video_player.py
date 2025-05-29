@@ -12,6 +12,12 @@ from concurrent.futures import ThreadPoolExecutor
 import collections
 import getpass  # Added import
 
+# Add central logging
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from central_logger import get_logger, log_startup, log_shutdown, log_exception
+logger = get_logger('VideoPlayer')
+
 from .PasswordConfig import load_config
 
 def get_username_from_config():
@@ -121,9 +127,9 @@ class FrameReaderThread(threading.Thread):
 
     def run(self):
         self.running = True
-        self.cap = cv2.VideoCapture(self.video_path, cv2.CAP_ANY)
+        self.cap = cv2.VideoCapture(self.video_path, cv2.CAP_ANY)        
         if not self.cap.isOpened():
-            print(f"Error: Could not open video {self.video_path} in thread.")
+            logger.error(f"Could not open video {self.video_path} in thread")
             self.running = False
             return
 
@@ -131,7 +137,7 @@ class FrameReaderThread(threading.Thread):
         if self.video_fps <= 0 or self.video_fps > 120:  # Fallback for invalid FPS
             self.video_fps = 30.0 # Ensure float for division
         
-        print(f"Video FPS: {self.video_fps:.2f}") # Display actual video FPS
+        logger.info(f"Video FPS: {self.video_fps:.2f}")  # Display actual video FPS
         
         self.actual_frame_interval = 1.0 / self.video_fps
         
@@ -265,7 +271,7 @@ try:
     from widgets.media_widget import MediaWidget
     from widgets.weather_widget import WeatherWidget
 except ImportError as e:
-    print(f"Widget import error: {e}")
+    logger.error(f"Widget import error: {e}")
     StockWidget = None
     MediaWidget = None
     WeatherWidget = None
@@ -301,7 +307,7 @@ class VideoClockScreenSaver:
             # Project root is two levels up from this file (screensaver_app/video_player.py -> ScreenSaver/)
             project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
             actual_video_path = os.path.join(project_root, actual_video_path)
-            print(f"Resolved relative video path to: {actual_video_path}") # Debug print
+            logger.debug(f"Resolved relative video path to: {actual_video_path}")
 
 
         self.width = master.winfo_screenwidth() 
@@ -466,10 +472,10 @@ class VideoClockScreenSaver:
             )
             
             self.widgets.append(weather_widget_toplevel)
-            print(f"Weather widget created for {pincode}, {country}.")
+            logger.info(f"Weather widget created for {pincode}, {country}.")
             
         except Exception as e:
-            print(f"Failed to create weather widget: {e}")
+            logger.error(f"Failed to create weather widget: {e}")
 
     def _create_stock_widget(self, market, screen_w, screen_h):
         """Create stock widget on main thread"""
@@ -483,10 +489,10 @@ class VideoClockScreenSaver:
             )
             
             self.widgets.append(stock_widget_toplevel)
-            print(f"Stock widget (Toplevel) for {market} created.")
+            logger.info(f"Stock widget (Toplevel) for {market} created.")
             
         except Exception as e:
-            print(f"Failed to create stock widget (Toplevel): {e}")
+            logger.error(f"Failed to create stock widget (Toplevel): {e}")
     
     def _create_media_widget(self, screen_w, screen_h):
         """Create media widget on main thread"""

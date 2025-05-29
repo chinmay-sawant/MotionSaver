@@ -12,9 +12,9 @@ from screensaver_app.PasswordConfig import load_config
 import logging
 import traceback
 
-# Setup logging
-log_file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "service_debug.log")
-logging.basicConfig(filename=log_file_path, level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+# Initialize central logging for service
+from central_logger import get_logger, log_startup, log_shutdown, log_exception
+logger = get_logger('ScreenSaverService')
 
 class ScreenSaverService(win32serviceutil.ServiceFramework):
     _svc_name_ = "ScreenSaverService"
@@ -23,13 +23,13 @@ class ScreenSaverService(win32serviceutil.ServiceFramework):
     
     # REMOVED _exe_name_ and _exe_args_ to use win32serviceutil defaults
     # This means this script (screensaver_service.py) will be run by the service,
-    # and its SvcDoRun method will be called.
-
+    # and its SvcDoRun method will be called.    
     def __init__(self, args):
         win32serviceutil.ServiceFramework.__init__(self, args)
         self.hWaitStop = win32event.CreateEvent(None, 0, 0, None)
         self.running = True
         self.tray_process = None
+        logger.info("ScreenSaverService initialized")
 
     def SvcStop(self):
         self.ReportServiceStatus(win32service.SERVICE_STOP_PENDING)

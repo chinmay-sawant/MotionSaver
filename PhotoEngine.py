@@ -4,16 +4,21 @@ import os
 import platform 
 import sys
 import subprocess # Added for service registration
+
+# Initialize central logging first
+from central_logger import get_logger, log_startup, log_shutdown, log_exception
+logger = get_logger('PhotoEngine')
+
 from screensaver_app.video_player import VideoClockScreenSaver 
 from screensaver_app.PasswordConfig import verify_password_dialog_macos
 
 # Try to import enhanced blocker first, fallback to basic blocker
 try:
     from enhanced_key_blocker import EnhancedKeyBlocker as KeyBlocker
-    print("[PhotoEngine] Using enhanced key blocker") # Removed "with C++ hooks" as it's Python-only now
+    logger.info("Using enhanced key blocker")
 except ImportError:
     from blockit import KeyBlocker # Assuming blockit.py contains a basic KeyBlocker
-    print("[PhotoEngine] Using basic key blocker from blockit.py") 
+    logger.info("Using basic key blocker from blockit.py")
 import gui 
 import json
 import time
@@ -22,9 +27,10 @@ import pystray # Added for system tray functionality
 # Import PyUAC for UAC elevation
 try:
     import pyuac
+    logger.info("PyUAC imported successfully")
 except ImportError:
-    print("PyUAC not installed. Please install with: pip install pyuac")
-    print("For elevation capability, also install: pip install pypiwin32")
+    logger.warning("PyUAC not installed. Please install with: pip install pyuac")
+    logger.warning("For elevation capability, also install: pip install pypiwin32")
     pyuac = None
 
 # For multi-monitor black-out and event hooking on Windows
@@ -52,6 +58,7 @@ if platform.system() == "Windows":
         
         # Flag for multi-monitor support
         WINDOWS_MULTI_MONITOR_SUPPORT = True
+        logger.info("Windows multi-monitor support enabled with pywin32")
         
         # Define the WinEventProc callback function type
         # WINEVENTPROC callback function prototype
@@ -88,9 +95,9 @@ if platform.system() == "Windows":
         UnhookWinEvent = user32.UnhookWinEvent
         
     except ImportError:
-        print("pywin32 not installed, multi-monitor features and dynamic updates will be limited.")
+        logger.warning("pywin32 not installed, multi-monitor features and dynamic updates will be limited.")
 else:
-    pass # No specific multi-monitor black-out for other OS in this version
+    logger.info("Non-Windows OS detected, multi-monitor blackout features not available")
 
 secondary_screen_windows = []
 
@@ -101,16 +108,17 @@ def update_secondary_monitor_blackouts(main_tk_window):
     """
     global secondary_screen_windows
     if not main_tk_window.winfo_exists() or not WINDOWS_MULTI_MONITOR_SUPPORT:
+        logger.debug("Skipping monitor blackout update - main window not exists or no multi-monitor support")
         return
 
     main_tk_window.update_idletasks() # Ensure Tkinter's view of window state is up-to-date
 
     try:
         raw_monitors_info = win32api.EnumDisplayMonitors()
+        logger.debug(f"Enumerated {len(raw_monitors_info)} monitors")
     except Exception as e:
-        print(f"[PhotoEngine] Error enumerating display monitors: {e}")
-        return
-
+        logger.error(f"Error enumerating display monitors: {e}")
+        return    
     detailed_monitors_info = []
     primary_monitor_hMonitor = None # Store the hMonitor of the primary display
 
@@ -123,12 +131,12 @@ def update_secondary_monitor_blackouts(main_tk_window):
             if is_primary:
                 primary_monitor_hMonitor = hMonitor
         except Exception as e_info:
-            print(f"[PhotoEngine] Error getting info for monitor {hMonitor}: {e_info}")
+            logger.warning(f"Error getting info for monitor {hMonitor}: {e_info}")
             detailed_monitors_info.append({'hMonitor': hMonitor, 'rect': monitor_rect_coords, 'is_primary': False})
 
     # Fallback if no primary monitor was explicitly flagged
     if primary_monitor_hMonitor is None and detailed_monitors_info:
-        print("[PhotoEngine] Warning: No explicit primary monitor found. Attempting fallback identification.")
+        logger.warning("No explicit primary monitor found. Attempting fallback identification.")
         # Fallback 1: Monitor containing (0,0)
         found_fallback_primary = False
         for i, mon_data in enumerate(detailed_monitors_info):
@@ -139,13 +147,12 @@ def update_secondary_monitor_blackouts(main_tk_window):
                 # Ensure all others are marked non-primary if this fallback is used
                 for j_idx, j_mon_data in enumerate(detailed_monitors_info):
                     if i != j_idx: detailed_monitors_info[j_idx]['is_primary'] = False
-                print(f"[PhotoEngine] Fallback: Identified monitor at (0,0) as primary: {primary_monitor_hMonitor}")
+                logger.info(f"Fallback: Identified monitor at (0,0) as primary: {primary_monitor_hMonitor}")
                 found_fallback_primary = True
                 break
-        
-        # Fallback 2: Use the main Tkinter window's current monitor (less reliable if Tk window placement is uncertain)
+          # Fallback 2: Use the main Tkinter window's current monitor (less reliable if Tk window placement is uncertain)
         if not found_fallback_primary:
-            print("[PhotoEngine] Fallback: Using main Tkinter window's location to identify primary.")
+            logger.debug("[PhotoEngine] Fallback: Using main Tkinter window's location to identify primary.")
             main_win_center_x = main_tk_window.winfo_x() + main_tk_window.winfo_width() // 2
             main_win_center_y = main_tk_window.winfo_y() + main_tk_window.winfo_height() // 2
             for i, mon_data in enumerate(detailed_monitors_info):
@@ -155,13 +162,11 @@ def update_secondary_monitor_blackouts(main_tk_window):
                     primary_monitor_hMonitor = mon_data['hMonitor']
                     for j_idx, j_mon_data in enumerate(detailed_monitors_info):
                         if i != j_idx: detailed_monitors_info[j_idx]['is_primary'] = False
-                    print(f"[PhotoEngine] Fallback: Identified monitor via Tk window center as primary: {primary_monitor_hMonitor}")
+                    logger.debug(f"[PhotoEngine] Fallback: Identified monitor via Tk window center as primary: {primary_monitor_hMonitor}")
                     found_fallback_primary = True
-                    break
-
-        # Fallback 3: Default to the first enumerated monitor if all else fails
+                    break        # Fallback 3: Default to the first enumerated monitor if all else fails
         if not found_fallback_primary and detailed_monitors_info:
-            print("[PhotoEngine] Ultimate Fallback: Assuming first enumerated monitor is primary.")
+            logger.debug("[PhotoEngine] Ultimate Fallback: Assuming first enumerated monitor is primary.")
             detailed_monitors_info[0]['is_primary'] = True
             primary_monitor_hMonitor = detailed_monitors_info[0]['hMonitor']
 
@@ -184,11 +189,11 @@ def update_secondary_monitor_blackouts(main_tk_window):
                     secondary_screen_windows.append(existing_win)
                     old_black_windows_to_process.pop(i)
                     found_and_reused_existing = True
-                    print(f"[PhotoEngine] Reusing existing blackout window for monitor at ({mx1},{my1})")
+                    logger.debug(f"Reusing existing blackout window for monitor at ({mx1},{my1})")
                     break
             
             if not found_and_reused_existing:
-                print(f"[PhotoEngine] Creating new blackout window for monitor at ({mx1},{my1}) {width}x{height}")
+                logger.info(f"Creating new blackout window for monitor at ({mx1},{my1}) {width}x{height}")
                 black_screen_window = tk.Toplevel(main_tk_window)
                 black_screen_window.configure(bg='black')
                 black_screen_window.overrideredirect(True)
@@ -204,12 +209,10 @@ def update_secondary_monitor_blackouts(main_tk_window):
                 
                 black_screen_window.lift() # Ensure it's on top
                 black_screen_window.focus_set() # Attempt to give focus to solidify topmost
-                secondary_screen_windows.append(black_screen_window)
-
-    # Destroy any old blackout windows that are no longer needed
+                secondary_screen_windows.append(black_screen_window)    # Destroy any old blackout windows that are no longer needed
     for old_win in old_black_windows_to_process:
         if old_win.winfo_exists():
-            print(f"[PhotoEngine] Destroying obsolete blackout window at ({old_win.winfo_x()},{old_win.winfo_y()})")
+            logger.debug(f"Destroying obsolete blackout window at ({old_win.winfo_x()},{old_win.winfo_y()})")
             old_win.destroy()
 
 # Store the callback as a global to prevent garbage collection
@@ -232,30 +235,29 @@ def start_screensaver(video_path_override=None):
     
     key_blocker = None
     ctrl_alt_del_detector = None
-    
-    # Initialize key blocker if admin mode is enabled
+      # Initialize key blocker if admin mode is enabled
     if config.get("run_as_admin", False):
-        print("Initializing enhanced key blocking...")
+        logger.info("Initializing enhanced key blocking...")
         key_blocker = KeyBlocker(debug_print=True)
         # Check if this is the enhanced blocker or basic blocker
         if hasattr(key_blocker, 'start_blocking'):
             # Enhanced blocker
             blocking_success = key_blocker.start_blocking()
             if blocking_success:
-                print("Enhanced key blocking enabled successfully.")
+                logger.info("Enhanced key blocking enabled successfully.")
                 status = key_blocker.get_status()
-                print(f"Blocking status: {status}")
+                logger.info(f"Blocking status: {status}")
             else:
-                print("Enhanced key blocking failed to start.")
+                logger.warning("Enhanced key blocking failed to start.")
                 # Even if C++ hooks fail, we can still use Python hooks
-                print("Attempting to use Python-only blocking...")
+                logger.info("Attempting to use Python-only blocking...")
         else:
             # Basic blocker fallback
             blocking_success = key_blocker.enable_all_blocking(use_registry=True, use_hooks=True)
             if blocking_success:
-                print("Basic key blocking enabled successfully.")
+                logger.info("Basic key blocking enabled successfully.")
             else:
-                print("Some key blocking methods failed. Check permissions.")
+                logger.warning("Some key blocking methods failed. Check permissions.")
     
     root = tk.Tk()
     root_ref_for_hook = root # Store root for the callback
@@ -272,12 +274,11 @@ def start_screensaver(video_path_override=None):
         success = verify_password_dialog_macos(root)
         if success: 
             app.close()
-            
             if hWinEventHook: # Unhook before destroying windows
                 try:
                     UnhookWinEvent(hWinEventHook)  # Use ctypes function
                 except Exception as e_unhook:
-                    print(f"Error unhooking display event: {e_unhook}")
+                    logger.error(f"Error unhooking display event: {e_unhook}")
                 hWinEventHook = None
             root_ref_for_hook = None
 
@@ -303,8 +304,8 @@ def start_screensaver(video_path_override=None):
                 if root and root.winfo_exists():
                     root.focus_set()
             except tk.TclError:
-                print("Root window already destroyed.")
-            print("Login cancelled or failed.")
+                logger.debug("Root window already destroyed.")
+            logger.info("Login cancelled or failed.")
 
     # Initial call to black out monitors, delayed slightly for fullscreen to establish
     if WINDOWS_MULTI_MONITOR_SUPPORT:
@@ -323,11 +324,11 @@ def start_screensaver(video_path_override=None):
                 0, # idProcess
                 0, # idThread
                 win32con.WINEVENT_OUTOFCONTEXT | win32con.WINEVENT_SKIPOWNPROCESS
-            )
+            )            
             if not hWinEventHook:
-                print("Failed to set event hook")
+                logger.warning("Failed to set event hook")
         except Exception as e:
-            print(f"Error setting up display change event hook: {e}")
+            logger.error(f"Error setting up display change event hook: {e}")
             hWinEventHook = None
     
     # Bind multiple keys and mouse click to trigger password prompt
@@ -349,13 +350,12 @@ def start_screensaver(video_path_override=None):
         
         if success:
             if app: # 'app' is from the outer scope
-                app.close()
-
+                app.close()            
             if hWinEventHook:
                 try:
                     UnhookWinEvent(hWinEventHook)
                 except Exception as e_unhook:
-                    print(f"Error unhooking display event on close: {e_unhook}")
+                    logger.error(f"Error unhooking display event on close: {e_unhook}")
                 hWinEventHook = None
               # Disable key blocking
             if key_blocker:
@@ -424,9 +424,10 @@ def load_config():
                 return config_data
         else:
             print(f"[PhotoEngine] Config file not found at {config_path}. Using defaults.")
-            return default_config
+            return default_config    
+    
     except Exception as e:
-        print(f"[PhotoEngine] Error loading config: {e}. Using defaults.")
+        logger.error(f"Error loading config: {e}. Using defaults.")
         return default_config
 
 def create_image(width, height, color1, color2):
@@ -442,37 +443,32 @@ def create_image(width, height, color1, color2):
     return image
 
 def run_in_system_tray():
-    print("Running in system tray mode...")
+    logger.info("Running in system tray mode...")
     icon_image = create_image(64, 64, 'black', 'blue') # Example icon
     
     # Global variables for managing the tray mode
     global tray_running, win_s_blocker, tray_icon_instance # Add tray_icon_instance here
     tray_running = True
-    win_s_blocker = None
-
+    win_s_blocker = None    
     def on_open_screensaver(icon, item):
-        print("Starting screensaver from tray...")
+        logger.info("Starting screensaver from tray...")
         # Run start_screensaver_with_return in a new thread to avoid blocking the tray icon
         import threading
         thread = threading.Thread(target=start_screensaver_with_return)
         thread.daemon = True        
         thread.start()
-    
     def on_open_gui(icon, item):
-        print("Opening GUI from tray...")
+        logger.info("Opening GUI from tray...")
         # Run GUI in a new thread to avoid blocking the tray icon
         import threading
         thread = threading.Thread(target=gui.main)
         thread.daemon = True
-        thread.start()
-
+        thread.start()    
     def on_exit_app(icon, item):
-        print("Exiting application from tray...")
-        shutdown_system_tray() # Call the centralized shutdown
-
-    def start_screensaver_with_return():
+        logger.info("Exiting application from tray...")
+        shutdown_system_tray() # Call the centralized shutdown    def start_screensaver_with_return():
         """Start screensaver and return to tray mode after authentication."""
-        print("Win + S detected or manual start. Starting screensaver...")
+        logger.info("Win + S detected or manual start. Starting screensaver...")
         
         # Temporarily disable Win+S detection
         global win_s_blocker
@@ -491,7 +487,7 @@ def run_in_system_tray():
         # Start the screensaver normally
         start_screensaver()
           # After screensaver exits, restart Win+S detection
-        print("Screensaver closed. Returning to minimized mode...")
+        logger.info("Screensaver closed. Returning to minimized mode...")
         start_win_s_detection()
 
     def start_win_s_detection():
@@ -525,10 +521,9 @@ def run_in_system_tray():
             if actual_blocker:
                 # Override the _on_block_action method to trigger screensaver AND block the key
                 original_on_block_action = getattr(actual_blocker, '_on_block_action', None)
-                
                 def custom_on_block_action(combo_name):
                     if "win+s" in combo_name.lower():
-                        print(f"Win+S detected and blocked: {combo_name}")
+                        logger.info(f"Win+S detected and blocked: {combo_name}")
                         # Start screensaver in a new thread
                         import threading
                         thread = threading.Thread(target=start_screensaver_with_return)
@@ -542,8 +537,8 @@ def run_in_system_tray():
                         return False
                 
                 actual_blocker._on_block_action = custom_on_block_action
-                
-                # Enable full blocking mode for Win+S only
+                        
+                    # Enable full blocking mode for Win+S only
                 if hasattr(actual_blocker, 'enable_all_blocking'):
                     # Temporarily modify blocked_combinations to only include Win+S
                     original_combinations = actual_blocker.blocked_combinations.copy()
@@ -553,11 +548,10 @@ def run_in_system_tray():
                     
                     # Restore original combinations for reference
                     actual_blocker.blocked_combinations = original_combinations
-                    
                     if success:
-                        print("Win+S detection and blocking active in tray mode")
+                        logger.info("Win+S detection and blocking active in tray mode")
                     else:
-                        print("Failed to start Win+S detection and blocking")
+                        logger.warning("Failed to start Win+S detection and blocking")
                 elif hasattr(actual_blocker, 'start_hook_blocking'):
                     # Fallback to hook-only blocking
                     original_combinations = actual_blocker.blocked_combinations.copy()
@@ -567,19 +561,18 @@ def run_in_system_tray():
                     
                     # Restore original combinations for reference
                     actual_blocker.blocked_combinations = original_combinations
-                    
                     if success:
-                        print("Win+S hook detection active in tray mode")
+                        logger.info("Win+S hook detection active in tray mode")
                     else:
-                        print("Failed to start Win+S hook detection")
+                        logger.warning("Failed to start Win+S hook detection")                
                 else:
-                    print("Hook blocking not available")
+                        logger.warning("Hook blocking not available")
             else:
-                print("Could not initialize key blocker for Win+S detection")
-                
+                logger.error("Could not initialize key blocker for Win+S detection")
+                    
         except Exception as e:
-            print(f"Error starting Win+S detection: {e}")
-
+            logger.error(f"Error starting Win+S detection: {e}")
+    
     # Create system tray menu with GUI option
     menu = (pystray.MenuItem('Open Screensaver', on_open_screensaver),
             pystray.MenuItem('Open GUI', on_open_gui),
@@ -589,27 +582,25 @@ def run_in_system_tray():
     tray_icon_instance = icon # Store the icon instance
 
     # Start Win+S detection
-    start_win_s_detection()
-
-    # Run the icon - this will block until exit is called
-    print("System tray mode active. Press Win+S to activate screensaver.")
+    start_win_s_detection()    # Run the icon - this will block until exit is called
+    logger.info("System tray mode active. Press Win+S to activate screensaver.")
     icon.run()
-    print("[PhotoEngine] Tray icon.run() has finished.") # Add log to see when it exits
+    logger.info("Tray icon.run() has finished.")
 
 
 def shutdown_system_tray():
     """Handles the clean shutdown of the system tray icon and related resources."""
-    print("[PhotoEngine] shutdown_system_tray called.")
+    logger.info("shutdown_system_tray called.")
     global tray_running, win_s_blocker, tray_icon_instance
     
     if not tray_running:
-        print("[PhotoEngine] Tray not running or already shut down.")
+        logger.info("Tray not running or already shut down.")
         return
 
     tray_running = False
     
     if win_s_blocker:
-        print("[PhotoEngine] Stopping Win+S blocker...")
+        logger.info("Stopping Win+S blocker...")
         if hasattr(win_s_blocker, 'stop_blocking'):
             win_s_blocker.stop_blocking()
         elif hasattr(win_s_blocker, 'disable_all_blocking'):
@@ -617,15 +608,15 @@ def shutdown_system_tray():
         elif hasattr(win_s_blocker, 'python_blocker') and win_s_blocker.python_blocker:
             win_s_blocker.python_blocker.disable_all_blocking()
         win_s_blocker = None
-        print("[PhotoEngine] Win+S blocker stopped.")
+        logger.info("Win+S blocker stopped.")
 
     if tray_icon_instance:
-        print("[PhotoEngine] Stopping tray icon instance...")
+        logger.info("Stopping tray icon instance...")
         tray_icon_instance.stop()
         tray_icon_instance = None
-        print("[PhotoEngine] Tray icon instance stopped.")
+        logger.info("Tray icon instance stopped.")
     else:
-        print("[PhotoEngine] No tray icon instance to stop.")
+        logger.info("No tray icon instance to stop.")
     
     # If there are any screensaver windows open, try to close them.
     # This is a bit tricky as they are managed by start_screensaver.
@@ -635,7 +626,7 @@ def shutdown_system_tray():
     # However, the screensaver should ideally close itself upon authentication.
     # If the service stops it abruptly, it might bypass password.
 
-    print("[PhotoEngine] System tray shutdown process complete.")
+    logger.info("System tray shutdown process complete.")
 
 
 def admin_main():
@@ -653,13 +644,14 @@ def admin_main():
 
     if args.min:
         try:
-            run_in_system_tray()
+            run_in_system_tray()        
+        
         except Exception as e:
-            print(f"[PhotoEngine] Exception in run_in_system_tray: {e}")
+            logger.error(f"Exception in run_in_system_tray: {e}")
             # Ensure cleanup if run_in_system_tray crashes
             shutdown_system_tray() 
         finally:
-            print("[PhotoEngine] admin_main: run_in_system_tray finished or exited.")
+            logger.info("admin_main: run_in_system_tray finished or exited.")
         sys.exit(0) # Exit after starting tray icon (tray icon runs its own loop)
     elif args.mode == 'saver':
         start_screensaver(args.video)
@@ -667,44 +659,44 @@ def admin_main():
         gui.main() # Call the main function from the gui module
 
 if __name__ == "__main__":
-    print("[PhotoEngine] Starting PhotoEngine...") # Debug
+    logger.info("Starting PhotoEngine...")
     # Request admin privileges when running on Windows
     if platform.system() == "Windows" and pyuac:
         current_config = load_config()
-        print(f"[PhotoEngine] Loaded config for admin check: run_as_admin = {current_config.get('run_as_admin')}") # Debug
+        logger.debug(f"Loaded config for admin check: run_as_admin = {current_config.get('run_as_admin')}")
         
         if current_config.get("run_as_admin", False):
             if not pyuac.isUserAdmin():
-                print("[PhotoEngine] Admin privileges required, but not currently running as admin.") # Debug
-                print("[PhotoEngine] Attempting to restart with admin privileges...") # Debug
+                logger.info("Admin privileges required, but not currently running as admin.")
+                logger.info("Attempting to restart with admin privileges...")
                 try:
                     pyuac.runAsAdmin()  # This will restart the script with sys.argv
-                    print("[PhotoEngine] runAsAdmin called. Exiting current non-admin instance.") # Debug
+                    logger.info("runAsAdmin called. Exiting current non-admin instance.")
                     sys.exit(0)  # Crucial: Exit the current non-admin instance immediately
                 except Exception as e:
-                    print(f"[PhotoEngine] Failed to restart with admin privileges: {e}")
-                    print("[PhotoEngine] Continuing without admin privileges. Some features may be limited.")
+                    logger.error(f"Failed to restart with admin privileges: {e}")
+                    logger.warning("Continuing without admin privileges. Some features may be limited.")
                     # Fallback to running admin_main without elevated privileges if restart fails
                     admin_main() 
                     sys.exit(1) # Exit after fallback attempt if it also has issues or to signify failure
             else:
-                print("[PhotoEngine] Already running with admin privileges.") # Debug
+                logger.info("Already running with admin privileges.")
                 admin_main()
         else:
-            print("[PhotoEngine] Admin privileges not required by configuration.") # Debug
+            logger.info("Admin privileges not required by configuration.")
             admin_main()
     else:
         if platform.system() != "Windows":
-            print("[PhotoEngine] Not running on Windows. Admin check skipped.") # Debug
+            logger.info("Not running on Windows. Admin check skipped.")
         elif not pyuac:
-            print("[PhotoEngine] PyUAC module not available. Admin check skipped.") # Debug
+            logger.info("PyUAC module not available. Admin check skipped.")
         admin_main()
-    print("[PhotoEngine] PhotoEngine finished.") # Debug
+    logger.info("PhotoEngine finished.")
 
 def register_service():
-    print("Attempting to register application as a Windows service...")
+    print("Attempting to register application as a Windows service...")    
     if platform.system() != "Windows":
-        print("Service registration is only supported on Windows.")
+        logger.warning("Service registration is only supported on Windows.")
         return
 
     try:

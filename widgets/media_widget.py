@@ -13,6 +13,12 @@ import platform
 import asyncio
 import io
 from PIL import Image, ImageTk
+import sys
+
+# Add central logging
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from central_logger import get_logger, log_startup, log_shutdown, log_exception
+logger = get_logger('MediaWidget')
 
 # Add imports for Windows SDK (only used on Windows)
 WINSDK_AVAILABLE = False
@@ -20,13 +26,14 @@ if platform.system() == "Windows":
     try:
         from winsdk.windows.media.control import GlobalSystemMediaTransportControlsSessionManager as MediaManager
         from winsdk.windows.storage.streams import DataReader, Buffer, InputStreamOptions
-        WINSDK_AVAILABLE = True
+        WINSDK_AVAILABLE = True    
     except ImportError:
-        print("Windows SDK not available. Install with: pip install winsdk")
+        logger.warning("Windows SDK not available. Install with: pip install winsdk")
         WINSDK_AVAILABLE = False
 
-class MediaWidget:
+class MediaWidget:    
     def __init__(self, parent_root, transparent_key='#123456', screen_width=0, screen_height=0):
+        logger.info("Initializing MediaWidget")
         self.parent_root = parent_root
         self.transparent_key = transparent_key
         
@@ -74,7 +81,7 @@ class MediaWidget:
             self.parent_root.after(0, self._create_widget_ui)
             
         except Exception as e:
-            print(f"Error in media widget async initialization: {e}")
+            logger.error(f"Error in media widget async initialization: {e}")
     
     def _create_widget_ui(self):
         """Create widget UI on main thread"""
@@ -86,11 +93,11 @@ class MediaWidget:
             self.initialized = True
             
             # Start detection in separate thread after UI is ready
-            self.detection_thread = threading.Thread(target=self._start_detection_async, daemon=True)
+            self.detection_thread = threading.Thread(target=self._start_detection_async, daemon=True)            
             self.detection_thread.start()
             
         except Exception as e:
-            print(f"Error creating media widget UI: {e}")
+            logger.error(f"Error creating media widget UI: {e}")
     
     def _start_detection_async(self):
         """Start media detection in completely separate thread""" # Renamed
@@ -98,7 +105,7 @@ class MediaWidget:
             time.sleep(0.2) # Reduced delay, slightly more than UI init
             self.start_media_detection() # Renamed
         except Exception as e:
-            print(f"Error starting media detection: {e}")
+            logger.error(f"Error starting media detection: {e}")
 
     def create_widget_content(self):
         """Create the media widget UI content within its Toplevel window"""
@@ -192,10 +199,9 @@ class MediaWidget:
                 }
                 
                 if key in media_keys:
-                    # Send key down and key up events
-                    win32api.keybd_event(media_keys[key], 0, 0, 0)  # Key down
+                    # Send key down and key up events                    win32api.keybd_event(media_keys[key], 0, 0, 0)  # Key down
                     win32api.keybd_event(media_keys[key], 0, win32con.KEYEVENTF_KEYUP, 0)  # Key up
-                    print(f"Sent media key: {key}")
+                    logger.debug(f"Sent media key: {key}")
                     return True
                     
             elif system == "Darwin":  # macOS
@@ -205,10 +211,9 @@ class MediaWidget:
                     'next': 'tell application "System Events" to key code 17',       # Next
                     'previous': 'tell application "System Events" to key code 18'   # Previous
                 }
-                
                 if key in scripts:
                     subprocess.run(['osascript', '-e', scripts[key]], capture_output=True)
-                    print(f"Sent media key: {key}")
+                    logger.debug(f"Sent media key: {key}")
                     return True
                     
             elif system == "Linux":
@@ -218,14 +223,13 @@ class MediaWidget:
                     'next': 'playerctl next',
                     'previous': 'playerctl previous'
                 }
-                
                 if key in commands:
                     subprocess.run(commands[key].split(), capture_output=True)
-                    print(f"Sent media key: {key}")
+                    logger.debug(f"Sent media key: {key}")
                     return True
                     
         except Exception as e:
-            print(f"Error sending media key {key}: {e}")
+            logger.error(f"Error sending media key {key}: {e}")
             return False
         
         return False
@@ -250,9 +254,8 @@ class MediaWidget:
             elif system == "Darwin":
                 result = self._check_macos_chrome_fast()
             
-            # Debug output for troubleshooting
-            if result:
-                print(f"Detected media: {result}")
+            # Debug output for troubleshooting            if result:
+                logger.debug(f"Detected media: {result}")
                 
             # Cache the result
             self.detection_cache = result
@@ -260,7 +263,7 @@ class MediaWidget:
             return result
             
         except Exception as e:
-            print(f"Error in media detection: {e}")
+            logger.error(f"Error in media detection: {e}")
             return None
     
     def _check_windows_media_session_winsdk(self):
@@ -275,9 +278,8 @@ class MediaWidget:
                 
             # Otherwise, fall back to browser window check
             return self._check_browser_window_titles()
-            
         except Exception as e:
-            print(f"Error in winsdk media detection: {e}")
+            logger.error(f"Error in winsdk media detection: {e}")
             return self._check_browser_window_titles()
     
     async def _get_media_info_async(self):
@@ -319,9 +321,8 @@ class MediaWidget:
                     if current_state > best_session_state:
                         best_session = session
                         best_session_state = current_state
-                        
                 except Exception as e:
-                    print(f"Error processing session: {e}")
+                    logger.error(f"Error processing session: {e}")
                     continue
             
             # If we found a good session, extract its details
@@ -402,9 +403,8 @@ class MediaWidget:
                     media_info["thumbnail_base64"] = thumbnail_base64
                 
                 return media_info
-        
         except Exception as e:
-            print(f"Error in _get_media_info_async: {e}")
+            logger.error(f"Error in _get_media_info_async: {e}")
             
         return None
 
@@ -489,15 +489,13 @@ class MediaWidget:
                 
             results = []
             win32gui.EnumWindows(enum_windows_callback, results)
-            
             if results:
-                print(f"Window title detection found: {results[0]}")
+                logger.debug(f"Window title detection found: {results[0]}")
                 return results[0]
-            
         except ImportError:
-            print("win32gui not available for window title detection")
+            logger.warning("win32gui not available for window title detection")
         except Exception as e:
-            print(f"Browser window detection error: {e}")
+            logger.error(f"Browser window detection error: {e}")
         
         return None
 
@@ -514,9 +512,9 @@ class MediaWidget:
                     daemon=True
                 )
                 detection_thread_job.start()
-                detection_count += 1
+                detection_count += 1            
             except Exception as e:
-                print(f"Initial media detection error: {e}")
+                logger.error(f"Initial media detection error: {e}")
             
             # Then continue with normal detection loop
             while self.detection_running and hasattr(self, 'window'):
