@@ -199,7 +199,8 @@ def get_weather_data(pincode="400068", country_code="IN"):
         return {"error": f"Failed to fetch weather data: {str(e)}"}
 
 if __name__ == "__main__":
-    # Test the function    weather_data = get_weather_data()
+    # Test the function   
+    weather_data = get_weather_data()
     if "error" not in weather_data:
         current = weather_data["current"]
         logger.info(f"Today's Weather: {current['description']} {current['icon']}")

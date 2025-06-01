@@ -466,7 +466,8 @@ def run_in_system_tray():
         thread.start()    
     def on_exit_app(icon, item):
         logger.info("Exiting application from tray...")
-        shutdown_system_tray() # Call the centralized shutdown    def start_screensaver_with_return():
+        shutdown_system_tray() # Call the centralized shutdown    
+    def start_screensaver_with_return():
         """Start screensaver and return to tray mode after authentication."""
         logger.info("Win + S detected or manual start. Starting screensaver...")
         
