@@ -658,6 +658,60 @@ def admin_main():
         start_screensaver(args.video)
     elif args.mode == 'gui':
         gui.main() # Call the main function from the gui module
+def register_service():
+    print("Attempting to register application as a Windows service...")    
+    if platform.system() != "Windows":
+        logger.warning("Service registration is only supported on Windows.")
+        return
+
+    try:
+        # Ensure running as admin for service creation
+        if pyuac and not pyuac.isUserAdmin():
+            print("Admin privileges are required to register the service. Please re-run as administrator.")
+            # Optionally, try to elevate again, but for a specific action like this,
+            # it's often better to instruct the user.
+            # pyuac.runAsAdmin() 
+            # sys.exit(0)
+            return
+
+        service_name = "PhotoEngineService"
+        script_path = os.path.abspath(__file__)
+        python_exe = sys.executable 
+        # Command to run the screensaver mode. Ensure paths are quoted.
+        command = f'"{python_exe}" "{script_path}" --min'
+        
+        # Check if service exists
+        check_service_cmd = f'sc query "{service_name}"'
+        try:
+            service_query_output = subprocess.check_output(check_service_cmd, shell=True, text=True, stderr=subprocess.STDOUT)
+            if "STATE" in service_query_output: # A simple check to see if query returned service info
+                 print(f"Service '{service_name}' already exists.")
+                 print(f"To manage it, use 'sc start {service_name}', 'sc stop {service_name}', or 'sc delete {service_name}'.")
+                 return
+        except subprocess.CalledProcessError as e:
+            # Error 1060: The specified service does not exist as an installed service.
+            # This is expected if the service is not yet created.
+            if "1060" not in e.output: 
+                print(f"Error checking service status: {e.output}")
+                # return # Decide if other errors during check should halt registration
+
+        create_cmd = f'sc create "{service_name}" binPath= "{command}" start= auto DisplayName= "PhotoEngine Screensaver Service"'
+        print(f"Executing: {create_cmd}")
+        subprocess.run(create_cmd, check=True, shell=True, text=True)
+        print(f"Service '{service_name}' created successfully.")
+        print(f"  To start it: sc start {service_name}")
+        print(f"  To stop it:  sc stop {service_name}")
+        print(f"  To delete it: sc delete {service_name}")
+
+    except subprocess.CalledProcessError as e:
+        print(f"Failed to register service: {e}")
+        if e.stderr:
+            print(f"Error details: {e.stderr}")
+        print("Make sure you are running this script as an administrator.")
+    except FileNotFoundError: # For 'sc' command not found, though unlikely on Windows
+        print("Error: 'sc' command not found. Is your Windows environment correctly set up?")
+    except Exception as e:
+        print(f"An unexpected error occurred during service registration: {e}")
 
 if __name__ == "__main__":
     logger.info("Starting PhotoEngine...")
@@ -694,57 +748,3 @@ if __name__ == "__main__":
         admin_main()
     logger.info("PhotoEngine finished.")
 
-def register_service():
-    print("Attempting to register application as a Windows service...")    
-    if platform.system() != "Windows":
-        logger.warning("Service registration is only supported on Windows.")
-        return
-
-    try:
-        # Ensure running as admin for service creation
-        if pyuac and not pyuac.isUserAdmin():
-            print("Admin privileges are required to register the service. Please re-run as administrator.")
-            # Optionally, try to elevate again, but for a specific action like this,
-            # it's often better to instruct the user.
-            # pyuac.runAsAdmin() 
-            # sys.exit(0)
-            return
-
-        service_name = "PhotoEngineService"
-        script_path = os.path.abspath(__file__)
-        python_exe = sys.executable 
-        # Command to run the screensaver mode. Ensure paths are quoted.
-        command = f'"{python_exe}" "{script_path}" --mode saver'
-        
-        # Check if service exists
-        check_service_cmd = f'sc query "{service_name}"'
-        try:
-            service_query_output = subprocess.check_output(check_service_cmd, shell=True, text=True, stderr=subprocess.STDOUT)
-            if "STATE" in service_query_output: # A simple check to see if query returned service info
-                 print(f"Service '{service_name}' already exists.")
-                 print(f"To manage it, use 'sc start {service_name}', 'sc stop {service_name}', or 'sc delete {service_name}'.")
-                 return
-        except subprocess.CalledProcessError as e:
-            # Error 1060: The specified service does not exist as an installed service.
-            # This is expected if the service is not yet created.
-            if "1060" not in e.output: 
-                print(f"Error checking service status: {e.output}")
-                # return # Decide if other errors during check should halt registration
-
-        create_cmd = f'sc create "{service_name}" binPath= "{command}" start= auto DisplayName= "PhotoEngine Screensaver Service"'
-        print(f"Executing: {create_cmd}")
-        subprocess.run(create_cmd, check=True, shell=True, text=True)
-        print(f"Service '{service_name}' created successfully.")
-        print(f"  To start it: sc start {service_name}")
-        print(f"  To stop it:  sc stop {service_name}")
-        print(f"  To delete it: sc delete {service_name}")
-
-    except subprocess.CalledProcessError as e:
-        print(f"Failed to register service: {e}")
-        if e.stderr:
-            print(f"Error details: {e.stderr}")
-        print("Make sure you are running this script as an administrator.")
-    except FileNotFoundError: # For 'sc' command not found, though unlikely on Windows
-        print("Error: 'sc' command not found. Is your Windows environment correctly set up?")
-    except Exception as e:
-        print(f"An unexpected error occurred during service registration: {e}")
