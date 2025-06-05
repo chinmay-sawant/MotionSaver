@@ -11,7 +11,7 @@ logger = get_logger('PhotoEngine')
 
 from screensaver_app.video_player import VideoClockScreenSaver 
 from screensaver_app.PasswordConfig import verify_password_dialog_macos
-
+from screensaver_service import launch_in_user_session
 # Try to import enhanced blocker first, fallback to basic blocker
 try:
     from enhanced_key_blocker import EnhancedKeyBlocker as KeyBlocker
@@ -637,8 +637,31 @@ def admin_main():
     parser.add_argument('--video', default=None, help='Path to video file (overrides config)')
     parser.add_argument('--min', action='store_true', help='Run in minimized system tray window')
     parser.add_argument('--register-service', action='store_true', help='Register the application as a Windows service')
+    parser.add_argument('--start-service', action='store_true', help='Start the tray app in the active user session (for service use)')
     args = parser.parse_args()
-    
+
+    if args.start_service:
+        # Only works if running as a Windows service (LocalSystem)
+        import ctypes
+        try:
+            # Correct session check
+            session_id = ctypes.c_uint()
+            result = ctypes.windll.kernel32.ProcessIdToSessionId(os.getpid(), ctypes.byref(session_id))
+            if result and session_id.value == 0:
+                script_path = os.path.abspath(__file__)
+                python_exe = sys.executable
+                command = f'"{python_exe}" "{script_path}" --min'
+                try:
+                    launch_in_user_session(command)
+                except Exception as e:
+                    logger.error(f"Failed to launch in user session: {e}")
+            else:
+                logger.error("--start-service must be run from a Windows service (Session 0 / LocalSystem).")
+                print("--start-service must be run from a Windows service (Session 0 / LocalSystem). Use --min for normal tray mode.")
+        except Exception as e:
+            logger.error(f"Service context check failed: {e}")
+        sys.exit(0)
+
     if args.register_service:
         register_service()
         sys.exit(0) # Exit after service registration attempt
@@ -658,6 +681,7 @@ def admin_main():
         start_screensaver(args.video)
     elif args.mode == 'gui':
         gui.main() # Call the main function from the gui module
+
 def register_service():
     print("Attempting to register application as a Windows service...")    
     if platform.system() != "Windows":
@@ -677,9 +701,9 @@ def register_service():
         service_name = "PhotoEngineService"
         script_path = os.path.abspath(__file__)
         python_exe = sys.executable 
-        # Command to run the screensaver mode. Ensure paths are quoted.
-        command = f'"{python_exe}" "{script_path}" --min'
-        
+        # Command to run the service: it will call --start-service, which launches the tray in the user session
+        command = f'"{python_exe}" "{script_path}" --start-service'
+
         # Check if service exists
         check_service_cmd = f'sc query "{service_name}"'
         try:

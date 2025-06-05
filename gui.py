@@ -723,7 +723,6 @@ class ScreenSaverApp:
             except Exception:
                 pass
         self.update_font_preview()
-        self.update_ui_font_preview()
 
     def _set_entry_dark(self, widget):
         # Recursively set all Entry widgets to dark mode
