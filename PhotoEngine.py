@@ -320,7 +320,7 @@ def start_screensaver(video_path_override=None):
     root.focus_force()  # Force focus
 
     app = VideoClockScreenSaver(root, video_path_override) 
-    
+
     def on_escape(event):
         global secondary_screen_windows, hWinEventHook, root_ref_for_hook
         if event:
@@ -353,6 +353,35 @@ def start_screensaver(video_path_override=None):
             secondary_screen_windows = []
             if root.winfo_exists():
                 root.destroy()
+
+            # --- Relaunch tray with same elevation ---
+            try:
+                logger.info("Restarting system tray after screensaver login...")
+                script_path = os.path.abspath(__file__)
+                python_exe = sys.executable
+                
+                # Check if we're running as admin and preserve elevation
+                if is_admin():
+                    logger.info("Restarting tray with admin privileges...")
+                    import ctypes
+                    # Use ShellExecuteW to maintain admin privileges
+                    ctypes.windll.shell32.ShellExecuteW(
+                        None,
+                        "runas", 
+                        python_exe,
+                        f'"{script_path}" --min --no-elevate',
+                        None,
+                        0  # SW_HIDE
+                    )
+                else:
+                    logger.info("Restarting tray without admin privileges...")
+                    subprocess.Popen([python_exe, script_path, "--min"], 
+                                   creationflags=subprocess.CREATE_NO_WINDOW if platform.system() == "Windows" else 0)
+                
+                logger.info("New tray process started, exiting current process.")
+                os._exit(0)
+            except Exception as e:
+                logger.error(f"Failed to restart tray after login: {e}")
         else:
             try:
                 if root and root.winfo_exists():
