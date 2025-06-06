@@ -40,7 +40,6 @@ The following Python packages are required (automatically installed via requirem
 **Windows Integration:**
 - `winsdk>=1.0.0b9` - Windows Media Session API
 - `pywin32>=300` - Windows API integration
-- `pyuac>=0.0.5` - UAC elevation handling
 - `pypiwin32>=223` - Additional Windows APIs
 - `pystray>=0.19.0` - System tray functionality
 
