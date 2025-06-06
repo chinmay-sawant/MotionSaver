@@ -309,17 +309,30 @@ def start_screensaver(video_path_override=None):
     
     root = tk.Tk()
     root_ref_for_hook = root # Store root for the callback
-    root.attributes('-fullscreen', True) 
-    TRANSPARENT_KEY_FOR_LOGIN_TOPLEVEL = '#123456' 
+    root.attributes('-fullscreen', True)
+    TRANSPARENT_KEY_FOR_LOGIN_TOPLEVEL = '#123456'
     root.attributes('-transparentcolor', TRANSPARENT_KEY_FOR_LOGIN_TOPLEVEL)
-    root.configure(bg='black') 
+    root.configure(bg='black')
 
     # --- Ensure main window is visible and on top ---
     root.deiconify()  # Make sure it's not minimized
     root.lift()       # Bring to front
     root.focus_force()  # Force focus
+    root.update()
+    # On single monitor, force always on top and focus again
+    try:
+        if root.tk.call('tk', 'windowingsystem') == 'win32':
+            # Check number of screens
+            screen_count = root.winfo_screenmmwidth() // root.winfo_screenwidth()
+            if screen_count <= 1:
+                root.attributes('-topmost', True)
+                root.lift()
+                root.focus_force()
+                root.after(100, lambda: root.focus_force())
+    except Exception as e:
+        logger.warning(f"Could not enforce topmost/focus for single monitor: {e}")
 
-    app = VideoClockScreenSaver(root, video_path_override) 
+    app = VideoClockScreenSaver(root, video_path_override)
 
     def on_escape(event):
         global secondary_screen_windows, hWinEventHook, root_ref_for_hook
