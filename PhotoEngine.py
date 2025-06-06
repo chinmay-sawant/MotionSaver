@@ -24,14 +24,56 @@ import json
 import time
 from PIL import Image, ImageDraw # Added for system tray icon
 import pystray # Added for system tray functionality
-# Import PyUAC for UAC elevation
-try:
-    import pyuac
-    logger.info("PyUAC imported successfully")
-except ImportError:
-    logger.warning("PyUAC not installed. Please install with: pip install pyuac")
-    logger.warning("For elevation capability, also install: pip install pypiwin32")
-    pyuac = None
+
+# Custom UAC elevation functions to replace pyUAC
+def is_admin():
+    """Check if the current process is running with admin privileges."""
+    if platform.system() != "Windows":
+        return False
+    try:
+        import ctypes
+        return ctypes.windll.shell32.IsUserAnAdmin()
+    except:
+        return False
+
+def run_as_admin():
+    """Restart the current script with admin privileges without showing console window."""
+    if platform.system() != "Windows":
+        return False
+    
+    try:
+        import ctypes
+        # Get the current script path and arguments
+        script = os.path.abspath(sys.argv[0])
+        params = ' '.join(sys.argv[1:])
+        
+        # Use ShellExecuteW to run with admin privileges and hide console
+        ctypes.windll.shell32.ShellExecuteW(
+            None, 
+            "runas", 
+            sys.executable, 
+            f'"{script}" {params}', 
+            None, 
+            0  # SW_HIDE - hide the window
+        )
+        return True
+    except Exception as e:
+        logger.error(f"Failed to elevate privileges: {e}")
+        return False
+
+def hide_console_window():
+    """Hide the console window for the current process."""
+    if platform.system() == "Windows":
+        try:
+            import ctypes
+            # Get console window handle
+            console_window = ctypes.windll.kernel32.GetConsoleWindow()
+            if console_window:
+                # Hide the console window
+                ctypes.windll.user32.ShowWindow(console_window, 0)  # SW_HIDE
+                logger.info("Console window hidden successfully")
+        except Exception as e:
+            logger.warning(f"Failed to hide console window: {e}")
 
 # For multi-monitor black-out and event hooking on Windows
 WINDOWS_MULTI_MONITOR_SUPPORT = False
@@ -638,7 +680,12 @@ def admin_main():
     parser.add_argument('--min', action='store_true', help='Run in minimized system tray window')
     parser.add_argument('--register-service', action='store_true', help='Register the application as a Windows service')
     parser.add_argument('--start-service', action='store_true', help='Start the tray app in the active user session (for service use)')
+    parser.add_argument('--no-elevate', action='store_true', help='Skip elevation check (internal flag)')
     args = parser.parse_args()
+
+    # Hide console window when running in minimized mode
+    if args.min:
+        hide_console_window()
 
     if args.start_service:
         # Only works if running as a Windows service (LocalSystem)
@@ -669,7 +716,6 @@ def admin_main():
     if args.min:
         try:
             run_in_system_tray()        
-        
         except Exception as e:
             logger.error(f"Exception in run_in_system_tray: {e}")
             # Ensure cleanup if run_in_system_tray crashes
@@ -689,15 +735,6 @@ def register_service():
         return
 
     try:
-        # Ensure running as admin for service creation
-        if pyuac and not pyuac.isUserAdmin():
-            print("Admin privileges are required to register the service. Please re-run as administrator.")
-            # Optionally, try to elevate again, but for a specific action like this,
-            # it's often better to instruct the user.
-            # pyuac.runAsAdmin() 
-            # sys.exit(0)
-            return
-
         service_name = "PhotoEngineService"
         script_path = os.path.abspath(__file__)
         python_exe = sys.executable 
@@ -739,27 +776,47 @@ def register_service():
 
 if __name__ == "__main__":
     logger.info("Starting PhotoEngine...")
+    
+    # Parse arguments early to check for --no-elevate flag
+    parser = argparse.ArgumentParser(description='Video Clock Screen Saver', add_help=False)
+    parser.add_argument('--no-elevate', action='store_true', help='Skip elevation check (internal flag)')
+    parser.add_argument('--min', action='store_true', help='Run in minimized system tray window')
+    early_args, _ = parser.parse_known_args()
+    
     # Request admin privileges when running on Windows
-    if platform.system() == "Windows" and pyuac:
+    if platform.system() == "Windows" and not early_args.no_elevate:
         current_config = load_config()
         logger.debug(f"Loaded config for admin check: run_as_admin = {current_config.get('run_as_admin')}")
         
         if current_config.get("run_as_admin", False):
-            if not pyuac.isUserAdmin():
+            if not is_admin():
                 logger.info("Admin privileges required, but not currently running as admin.")
                 logger.info("Attempting to restart with admin privileges...")
                 try:
-                    pyuac.runAsAdmin()  # This will restart the script with sys.argv
-                    logger.info("runAsAdmin called. Exiting current non-admin instance.")
-                    sys.exit(0)  # Crucial: Exit the current non-admin instance immediately
+                    # Add --no-elevate flag to prevent infinite loop
+                    sys.argv.append('--no-elevate')
+                    
+                    if run_as_admin():
+                        logger.info("runAsAdmin called. Exiting current non-admin instance.")
+                        sys.exit(0)  # Exit the current non-admin instance immediately
+                    else:
+                        logger.error("Failed to restart with admin privileges")
+                        logger.warning("Continuing without admin privileges. Some features may be limited.")
+                        # Remove the --no-elevate flag we added since elevation failed
+                        if '--no-elevate' in sys.argv:
+                            sys.argv.remove('--no-elevate')
+                        admin_main()
+                        sys.exit(1)
                 except Exception as e:
                     logger.error(f"Failed to restart with admin privileges: {e}")
                     logger.warning("Continuing without admin privileges. Some features may be limited.")
-                    # Fallback to running admin_main without elevated privileges if restart fails
                     admin_main() 
-                    sys.exit(1) # Exit after fallback attempt if it also has issues or to signify failure
+                    sys.exit(1)
             else:
                 logger.info("Already running with admin privileges.")
+                # Hide console window if running in minimized mode
+                if early_args.min:
+                    hide_console_window()
                 admin_main()
         else:
             logger.info("Admin privileges not required by configuration.")
@@ -767,8 +824,8 @@ if __name__ == "__main__":
     else:
         if platform.system() != "Windows":
             logger.info("Not running on Windows. Admin check skipped.")
-        elif not pyuac:
-            logger.info("PyUAC module not available. Admin check skipped.")
+        elif early_args.no_elevate:
+            logger.info("Elevation check skipped due to --no-elevate flag.")
         admin_main()
     logger.info("PhotoEngine finished.")
 
