@@ -12,6 +12,12 @@ from concurrent.futures import ThreadPoolExecutor
 import collections
 import getpass  # Added import
 
+# Add central logging
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from central_logger import get_logger, log_startup, log_shutdown, log_exception
+logger = get_logger('VideoPlayer')
+
 from .PasswordConfig import load_config
 
 def get_username_from_config():
@@ -92,11 +98,10 @@ class FrameProcessorThread(threading.Thread):
                         self.processed_frame_queue.put_nowait(processed_frame)
                     except queue.Empty:
                         pass
-                        
             except queue.Empty:
                 continue
             except Exception as e:
-                print(f"Error in frame processor: {e}")
+                logger.error(f"Error in frame processor: {e}")
                 
     def stop(self):
         self.running = False
@@ -121,9 +126,9 @@ class FrameReaderThread(threading.Thread):
 
     def run(self):
         self.running = True
-        self.cap = cv2.VideoCapture(self.video_path, cv2.CAP_ANY)
+        self.cap = cv2.VideoCapture(self.video_path, cv2.CAP_ANY)        
         if not self.cap.isOpened():
-            print(f"Error: Could not open video {self.video_path} in thread.")
+            logger.error(f"Could not open video {self.video_path} in thread")
             self.running = False
             return
 
@@ -131,7 +136,7 @@ class FrameReaderThread(threading.Thread):
         if self.video_fps <= 0 or self.video_fps > 120:  # Fallback for invalid FPS
             self.video_fps = 30.0 # Ensure float for division
         
-        print(f"Video FPS: {self.video_fps:.2f}") # Display actual video FPS
+        logger.info(f"Video FPS: {self.video_fps:.2f}")  # Display actual video FPS
         
         self.actual_frame_interval = 1.0 / self.video_fps
         
@@ -158,10 +163,10 @@ class FrameReaderThread(threading.Thread):
             
             ret, frame = self.cap.read()
             if not ret:
-                self.cap.set(cv2.CAP_PROP_POS_FRAMES, 0) 
+                self.cap.set(cv2.CAP_PROP_POS_FRAMES, 0)                
                 ret, frame = self.cap.read()
                 if not ret:
-                    print("Error reading frame in FrameReaderThread, stopping.")
+                    logger.error("Error reading frame in FrameReaderThread, stopping.")
                     break 
             
             try:
@@ -183,17 +188,16 @@ class FrameReaderThread(threading.Thread):
                 if frame_count % 120 == 0: # Approx every 2-4 seconds
                     elapsed = current_time - last_perf_time
                     actual_read_fps = 120 / elapsed if elapsed > 0 else 0
-                    if actual_read_fps < self.video_fps * 0.8:
-                        print(f"Frame reader read FPS: {actual_read_fps:.1f} (video native: {self.video_fps:.1f})")
+                    if actual_read_fps < self.video_fps * 0.8:                    logger.debug(f"Frame reader read FPS: {actual_read_fps:.1f} (video native: {self.video_fps:.1f})")
                     last_perf_time = current_time
                 
             except Exception as e:
-                print(f"Error processing frame in FrameReaderThread: {e}")
+                logger.error(f"Error processing frame in FrameReaderThread: {e}")
                 continue
         
         if self.cap:
             self.cap.release()
-        print("FrameReaderThread finished.")
+        logger.info("FrameReaderThread finished.")
 
     def stop(self):
         self.running = False
@@ -265,7 +269,7 @@ try:
     from widgets.media_widget import MediaWidget
     from widgets.weather_widget import WeatherWidget
 except ImportError as e:
-    print(f"Widget import error: {e}")
+    logger.error(f"Widget import error: {e}")
     StockWidget = None
     MediaWidget = None
     WeatherWidget = None
@@ -301,7 +305,7 @@ class VideoClockScreenSaver:
             # Project root is two levels up from this file (screensaver_app/video_player.py -> ScreenSaver/)
             project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
             actual_video_path = os.path.join(project_root, actual_video_path)
-            print(f"Resolved relative video path to: {actual_video_path}") # Debug print
+            logger.debug(f"Resolved relative video path to: {actual_video_path}")
 
 
         self.width = master.winfo_screenwidth() 
@@ -329,32 +333,32 @@ class VideoClockScreenSaver:
         # CLOCK FONT
         font_path_used = None
         try:
-            font_path = find_font_path(self.clock_font_family)
+            font_path = find_font_path(self.clock_font_family)            
             if font_path:
                 self.clock_font = ImageFont.truetype(font_path, self.clock_font_size)
                 font_path_used = font_path
-                print(f"Using clock font file: {font_path}")
+                logger.debug(f"Using clock font file: {font_path}")
             else:
                 self.clock_font = ImageFont.truetype(self.clock_font_family, self.clock_font_size)
                 font_path_used = self.clock_font_family
-                print(f"Using clock font family: {self.clock_font_family}")
+                logger.debug(f"Using clock font family: {self.clock_font_family}")
         except Exception as e:
-            print(f"Warning: Clock font '{self.clock_font_family}' not found. Using PIL default. ({e})")
+            logger.warning(f"Warning: Clock font '{self.clock_font_family}' not found. Using PIL default. ({e})")
             self.clock_font = ImageFont.load_default()
 
         # UI FONT
         try:
             ui_font_path = find_font_path(self.ui_font_family)
-            if ui_font_path:
+            if ui_font_path:                
                 self.profile_name_font = ImageFont.truetype(ui_font_path, self.ui_font_size)
                 self.profile_initial_font = ImageFont.truetype(ui_font_path, self.ui_font_size * 2)
-                print(f"Using UI font file: {ui_font_path}")
+                logger.debug(f"Using UI font file: {ui_font_path}")
             else:
                 self.profile_name_font = ImageFont.truetype(self.ui_font_family, self.ui_font_size)
                 self.profile_initial_font = ImageFont.truetype(self.ui_font_family, self.ui_font_size * 2)
-                print(f"Using UI font family: {self.ui_font_family}")
+                logger.debug(f"Using UI font family: {self.ui_font_family}")
         except Exception as e:
-            print(f"Warning: UI font '{self.ui_font_family}' not found. Using PIL default. ({e})")
+            logger.warning(f"Warning: UI font '{self.ui_font_family}' not found. Using PIL default. ({e})")
             self.profile_name_font = ImageFont.load_default()
             self.profile_initial_font = ImageFont.load_default()
 
@@ -443,11 +447,10 @@ class VideoClockScreenSaver:
                     elif widget_type == "stock":
                         self.master.after(0, lambda market=param: self._create_stock_widget(market, screen_w, screen_h))
                     elif widget_type == "media":
-                        time.sleep(0.5)  # Extra delay for media widget
-                        self.master.after(0, lambda: self._create_media_widget(screen_w, screen_h))
+                        time.sleep(0.5)  # Extra delay for media widget                        self.master.after(0, lambda: self._create_media_widget(screen_w, screen_h))
                         
             except Exception as e:
-                print(f"Error in async widget creation: {e}")
+                logger.error(f"Error in async widget creation: {e}")
         
         # Start widget creation in separate thread
         widget_thread = threading.Thread(target=create_widgets_async, daemon=True)
@@ -466,10 +469,10 @@ class VideoClockScreenSaver:
             )
             
             self.widgets.append(weather_widget_toplevel)
-            print(f"Weather widget created for {pincode}, {country}.")
+            logger.info(f"Weather widget created for {pincode}, {country}.")
             
         except Exception as e:
-            print(f"Failed to create weather widget: {e}")
+            logger.error(f"Failed to create weather widget: {e}")
 
     def _create_stock_widget(self, market, screen_w, screen_h):
         """Create stock widget on main thread"""
@@ -483,10 +486,10 @@ class VideoClockScreenSaver:
             )
             
             self.widgets.append(stock_widget_toplevel)
-            print(f"Stock widget (Toplevel) for {market} created.")
+            logger.info(f"Stock widget (Toplevel) for {market} created.")
             
         except Exception as e:
-            print(f"Failed to create stock widget (Toplevel): {e}")
+            logger.error(f"Failed to create stock widget (Toplevel): {e}")
     
     def _create_media_widget(self, screen_w, screen_h):
         """Create media widget on main thread"""
@@ -497,12 +500,11 @@ class VideoClockScreenSaver:
                 screen_width=screen_w,
                 screen_height=screen_h
             )
-            
             self.widgets.append(media_widget_toplevel)
-            print(f"Media widget (Toplevel) created.")
+            logger.info(f"Media widget (Toplevel) created.")
             
         except Exception as e:
-            print(f"Failed to create media widget (Toplevel): {e}")
+            logger.error(f"Failed to create media widget (Toplevel): {e}")
 
     def _initialize_ui_elements_after_first_frame(self, frame_width, frame_height):
         self.width = frame_width
@@ -568,11 +570,11 @@ class VideoClockScreenSaver:
                 # Apply mask to get circular image
                 circular_img = Image.new('RGBA', (size, size), (0,0,0,0))
                 circular_img.paste(square_img, (0, 0))
-                circular_img.putalpha(mask)
+                circular_img.putalpha(mask)                
                 loaded_custom_image = circular_img
                 
             except Exception as e:
-                print(f"Error loading or processing custom profile picture '{custom_pic_path}': {e}")
+                logger.error(f"Error loading or processing custom profile picture '{custom_pic_path}': {e}")
                 loaded_custom_image = None
 
         if loaded_custom_image:
@@ -708,14 +710,13 @@ class VideoClockScreenSaver:
 
         # Initialize UI elements on first frame if a frame was successfully dequeued
         if not self.first_frame_received and processed_frame:
-            self._initialize_ui_elements_after_first_frame(processed_frame.width, processed_frame.height)
-
+            self._initialize_ui_elements_after_first_frame(processed_frame.width, processed_frame.height)        
         if processed_frame:
             try:
                 self.imgtk = ImageTk.PhotoImage(processed_frame)
                 self.label.config(image=self.imgtk)
             except Exception as e:
-                print(f"Error updating label image: {e}") 
+                logger.error(f"Error updating label image: {e}") 
         
         # Lightweight performance monitoring
         frame_time = time.perf_counter() - frame_start_time
@@ -724,16 +725,15 @@ class VideoClockScreenSaver:
         current_time = time.perf_counter()
         
         # Less frequent performance logging to reduce overhead
-        if current_time - self.last_fps_print >= 5.0:  # Every 5 seconds
-            if self.fps_history:
+        if current_time - self.last_fps_print >= 5.0:  # Every 5 seconds            if self.fps_history:
                 avg_frame_time = sum(self.fps_history) / len(self.fps_history)
                 estimated_fps = 1.0 / avg_frame_time if avg_frame_time > 0 else 0
                 queue_info = f"Raw: {self.raw_frame_queue.qsize()}, Processed: {self.processed_frame_queue.qsize()}"
                 widget_count = len(self.widgets)
-                print(f"UI FPS: {estimated_fps:.1f}, Widgets: {widget_count}, Queues: {queue_info}")
-            self.frames_processed_in_ui = 0
-            self.start_time = current_time
-            self.last_fps_print = current_time
+                logger.debug(f"UI FPS: {estimated_fps:.1f}, Widgets: {widget_count}, Queues: {queue_info}")
+        self.frames_processed_in_ui = 0
+        self.start_time = current_time
+        self.last_fps_print = current_time
         
         # Optimized scheduling for the next frame
         ui_update_duration_ms = (time.perf_counter() - frame_start_time) * 1000
@@ -746,31 +746,31 @@ class VideoClockScreenSaver:
         
         self.after_id = self.master.after(delay, self.update_frame)
 
-    def close(self):
+    def close(self):        
         """Clean shutdown of the screensaver"""
-        print("Closing VideoClockScreenSaver and its widgets...")
-        # Clean up widgets
+        logger.info("Closing VideoClockScreenSaver and its widgets...")
+        # Clean up widgets        
         for widget in self.widgets:
             if hasattr(widget, 'destroy') and callable(widget.destroy):
                 widget.destroy()
         self.widgets.clear()
         
-        print("Closing VideoClockScreenSaver...")
+        logger.info("Closing VideoClockScreenSaver...")
         if self.after_id:
             self.master.after_cancel(self.after_id)
             self.after_id = None 
         
         # Stop processor thread first
         if hasattr(self, 'frame_processor_thread') and self.frame_processor_thread.is_alive():
-            print("Stopping frame processor thread...")
+            logger.debug("Stopping frame processor thread...")
             self.frame_processor_thread.stop()
             self.frame_processor_thread.join(timeout=2)
         
         # Then stop reader thread
         if hasattr(self, 'frame_reader_thread') and self.frame_reader_thread.is_alive():
-            print("Stopping frame reader thread...")
+            logger.debug("Stopping frame reader thread...")
             self.frame_reader_thread.stop()
             self.frame_reader_thread.join(timeout=2) 
             if self.frame_reader_thread.is_alive():
-                print("Frame reader thread did not stop in time.")
-        print("VideoClockScreenSaver closed.")
+                logger.warning("Frame reader thread did not stop in time.")
+        logger.info("VideoClockScreenSaver closed.")

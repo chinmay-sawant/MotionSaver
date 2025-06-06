@@ -9,6 +9,10 @@ import subprocess
 import win32serviceutil
 import win32service
 
+# Initialize central logging
+from central_logger import get_logger, log_startup, log_shutdown, log_exception
+logger = get_logger('GUI')
+
 # Assuming PasswordConfig.py is in the same directory (package)
 # This will work when gui.py is imported as part of the package
 # For direct execution, sys.path needs adjustment (see if __name__ == '__main__')
@@ -180,12 +184,10 @@ class ScreenSaverApp:
             
             copilot_icon_path = os.path.join(ICONS_DIR, "copilot.png") # Copilot icon
             if os.path.exists(copilot_icon_path):
-                self.copilot_icon = ImageTk.PhotoImage(Image.open(copilot_icon_path).resize((20, 20), Image.Resampling.LANCZOS))
+                self.copilot_icon = ImageTk.PhotoImage(Image.open(copilot_icon_path).resize((20, 20), Image.Resampling.LANCZOS))        
         except Exception as e:
-            print(f"Error loading icons: {e}")
-
-
-        # --- Main Frame ---
+            logger.error(f"Error loading icons: {e}")
+         # --- Main Frame ---
         main_frame = ttk.Frame(master, padding="10")
         main_frame.pack(fill=tk.BOTH, expand=True)
         
@@ -721,7 +723,6 @@ class ScreenSaverApp:
             except Exception:
                 pass
         self.update_font_preview()
-        self.update_ui_font_preview()
 
     def _set_entry_dark(self, widget):
         # Recursively set all Entry widgets to dark mode
@@ -945,19 +946,16 @@ class ScreenSaverApp:
     def update_font_preview(self, event=None):
         """Updates the font preview label with the selected font."""
         selected_font = self.selected_clock_font_family.get()
-        try:
-            self.font_preview_label.configure(font=(selected_font, 12))
+        try:        self.font_preview_label.configure(font=(selected_font, 12))
         except Exception as e:
-            print(f"Error updating font preview: {e}")
-            self.font_preview_label.configure(font=("TkDefaultFont", 12)) # Fallback
-
-    def update_ui_font_preview(self, event=None):
+            logger.error(f"Error updating font preview: {e}")
+            self.font_preview_label.configure(font=("TkDefaultFont", 12)) # Fallback    def update_ui_font_preview(self, event=None):
         """Updates the font preview label with the selected font."""
         selected_font = self.selected_ui_font_family.get()
         try:
             self.ui_font_preview_label.configure(font=(selected_font, 12))
         except Exception as e:
-            print(f"Error updating font preview: {e}")
+            logger.error(f"Error updating font preview: {e}")
             self.ui_font_preview_label.configure(font=("TkDefaultFont", 12)) # Fallback
 
     def _combo_nav(self, combo, direction):

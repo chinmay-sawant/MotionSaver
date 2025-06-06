@@ -14,6 +14,10 @@ import winreg
 from datetime import datetime, timedelta
 from utils.key_blocker import KeyBlocker
 
+# Initialize central logging
+from central_logger import get_logger, log_startup, log_shutdown, log_exception
+logger = get_logger('EnhancedKeyBlocker')
+
 class EnhancedKeyBlocker:
     """
     Enhanced key blocker (Python-only): uses Python hooks for key blocking and Ctrl+Alt+Del detection.
@@ -25,11 +29,10 @@ class EnhancedKeyBlocker:
         self.stop_monitoring = False
         self.ctrl_alt_del_monitor_thread = None
         self.last_active_time = datetime.now()
-        self.restart_pending = False
-
+        self.restart_pending = False    
     def _print_debug(self, message):
         if self.debug_print:
-            print(f"[EnhancedKeyBlocker] {message}")
+            logger.debug(f"{message}")
 
     def start_blocking(self):
         """Start Python key blocking."""
@@ -264,42 +267,42 @@ class EnhancedKeyBlocker:
         self.stop_blocking()
 
 
-def test_enhanced_blocker():
+def test_enhanced_blocker():    
     """Test the enhanced key blocker (Python-only)."""
-    print("Enhanced Key Blocker Test (Python-only)")
-    print("=" * 30)
-    print("This will block key combinations using Python hooks only.")
-    print("Press Ctrl+C to stop.")
-    print()
+    logger.info("Enhanced Key Blocker Test (Python-only)")
+    logger.info("=" * 30)
+    logger.info("This will block key combinations using Python hooks only.")
+    logger.info("Press Ctrl+C to stop.")
+    logger.info("")
 
     try:
         with EnhancedKeyBlocker(debug_print=True) as blocker:
             if not blocker.is_blocking_active():
-                print("Warning: No blocking methods are active!")
-                print("Make sure you're running as administrator.")
+                logger.warning("Warning: No blocking methods are active!")
+                logger.warning("Make sure you're running as administrator.")
                 return
 
-            print("Enhanced blocking is active!")
+            logger.info("Enhanced blocking is active!")
 
             # Show status
             status = blocker.get_status()
-            print(f"Status: {status}")
-            print()
-            print("Try pressing:")
-            print("- Win+Tab")
-            print("- Alt+Tab")
-            print("- Shift+Alt+Tab")
-            print("- Ctrl+Alt+Del (Python hooks may not survive this)")
-            print()
+            logger.info(f"Status: {status}")
+            logger.info("")
+            logger.info("Try pressing:")
+            logger.info("- Win+Tab")
+            logger.info("- Alt+Tab")
+            logger.info("- Shift+Alt+Tab")
+            logger.info("- Ctrl+Alt+Del (Python hooks may not survive this)")
+            logger.info("")
 
             # Keep running
             while True:
                 time.sleep(1)
 
     except KeyboardInterrupt:
-        print("\nStopping enhanced blocker...")
+        logger.info("\nStopping enhanced blocker...")
     except Exception as e:
-        print(f"Error: {e}")
+        logger.error(f"Error: {e}")
 
 
 if __name__ == "__main__":

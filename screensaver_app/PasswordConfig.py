@@ -5,6 +5,12 @@ import os
 import hashlib
 from PIL import Image, ImageTk, ImageDraw, ImageFont
 
+# Add central logging
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from central_logger import get_logger, log_startup, log_shutdown, log_exception
+logger = get_logger('PasswordConfig')
+
 # Adjust path to go one level up to find config files in the root project directory
 CONFIG_FILE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'config'))
 USER_CONFIG_FILE = os.path.join(CONFIG_FILE_DIR, "userconfig.json") 
@@ -48,9 +54,9 @@ def load_config():
             if "clock_font_size" not in config: config["clock_font_size"] = 64
             if "ui_font_family" not in config: config["ui_font_family"] = "Arial"
             if "ui_font_size" not in config: config["ui_font_size"] = 18
-            return config
+            return config    
     except Exception as e:
-        print(f"Error loading user config: {e}, returning hardcoded defaults.")
+        logger.error(f"Error loading user config: {e}, returning hardcoded defaults.")
         default_hash = hashlib.sha256(DEFAULT_PASSWORD.encode()).hexdigest()
         return { # Hardcoded fallback
             "users": [{"username": DEFAULT_USERNAME, "password_hash": default_hash}],
@@ -77,23 +83,23 @@ def save_config(config_data):
         try:
             with open(USER_CONFIG_FILE, 'r') as f:
                 json.load(f)
-            # print(f"Successfully saved and verified config to {USER_CONFIG_FILE}") # Optional success log
+            # print(f"Successfully saved and verified config to {USER_CONFIG_FILE}") # Optional success log        
         except Exception as e_readback:
-            print(f"CRITICAL ERROR: Config saved to {USER_CONFIG_FILE}, but failed to read back immediately: {e_readback}")
-            print(f"This could indicate a problem with file corruption or very intermittent write issues.")
+            logger.critical(f"CRITICAL ERROR: Config saved to {USER_CONFIG_FILE}, but failed to read back immediately: {e_readback}")
+            logger.critical(f"This could indicate a problem with file corruption or very intermittent write issues.")
             # Depending on severity, you might want to return False here or handle it.
             # For now, we'll assume the primary write was okay if it didn't throw an exception.
 
-        return True
+        return True    
     except IOError as e_io:
-        print(f"IOError saving user config to {USER_CONFIG_FILE}: {e_io}")
-        print(f"Please check file permissions and path.")
-        return False
+        logger.error(f"IOError saving user config to {USER_CONFIG_FILE}: {e_io}")
+        logger.error(f"Please check file permissions and path.")
+        return False    
     except Exception as e:
-        print(f"Unexpected error saving user config to {USER_CONFIG_FILE}: {e}")
-        import traceback
-        traceback.print_exc()
-        return False
+            logger.error(f"Unexpected error saving user config to {USER_CONFIG_FILE}: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
 
 def verify_password(username_attempt, password_attempt):
     """Verify if the given username and password are correct."""

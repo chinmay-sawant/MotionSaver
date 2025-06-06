@@ -6,6 +6,10 @@ import platform
 import json
 import os
 
+# Initialize central logging
+from central_logger import get_logger, log_startup, log_shutdown, log_exception
+logger = get_logger('KeyBlocker')
+
 # Registry-based blocking (Windows only)
 if platform.system() == "Windows":
     try:
@@ -21,9 +25,9 @@ else:
 try:
     import keyboard
     KEYBOARD_HOOK_SUPPORT = True
-except ImportError:
+except ImportError:    
     KEYBOARD_HOOK_SUPPORT = False
-    print("Warning: 'keyboard' library not installed. Install with: pip install keyboard")
+    logger.warning("'keyboard' library not installed. Install with: pip install keyboard")
 
 class KeyBlocker:
     """
@@ -49,19 +53,17 @@ class KeyBlocker:
             'ctrl+esc': "Ctrl+Esc (Start Menu)",
             'ctrl+alt+esc': "Ctrl+Alt+Esc (Task Manager)"
         }
-    
     def _print_debug(self, message):
         """Print debug message if debug mode is enabled."""
         if self.debug_print:
-            print(f"[KeyBlocker] {message}")
-    
+            logger.debug(f"{message}")
     def _on_block_action(self, combo_name):
         """Action to perform when a key combination is blocked."""
         self._print_debug(f"Blocked: {combo_name}")
         # Detect Ctrl+Alt+Del and call LockWorkStation
         if combo_name.lower() in ["ctrl+alt+del", "ctrl+alt+del (security screen)"]:
             self._print_debug("Ctrl+Alt+Del detected! Locking workstation...")
-            print("Ctrl+Alt+Del detected! Locking workstation...")
+            logger.info("Ctrl+Alt+Del detected! Locking workstation...")
             try:
                 import ctypes
                 ctypes.windll.user32.LockWorkStation()
@@ -305,35 +307,34 @@ class KeyBlocker:
 # Standalone script functionality
 def main():
     """Run as standalone key blocker script."""
-    print("ScreenSaver Key Blocker Utility")
-    print("================================")
-    print("This utility blocks system hotkeys for kiosk/screensaver applications.")
-    print("IMPORTANT: Run with administrator privileges for full functionality.")
-    print("Press Ctrl+C to stop blocking and exit.")
-    print()
+    logger.info("ScreenSaver Key Blocker Utility")
+    logger.info("================================")
+    logger.info("This utility blocks system hotkeys for kiosk/screensaver applications.")
+    logger.info("IMPORTANT: Run with administrator privileges for full functionality.")
+    logger.info("Press Ctrl+C to stop blocking and exit.")
+    logger.info("")
     
     blocker = KeyBlocker(debug_print=True)
     
     try:
         # Try to enable all blocking methods
         if blocker.enable_all_blocking():
-            print("Key blocking is now active.")
+            logger.info("Key blocking is now active.")
         else:
-            print("Some blocking methods failed to activate. Check permissions.")
+            logger.warning("Some blocking methods failed to activate. Check permissions.")
         
         if KEYBOARD_HOOK_SUPPORT:
             # Keep running to maintain hooks
             keyboard.wait()
         else:
             input("Press Enter to disable blocking and exit...")
-            
     except KeyboardInterrupt:
-        print("\nCtrl+C detected. Shutting down...")
+        logger.info("\nCtrl+C detected. Shutting down...")
     except Exception as e:
-        print(f"Unexpected error: {e}")
+        logger.error(f"Unexpected error: {e}")
     finally:
         blocker.disable_all_blocking()
-        print("Key blocking disabled. Exiting.")
+        logger.info("Key blocking disabled. Exiting.")
 
 if __name__ == "__main__":
     main()

@@ -2,10 +2,19 @@ import tkinter as tk
 from tkinter import ttk
 import threading
 import time
+import os
+import sys
+
+# Add central logging
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from central_logger import get_logger, log_startup, log_shutdown, log_exception
+logger = get_logger('WeatherWidget')
+
 from .weather_api import get_weather_data
 
 class WeatherWidget:
     def __init__(self, parent, transparent_key, screen_width, screen_height, pincode="400068", country_code="IN"):
+        logger.info(f"Initializing WeatherWidget for location {pincode}, {country_code}")
         self.parent = parent
         self.transparent_key = transparent_key
         self.screen_width = screen_width
@@ -28,6 +37,7 @@ class WeatherWidget:
         y_pos = 20
         
         self.window.geometry(f"{widget_width}x{widget_height}+{x_pos}+{y_pos}")
+        logger.debug(f"WeatherWidget positioned at {x_pos}x{y_pos} with size {widget_width}x{widget_height}")
         
         # Weather data
         self.weather_data = None
@@ -111,12 +121,10 @@ class WeatherWidget:
 
         # Clear and update forecast
         for widget in self.forecast_frame.winfo_children():
-            widget.destroy()
-
-        # --- DEBUG: Print forecast data ---
+            widget.destroy()        # --- DEBUG: Print forecast data ---
         forecast_data = self.weather_data.get("forecast")
-        print("Forecast data:", forecast_data)
-        print(f"Forecast data type: {type(forecast_data)}, length: {len(forecast_data) if forecast_data else 0}")
+        logger.debug(f"Forecast data: {forecast_data}")
+        logger.debug(f"Forecast data type: {type(forecast_data)}, length: {len(forecast_data) if forecast_data else 0}")
         # ----------------------------------
 
         if isinstance(forecast_data, list) and len(forecast_data) > 0:
@@ -126,9 +134,9 @@ class WeatherWidget:
             )
             forecast_title.pack(anchor=tk.W, pady=(5, 3))
 
-            # Show only next 2 days but with better spacing and larger fonts
+            # Show only next 2 days but with better spacing and larger fonts            
             for i, forecast in enumerate(forecast_data[:2]):  # Limit to 2 days
-                print(f"Creating forecast item {i}: {forecast.get('day_name', 'N/A')}")  # Debug
+                logger.debug(f"Creating forecast item {i}: {forecast.get('day_name', 'N/A')}")  # Debug
                 
                 forecast_item_frame = tk.Frame(self.forecast_frame, bg=self.transparent_key)
                 forecast_item_frame.pack(fill=tk.X, pady=3, padx=5)  # Increased padding
@@ -161,13 +169,13 @@ class WeatherWidget:
                 temp_label = tk.Label(
                     content_frame, text=temp_text, font=('Arial', 10),
                     fg='#cccccc', bg=self.transparent_key, anchor=tk.W
-                )
+                )                
                 temp_label.pack(side=tk.LEFT)
                 
-                print(f"Forecast item {i} created successfully")  # Debug
+                logger.debug(f"Forecast item {i} created successfully")  # Debug
 
         else:
-            print("No forecast data available or empty list")  # Debug
+            logger.debug("No forecast data available or empty list")  # Debug
             no_forecast_label = tk.Label(
                 self.forecast_frame, text="Forecast: Not available",
                 font=('Arial', 9), fg='#888888', bg=self.transparent_key
@@ -175,16 +183,17 @@ class WeatherWidget:
             no_forecast_label.pack(anchor=tk.W, pady=5)
 
         self.status_label.config(text=f"Updated: {time.strftime('%H:%M')}")
-    
     def fetch_weather_data(self):
         """Fetch weather data in background thread"""
         try:
+            logger.debug(f"Fetching weather data for {self.pincode}, {self.country_code}")
             self.weather_data = get_weather_data(self.pincode, self.country_code)
             self.last_update = time.time()
+            logger.info("Weather data fetched successfully")
             # Schedule UI update on main thread
             self.window.after(0, self.update_weather_display)
         except Exception as e:
-            print(f"Error fetching weather data: {e}")
+            logger.error(f"Error fetching weather data: {e}")
             self.weather_data = {"error": str(e)}
             self.window.after(0, self.update_weather_display)
     
@@ -201,9 +210,9 @@ class WeatherWidget:
                     else:
                         break
                 except tk.TclError:
-                    break
+                    break               
                 except Exception as e:
-                    print(f"Error in weather update cycle: {e}")
+                    logger.error(f"Error in weather update cycle: {e}")
                     time.sleep(60)
         
         # Initial fetch

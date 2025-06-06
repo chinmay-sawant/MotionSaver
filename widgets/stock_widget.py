@@ -5,9 +5,17 @@ import json
 import threading
 import time
 from datetime import datetime
+import os
+import sys
+
+# Add central logging
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from central_logger import get_logger, log_startup, log_shutdown, log_exception
+logger = get_logger('StockWidget')
 
 class StockWidget:
     def __init__(self, parent_root, transparent_key='#123456', screen_width=0, screen_height=0, initial_market="NASDAQ"):
+        logger.info(f"Initializing StockWidget for market: {initial_market}")
         self.parent_root = parent_root 
         self.transparent_key = transparent_key
         self.markets = {
@@ -51,9 +59,8 @@ class StockWidget:
             
             # Schedule UI creation on main thread
             self.parent_root.after(0, self._create_widget_ui)
-            
         except Exception as e:
-            print(f"Error in stock widget async initialization: {e}")
+            logger.error(f"Error in stock widget async initialization: {e}")
     
     def _create_widget_ui(self):
         """Create widget UI on main thread"""
@@ -65,7 +72,7 @@ class StockWidget:
             self.initialized = True
             
         except Exception as e:
-            print(f"Error creating stock widget UI: {e}")
+            logger.error(f"Error creating stock widget UI: {e}")
         
     def create_widget_content(self):
         """Create the content of the stock widget UI within its Toplevel window"""
@@ -141,7 +148,7 @@ class StockWidget:
             self._schedule_updates()
             
         except Exception as e:
-            print(f"Error starting stock data fetching: {e}")
+            logger.error(f"Error starting stock data fetching: {e}")
     
     def _schedule_updates(self):
         """Schedule periodic updates in separate thread"""
@@ -155,7 +162,7 @@ class StockWidget:
                     else:
                         break
                 except Exception as e:
-                    print(f"Error in stock update loop: {e}")
+                    logger.error(f"Error in stock update loop: {e}")
                     break
         
         threading.Thread(target=update_loop, daemon=True).start()
@@ -167,7 +174,7 @@ class StockWidget:
             self.clear_stock_display() # Clear current stocks
             self.create_widget_content() # Recreate content for new market
         else:
-            print(f"Unknown market: {new_market}")
+            logger.warning(f"Unknown market: {new_market}")
         
     def clear_stock_display(self):
         """Clear current stock display"""
@@ -220,7 +227,7 @@ class StockWidget:
                         }
                         
             except Exception as e:
-                print(f"Error fetching data for {symbol}: {e}")
+                logger.error(f"Error fetching data for {symbol}: {e}")
                 stocks_data[symbol] = {
                     'name': symbol,
                     'price': 0,
@@ -311,7 +318,7 @@ class StockWidget:
                 if hasattr(self, 'window') and self.window.winfo_exists():
                     self.update_stock_display(stocks_data)
             except Exception as e:
-                print(f"Error in stock fetch and update: {e}")
+                logger.error(f"Error in stock fetch and update: {e}")
             
         # Run in separate thread to avoid blocking anything
         threading.Thread(target=fetch_and_update, daemon=True).start()

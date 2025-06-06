@@ -3,6 +3,13 @@ import pandas as pd
 import requests_cache
 from retry_requests import retry
 import pgeocode
+import os
+import sys
+
+# Add central logging
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from central_logger import get_logger, log_startup, log_shutdown, log_exception
+logger = get_logger('WeatherAPI')
 
 # Setup the Open-Meteo API client with cache and retry on error
 cache_session = requests_cache.CachedSession('.cache', expire_after=3600)
@@ -127,9 +134,8 @@ def get_weather_data(pincode="400068", country_code="IN"):
                 daily_data[daily_params[i]] = variable.ValuesAsNumpy()
 
         daily_dataframe = pd.DataFrame(data=daily_data)
-        
-        print(f"Daily dataframe shape: {daily_dataframe.shape}")  # Debug print
-        print(f"Daily dataframe columns: {daily_dataframe.columns.tolist()}")  # Debug print
+        logger.debug(f"Daily dataframe shape: {daily_dataframe.shape}")
+        logger.debug(f"Daily dataframe columns: {daily_dataframe.columns.tolist()}")
 
         # Get today's data
         if not daily_dataframe.empty and len(daily_dataframe) > 0:
@@ -159,7 +165,7 @@ def get_weather_data(pincode="400068", country_code="IN"):
             }
             
             # Add forecast for next days (skip today which is index 0)
-            print(f"Processing forecast for {len(daily_dataframe)} days")  # Debug print
+            logger.debug(f"Processing forecast for {len(daily_dataframe)} days")
             for i in range(1, min(4, len(daily_dataframe))):  # Get next 3 days
                 try:
                     forecast_data = daily_dataframe.iloc[i]
@@ -176,34 +182,34 @@ def get_weather_data(pincode="400068", country_code="IN"):
                         "precipitation": float(forecast_data['precipitation_sum']) if not pd.isna(forecast_data['precipitation_sum']) else 0
                     }
                     
-                    weather_info["forecast"].append(forecast_item)
-                    print(f"Added forecast for day {i}: {forecast_item['day_name']}")  # Debug print
+                    weather_info["forecast"].append(forecast_item)                    
+                    logger.debug(f"Added forecast for day {i}: {forecast_item['day_name']}")
                     
                 except Exception as e:
-                    print(f"Error processing forecast day {i}: {e}")
+                    logger.error(f"Error processing forecast day {i}: {e}")
                     continue
             
-            print(f"Total forecast items: {len(weather_info['forecast'])}")  # Debug print
+            logger.debug(f"Total forecast items: {len(weather_info['forecast'])}")
             return weather_info
         else:
             return {"error": "No weather data available"}
             
-    except Exception as e:
-        print(f"Error in get_weather_data: {e}")  # Debug print
+    except Exception as e:        
+        logger.error(f"Error in get_weather_data: {e}")
         return {"error": f"Failed to fetch weather data: {str(e)}"}
 
 if __name__ == "__main__":
-    # Test the function
+    # Test the function   
     weather_data = get_weather_data()
     if "error" not in weather_data:
         current = weather_data["current"]
-        print(f"Today's Weather: {current['description']} {current['icon']}")
-        print(f"Temperature: {current['temperature_min']}°C - {current['temperature_max']}°C")
+        logger.info(f"Today's Weather: {current['description']} {current['icon']}")
+        logger.info(f"Temperature: {current['temperature_min']}°C - {current['temperature_max']}°C")
         
         if weather_data["forecast"]:
-            print("\nForecast:")
+            logger.info("\nForecast:")
             for forecast in weather_data["forecast"]:
-                print(f"{forecast['day_name']}: {forecast['description']} {forecast['icon']}, "
+                logger.info(f"{forecast['day_name']}: {forecast['description']} {forecast['icon']}, "
                       f"{forecast['temperature_min']}°C - {forecast['temperature_max']}°C")
     else:
-        print(f"Error: {weather_data['error']}")
+        logger.error(f"Error: {weather_data['error']}")
