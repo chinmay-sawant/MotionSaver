@@ -4,6 +4,8 @@ import os
 import platform 
 import sys
 import subprocess # Added for service registration
+import threading
+import time
 
 # Initialize central logging first
 from central_logger import get_logger, log_startup, log_shutdown, log_exception
@@ -21,27 +23,69 @@ except ImportError:
     logger.info("Using basic key blocker from blockit.py")
 import gui 
 import json
-import time
 from PIL import Image, ImageDraw # Added for system tray icon
 import pystray # Added for system tray functionality
-# Import PyUAC for UAC elevation
-try:
-    import pyuac
-    logger.info("PyUAC imported successfully")
-except ImportError:
-    logger.warning("PyUAC not installed. Please install with: pip install pyuac")
-    logger.warning("For elevation capability, also install: pip install pypiwin32")
-    pyuac = None
+
+# Custom UAC elevation functions to replace pyUAC
+def is_admin():
+    """Check if the current process is running with admin privileges."""
+    if platform.system() != "Windows":
+        return False
+    try:
+        import ctypes
+        return ctypes.windll.shell32.IsUserAnAdmin()
+    except:
+        return False
+
+def run_as_admin():
+    """Restart the current script with admin privileges without showing console window."""
+    if platform.system() != "Windows":
+        return False
+    
+    try:
+        import ctypes
+        # Get the current script path and arguments
+        script = os.path.abspath(sys.argv[0])
+        params = ' '.join(sys.argv[1:])
+        
+        # Use ShellExecuteW to run with admin privileges and hide console
+        ctypes.windll.shell32.ShellExecuteW(
+            None, 
+            "runas", 
+            sys.executable, 
+            f'"{script}" {params}', 
+            None, 
+            0  # SW_HIDE - hide the window
+        )
+        return True
+    except Exception as e:
+        logger.error(f"Failed to elevate privileges: {e}")
+        return False
+
+def hide_console_window():
+    """Hide the console window for the current process."""
+    if platform.system() == "Windows":
+        try:
+            import ctypes
+            # Get console window handle
+            console_window = ctypes.windll.kernel32.GetConsoleWindow()
+            if console_window:
+                # Hide the console window
+                ctypes.windll.user32.ShowWindow(console_window, 0)  # SW_HIDE
+                logger.info("Console window hidden successfully")
+        except Exception as e:
+            logger.warning(f"Failed to hide console window: {e}")
 
 # For multi-monitor black-out and event hooking on Windows
 WINDOWS_MULTI_MONITOR_SUPPORT = False
 hWinEventHook = None
 root_ref_for_hook = None # Global reference to the root window for the hook callback
 
-# Global variables for tray mode
+# Global variables for tray mode and Ctrl+Alt+Del tracking
 tray_running = False
 win_s_blocker = None
-tray_icon_instance = None # Add this global variable
+tray_icon_instance = None
+ctrl_alt_del_tracker = {"triggered": False, "timestamp": None}
 
 # Define missing Windows constants
 # From winuser.h: EVENT_SYSTEM_DISPLAYSETTINGSCHANGED = 0x000F
@@ -52,9 +96,9 @@ if platform.system() == "Windows":
         import win32api
         import win32con
         import win32gui
-        # Import additional Windows modules for event hooking
+        # Remove win32ts import and any session monitoring references
         import win32event
-        from ctypes import windll, CFUNCTYPE, c_int, c_uint, c_void_p, POINTER, Structure, c_size_t, byref, c_wchar_p
+        from ctypes import windll, CFUNCTYPE, c_int, c_uint, c_void_p, POINTER, Structure, c_size_t, byref, c_wchar_p, wintypes
         
         # Flag for multi-monitor support
         WINDOWS_MULTI_MONITOR_SUPPORT = True
@@ -95,9 +139,10 @@ if platform.system() == "Windows":
         UnhookWinEvent = user32.UnhookWinEvent
         
     except ImportError:
-        logger.warning("pywin32 not installed, multi-monitor features and dynamic updates will be limited.")
+        logger.warning("pywin32 not installed, multi-monitor features and session monitoring will be limited.")
+
 else:
-    logger.info("Non-Windows OS detected, multi-monitor blackout features not available")
+    logger.info("Non-Windows OS detected, session monitoring not available")
 
 secondary_screen_windows = []
 
@@ -105,6 +150,7 @@ def update_secondary_monitor_blackouts(main_tk_window):
     """
     Identifies secondary monitors and creates/updates/destroys black Toplevel windows on them.
     This function is designed to be called initially and whenever display settings change.
+    Ensures only secondary monitors are blocked, not the primary (main) display.
     """
     global secondary_screen_windows
     if not main_tk_window.winfo_exists() or not WINDOWS_MULTI_MONITOR_SUPPORT:
@@ -125,7 +171,6 @@ def update_secondary_monitor_blackouts(main_tk_window):
     for hMonitor, _, monitor_rect_coords in raw_monitors_info:
         try:
             monitor_info_dict = win32api.GetMonitorInfo(hMonitor)
-            # MONITORINFOF_PRIMARY is 0x00000001
             is_primary = bool(monitor_info_dict.get('Flags') == win32con.MONITORINFOF_PRIMARY)
             detailed_monitors_info.append({'hMonitor': hMonitor, 'rect': monitor_rect_coords, 'is_primary': is_primary})
             if is_primary:
@@ -174,13 +219,13 @@ def update_secondary_monitor_blackouts(main_tk_window):
     old_black_windows_to_process = list(secondary_screen_windows)
     secondary_screen_windows.clear()
 
+    # Only block secondary monitors (not primary)
     for mon_data in detailed_monitors_info:
         if not mon_data['is_primary']:
-            # This is a secondary monitor, create or update a black window on it.
             mx1, my1, mx2, my2 = mon_data['rect']
             width = mx2 - mx1
             height = my2 - my1
-            
+
             found_and_reused_existing = False
             for i, existing_win in enumerate(old_black_windows_to_process):
                 if existing_win.winfo_exists() and \
@@ -191,7 +236,7 @@ def update_secondary_monitor_blackouts(main_tk_window):
                     found_and_reused_existing = True
                     logger.debug(f"Reusing existing blackout window for monitor at ({mx1},{my1})")
                     break
-            
+
             if not found_and_reused_existing:
                 logger.info(f"Creating new blackout window for monitor at ({mx1},{my1}) {width}x{height}")
                 black_screen_window = tk.Toplevel(main_tk_window)
@@ -200,16 +245,17 @@ def update_secondary_monitor_blackouts(main_tk_window):
                 black_screen_window.geometry(f"{width}x{height}+{mx1}+{my1}")
                 black_screen_window.attributes('-topmost', True)
                 black_screen_window.wm_attributes("-disabled", True) # Make uninteractable
-                
+
                 # Block events (though -disabled might cover this)
                 black_screen_window.bind("<Key>", lambda e: "break")
                 black_screen_window.bind("<Button>", lambda e: "break")
                 black_screen_window.bind("<Motion>", lambda e: "break")
                 black_screen_window.protocol("WM_DELETE_WINDOW", lambda: None) # Prevent closing
-                
+
                 black_screen_window.lift() # Ensure it's on top
                 black_screen_window.focus_set() # Attempt to give focus to solidify topmost
-                secondary_screen_windows.append(black_screen_window)    # Destroy any old blackout windows that are no longer needed
+                secondary_screen_windows.append(black_screen_window)
+    # Destroy any old blackout windows that are no longer needed
     for old_win in old_black_windows_to_process:
         if old_win.winfo_exists():
             logger.debug(f"Destroying obsolete blackout window at ({old_win.winfo_x()},{old_win.winfo_y()})")
@@ -226,6 +272,7 @@ def WinEventProcCallback(hWinEventHook, event, hwnd, idObject, idChild, dwEventT
             # Schedule the update on the main Tkinter thread
             root_ref_for_hook.after(50, lambda: update_secondary_monitor_blackouts(root_ref_for_hook)) # Small delay
 
+
 def start_screensaver(video_path_override=None): 
     """Launch the full-screen screen saver directly"""
     global secondary_screen_windows, hWinEventHook, root_ref_for_hook, callback_ref
@@ -235,7 +282,8 @@ def start_screensaver(video_path_override=None):
     
     key_blocker = None
     ctrl_alt_del_detector = None
-      # Initialize key blocker if admin mode is enabled
+    
+    # Initialize key blocker if admin mode is enabled
     if config.get("run_as_admin", False):
         logger.info("Initializing enhanced key blocking...")
         key_blocker = KeyBlocker(debug_print=True)
@@ -255,22 +303,41 @@ def start_screensaver(video_path_override=None):
             # Basic blocker fallback
             blocking_success = key_blocker.enable_all_blocking(use_registry=True, use_hooks=True)
             if blocking_success:
-                logger.info("Basic key blocking enabled successfully.")
+                logger.info("Basic key blocking enabled successfully with Esc and Alt+Shift+Tab blocking.")
             else:
                 logger.warning("Some key blocking methods failed. Check permissions.")
     
     root = tk.Tk()
     root_ref_for_hook = root # Store root for the callback
-    root.attributes('-fullscreen', True) 
-    
-    TRANSPARENT_KEY_FOR_LOGIN_TOPLEVEL = '#123456' 
+    root.attributes('-fullscreen', True)
+    TRANSPARENT_KEY_FOR_LOGIN_TOPLEVEL = '#123456'
     root.attributes('-transparentcolor', TRANSPARENT_KEY_FOR_LOGIN_TOPLEVEL)
-    root.configure(bg='black') 
+    root.configure(bg='black')
 
-    app = VideoClockScreenSaver(root, video_path_override) 
-    
+    # --- Ensure main window is visible and on top ---
+    root.deiconify()  # Make sure it's not minimized
+    root.lift()       # Bring to front
+    root.focus_force()  # Force focus
+    root.update()
+    # On single monitor, force always on top and focus again
+    try:
+        if root.tk.call('tk', 'windowingsystem') == 'win32':
+            # Check number of screens
+            screen_count = root.winfo_screenmmwidth() // root.winfo_screenwidth()
+            if screen_count <= 1:
+                root.attributes('-topmost', True)
+                root.lift()
+                root.focus_force()
+                root.after(100, lambda: root.focus_force())
+    except Exception as e:
+        logger.warning(f"Could not enforce topmost/focus for single monitor: {e}")
+
+    app = VideoClockScreenSaver(root, video_path_override)
+
     def on_escape(event):
         global secondary_screen_windows, hWinEventHook, root_ref_for_hook
+        if event:
+            logger.info(f"Password dialog triggered by: {event.keysym if hasattr(event, 'keysym') else 'mouse click'}")
         success = verify_password_dialog_macos(root)
         if success: 
             app.close()
@@ -299,6 +366,35 @@ def start_screensaver(video_path_override=None):
             secondary_screen_windows = []
             if root.winfo_exists():
                 root.destroy()
+
+            # --- Relaunch tray with same elevation ---
+            try:
+                logger.info("Restarting system tray after screensaver login...")
+                script_path = os.path.abspath(__file__)
+                python_exe = sys.executable
+                
+                # Check if we're running as admin and preserve elevation
+                if is_admin():
+                    logger.info("Restarting tray with admin privileges...")
+                    import ctypes
+                    # Use ShellExecuteW to maintain admin privileges
+                    ctypes.windll.shell32.ShellExecuteW(
+                        None,
+                        "runas", 
+                        python_exe,
+                        f'"{script_path}" --min --no-elevate',
+                        None,
+                        0  # SW_HIDE
+                    )
+                else:
+                    logger.info("Restarting tray without admin privileges...")
+                    subprocess.Popen([python_exe, script_path, "--min"], 
+                                   creationflags=subprocess.CREATE_NO_WINDOW if platform.system() == "Windows" else 0)
+                
+                logger.info("New tray process started, exiting current process.")
+                os._exit(0)
+            except Exception as e:
+                logger.error(f"Failed to restart tray after login: {e}")
         else:
             try:
                 if root and root.winfo_exists():
@@ -588,7 +684,6 @@ def run_in_system_tray():
     icon.run()
     logger.info("Tray icon.run() has finished.")
 
-
 def shutdown_system_tray():
     """Handles the clean shutdown of the system tray icon and related resources."""
     logger.info("shutdown_system_tray called.")
@@ -613,7 +708,10 @@ def shutdown_system_tray():
 
     if tray_icon_instance:
         logger.info("Stopping tray icon instance...")
-        tray_icon_instance.stop()
+        try:
+            tray_icon_instance.stop()
+        except Exception as e:
+            logger.warning(f"Error stopping tray icon: {e}")
         tray_icon_instance = None
         logger.info("Tray icon instance stopped.")
     else:
@@ -629,7 +727,6 @@ def shutdown_system_tray():
 
     logger.info("System tray shutdown process complete.")
 
-
 def admin_main():
     """Main function that will check for admin rights and restart if needed"""
     parser = argparse.ArgumentParser(description='Video Clock Screen Saver')
@@ -638,7 +735,12 @@ def admin_main():
     parser.add_argument('--min', action='store_true', help='Run in minimized system tray window')
     parser.add_argument('--register-service', action='store_true', help='Register the application as a Windows service')
     parser.add_argument('--start-service', action='store_true', help='Start the tray app in the active user session (for service use)')
+    parser.add_argument('--no-elevate', action='store_true', help='Skip elevation check (internal flag)')
     args = parser.parse_args()
+
+    # Hide console window when running in minimized mode
+    if args.min:
+        hide_console_window()
 
     if args.start_service:
         # Only works if running as a Windows service (LocalSystem)
@@ -669,7 +771,6 @@ def admin_main():
     if args.min:
         try:
             run_in_system_tray()        
-        
         except Exception as e:
             logger.error(f"Exception in run_in_system_tray: {e}")
             # Ensure cleanup if run_in_system_tray crashes
@@ -689,15 +790,6 @@ def register_service():
         return
 
     try:
-        # Ensure running as admin for service creation
-        if pyuac and not pyuac.isUserAdmin():
-            print("Admin privileges are required to register the service. Please re-run as administrator.")
-            # Optionally, try to elevate again, but for a specific action like this,
-            # it's often better to instruct the user.
-            # pyuac.runAsAdmin() 
-            # sys.exit(0)
-            return
-
         service_name = "PhotoEngineService"
         script_path = os.path.abspath(__file__)
         python_exe = sys.executable 
@@ -739,27 +831,47 @@ def register_service():
 
 if __name__ == "__main__":
     logger.info("Starting PhotoEngine...")
+    
+    # Parse arguments early to check for --no-elevate flag
+    parser = argparse.ArgumentParser(description='Video Clock Screen Saver', add_help=False)
+    parser.add_argument('--no-elevate', action='store_true', help='Skip elevation check (internal flag)')
+    parser.add_argument('--min', action='store_true', help='Run in minimized system tray window')
+    early_args, _ = parser.parse_known_args()
+    
     # Request admin privileges when running on Windows
-    if platform.system() == "Windows" and pyuac:
+    if platform.system() == "Windows" and not early_args.no_elevate:
         current_config = load_config()
         logger.debug(f"Loaded config for admin check: run_as_admin = {current_config.get('run_as_admin')}")
         
         if current_config.get("run_as_admin", False):
-            if not pyuac.isUserAdmin():
+            if not is_admin():
                 logger.info("Admin privileges required, but not currently running as admin.")
                 logger.info("Attempting to restart with admin privileges...")
                 try:
-                    pyuac.runAsAdmin()  # This will restart the script with sys.argv
-                    logger.info("runAsAdmin called. Exiting current non-admin instance.")
-                    sys.exit(0)  # Crucial: Exit the current non-admin instance immediately
+                    # Add --no-elevate flag to prevent infinite loop
+                    sys.argv.append('--no-elevate')
+                    
+                    if run_as_admin():
+                        logger.info("runAsAdmin called. Exiting current non-admin instance.")
+                        sys.exit(0)  # Exit the current non-admin instance immediately
+                    else:
+                        logger.error("Failed to restart with admin privileges")
+                        logger.warning("Continuing without admin privileges. Some features may be limited.")
+                        # Remove the --no-elevate flag we added since elevation failed
+                        if '--no-elevate' in sys.argv:
+                            sys.argv.remove('--no-elevate')
+                        admin_main()
+                        sys.exit(1)
                 except Exception as e:
                     logger.error(f"Failed to restart with admin privileges: {e}")
                     logger.warning("Continuing without admin privileges. Some features may be limited.")
-                    # Fallback to running admin_main without elevated privileges if restart fails
                     admin_main() 
-                    sys.exit(1) # Exit after fallback attempt if it also has issues or to signify failure
+                    sys.exit(1)
             else:
                 logger.info("Already running with admin privileges.")
+                # Hide console window if running in minimized mode
+                if early_args.min:
+                    hide_console_window()
                 admin_main()
         else:
             logger.info("Admin privileges not required by configuration.")
@@ -767,8 +879,8 @@ if __name__ == "__main__":
     else:
         if platform.system() != "Windows":
             logger.info("Not running on Windows. Admin check skipped.")
-        elif not pyuac:
-            logger.info("PyUAC module not available. Admin check skipped.")
+        elif early_args.no_elevate:
+            logger.info("Elevation check skipped due to --no-elevate flag.")
         admin_main()
     logger.info("PhotoEngine finished.")
 

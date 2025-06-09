@@ -149,7 +149,6 @@ I created this application primarily for my personal use, born out of years of w
 ### 🖥️ Windows Integration
 - **PyWin32**: Windows API integration and system services
 - **WinSDK**: Windows Media Session API for media control
-- **PyUAC**: User Account Control (UAC) elevation handling
 - **WinReg**: Windows Registry manipulation for security features
 
 ### 🔧 System Tools

@@ -30,6 +30,8 @@ except ImportError:
     logger.warning("'keyboard' library not installed. Install with: pip install keyboard")
 
 class KeyBlocker:
+    # Class-level dictionary to track special block states
+    _block_action_flags = {}
     """
     Manages key blocking using multiple methods for maximum effectiveness.
     """
@@ -51,7 +53,8 @@ class KeyBlocker:
             'ctrl+alt+del': "Ctrl+Alt+Del (Security Screen)",
             'altgr+tab': "AltGr+Tab",
             'ctrl+esc': "Ctrl+Esc (Start Menu)",
-            'ctrl+alt+esc': "Ctrl+Alt+Esc (Task Manager)"
+            'ctrl+alt+esc': "Ctrl+Alt+Esc (Task Manager)",
+            'altgr': "AltGr (Right Alt Standalone)"
         }
     def _print_debug(self, message):
         """Print debug message if debug mode is enabled."""
@@ -60,12 +63,29 @@ class KeyBlocker:
     def _on_block_action(self, combo_name):
         """Action to perform when a key combination is blocked."""
         self._print_debug(f"Blocked: {combo_name}")
+        # Block Alt keys using pynput if Alt_L or Alt_R is detected
+        try:
+            from pynput.keyboard import Controller, Key
+            keyboard_controller = Controller()
+            if combo_name.lower() in ["alt", "alt_l", "alt key (left)"]:
+                self._print_debug("Blocking Alt_L (left alt) using pynput.")
+                keyboard_controller.release(Key.alt_l)
+            elif combo_name.lower() in ["alt_r", "alt key (right)"]:
+                self._print_debug("Blocking Alt_R (right alt) using pynput.")
+                keyboard_controller.release(Key.alt_r)
+        except Exception as e:
+            self._print_debug(f"pynput Alt block failed: {e}")
+
         # Detect Ctrl+Alt+Del and call LockWorkStation
         if combo_name.lower() in ["ctrl+alt+del", "ctrl+alt+del (security screen)"]:
             self._print_debug("Ctrl+Alt+Del detected! Locking workstation...")
             logger.info("Ctrl+Alt+Del detected! Locking workstation...")
+            # Set a flag to indicate hooks should NOT be auto-reenabled
+            KeyBlocker._block_action_flags['disable_auto_hook_restart'] = True
             try:
                 import ctypes
+                # Removes any blocking hooks before locking
+                self.stop_hook_blocking()
                 ctypes.windll.user32.LockWorkStation()
                 self._print_debug("LockWorkStation() executed from Python.")
             except Exception as e:
