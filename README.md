@@ -1,11 +1,5 @@
 # Motion Saver Project
 
-**Found a bug or have a suggestion?**
-
-Please report any issues or feedback using the form below:
-
-- [Submit an Issue or Suggestion](https://forms.gle/zhVFJnu5G1ySiBuC8)
-
 ## From Dream to Reality: My AI-Accelerated Development Journey
 
 ### The Spark of Inspiration (2020-2021)
@@ -227,3 +221,19 @@ Contributions are welcome! Feel free to fork the repository, make changes, and s
 *   Contribute code, documentation, or translations.
 
 This project is maintained by [Chinmay Sawant](https://github.com/chinmay-sawant).
+
+**Found a bug or have a suggestion?**
+
+Please report any issues or feedback using the form below:
+
+- [Submit an Issue or Suggestion](https://forms.gle/zhVFJnu5G1ySiBuC8)
+
+
+## Known Issues
+
+### 🚩 Security Limitations
+
+- **Incomplete Shortcut Blocking**: Some Windows keyboard shortcuts (such as Alt+Tab, Windows key, etc.) may still function while the screensaver is active. This is an ongoing area of development, and a complete lockscreen experience is not yet guaranteed.
+- **Usage Warning**: Do **not** use this application in workspaces or environments where security is critical, as the current implementation does not fully prevent shortcut-based bypasses.
+
+Improvements to shortcut blocking and overall security are planned for future updates.
