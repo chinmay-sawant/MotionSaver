@@ -946,16 +946,19 @@ class ScreenSaverApp:
     def update_font_preview(self, event=None):
         """Updates the font preview label with the selected font."""
         selected_font = self.selected_clock_font_family.get()
-        try:        self.font_preview_label.configure(font=(selected_font, 12))
+        try:
+            self.font_preview_label.configure(font=(selected_font, 12))
         except Exception as e:
             logger.error(f"Error updating font preview: {e}")
-            self.font_preview_label.configure(font=("TkDefaultFont", 12)) # Fallback    def update_ui_font_preview(self, event=None):
-        """Updates the font preview label with the selected font."""
+            self.font_preview_label.configure(font=("TkDefaultFont", 12)) # Fallback
+
+    def update_ui_font_preview(self, event=None):
+        """Updates the UI font preview label with the selected font."""
         selected_font = self.selected_ui_font_family.get()
         try:
             self.ui_font_preview_label.configure(font=(selected_font, 12))
         except Exception as e:
-            logger.error(f"Error updating font preview: {e}")
+            logger.error(f"Error updating UI font preview: {e}")
             self.ui_font_preview_label.configure(font=("TkDefaultFont", 12)) # Fallback
 
     def _combo_nav(self, combo, direction):
