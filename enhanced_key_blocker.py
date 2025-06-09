@@ -86,16 +86,25 @@ class EnhancedKeyBlocker:
                     self._print_debug(f"Hook monitoring active - check #{check_count}")
 
                 # Check Python hook status (if it has a way to check)
+                disable_auto_hook_restart = False
+                try:
+                    from utils.key_blocker import KeyBlocker
+                    disable_auto_hook_restart = getattr(KeyBlocker, '_block_action_flags', {}).get('disable_auto_hook_restart', False)
+                except Exception:
+                    self._print_debug(f"Failed to get the disable_auto_hook_restart attribute : {e}")
                 if self.python_blocker and hasattr(self.python_blocker, 'hooks_active') and not self.python_blocker.hooks_active:
-                    self._print_debug("Python hooks lost, attempting to restart...")
-                    try:
-                        if hasattr(self.python_blocker, 'start_hook_blocking'):
-                            self.python_blocker.start_hook_blocking()
-                        else:
-                            self.python_blocker.enable_all_blocking()
-                        self._print_debug("Python hooks restarted successfully")
-                    except Exception as e:
-                        self._print_debug(f"Failed to restart Python hooks: {e}")
+                    if not disable_auto_hook_restart:
+                        self._print_debug("Python hooks lost, attempting to restart...")
+                        try:
+                            if hasattr(self.python_blocker, 'start_hook_blocking'):
+                                self.python_blocker.start_hook_blocking()
+                            else:
+                                self.python_blocker.enable_all_blocking()
+                            self._print_debug("Python hooks restarted successfully")
+                        except Exception as e:
+                            self._print_debug(f"Failed to restart Python hooks: {e}")
+                    else:
+                        self._print_debug("Python hooks lost, but auto-restart is disabled due to Ctrl+Alt+Del event.")
 
                 time.sleep(0.5)
             except Exception as e:
