@@ -714,7 +714,9 @@ class VideoClockScreenSaver:
         if processed_frame:
             try:
                 self.imgtk = ImageTk.PhotoImage(processed_frame)
-                self.label.config(image=self.imgtk)
+                # Only update if label and master still exist
+                if self.label.winfo_exists() and self.master.winfo_exists():
+                    self.label.config(image=self.imgtk)
             except Exception as e:
                 logger.error(f"Error updating label image: {e}") 
         
