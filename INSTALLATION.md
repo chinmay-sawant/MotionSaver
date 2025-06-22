@@ -8,9 +8,9 @@ Before you install, please read the security warning in the [README.md](README.m
 
 ## Table of Contents
 - [Installation for Users (Recommended)](#installation-for-users-recommended)
-  - [Method 1: Standard Executable](#method-1-standard-executable)
+  - [Method 1: From Source Code](#method-1-from-source-code)
 - [Installation for Developers](#installation-for-developers)
-  - [Method 2: From Source Code](#method-2-from-source-code)
+  - [Method 2: Development Setup](#method-2-development-setup)
 - [Advanced Setup](#advanced-setup)
   - [Running as a Windows Service](#running-as-a-windows-service)
 - [Configuration](#configuration)
@@ -21,37 +21,53 @@ Before you install, please read the security warning in the [README.md](README.m
 
 ## Installation for Users (Recommended)
 
-This is the easiest way to get started with MotionSaver.
+This is the easiest way to get started with MotionSaver using the provided batch file.
 
 ### Prerequisites
 - **Operating System**: Windows 10 or Windows 11.
+- **Git**: [Download & Install Git](https://git-scm.com/downloads).
+- **Python**: Version 3.8 or higher. [Download & Install Python](https://www.python.org/downloads/) (ensure you check "Add Python to PATH").
 - **Permissions**: Standard user permissions are sufficient for normal use. Administrator rights are needed to install it as a service.
 
-### Method 1: Standard Executable
+### Method 1: From Source Code
 
-This method uses the pre-built `PhotoEngine.exe` file and requires no other dependencies.
+#### Step 1: Clone the Repository
+```bash
+git clone https://github.com/chinmay-sawant/MotionSaver.git
+cd MotionSaver
+```
 
-#### Step 1: Download
-- Go to the [**Releases**](https://github.com/chinmay-sawant/MotionSaver/releases) page of the MotionSaver GitHub repository.
-- Download the latest `PhotoEngine.exe` file.
-
-#### Step 2: Run the Application
-- Place `PhotoEngine.exe` in a folder of your choice (e.g., `C:\MotionSaver`).
-- Double-click `PhotoEngine.exe`.
-- The application will start in GUI mode, allowing you to configure it.
+#### Step 2: Install Dependencies
+```bash
+pip install -r requirements.txt
+```
 
 #### Step 3: Initial Configuration
+```bash
+# Run the settings GUI to configure the application
+python PhotoEngine.py --mode gui
+```
+
 1.  In the settings window, go to the **"General Settings"** tab.
 2.  Click **"Select Video"** to choose a video file for your screensaver background.
 3.  Go to the **"Users"** tab to add a user and set a password for unlocking the screensaver.
 4.  Explore the **"Widgets"** and **"Appearance"** tabs to customize your experience.
 5.  Click **"Save & Close"**.
 
-#### Step 4: Launch the Screensaver
+#### Step 4: Start Background Service
+Use the provided batch file to start MotionSaver in the background:
+```bash
+# Double-click MotionSaver.bat or run from command line
+MotionSaver.bat
+```
+
+This will start the application in tray mode, listening for the `Win + S` shortcut to activate the screensaver.
+
+#### Step 5: Launch the Screensaver
 You can start the screensaver in several ways:
-- From the GUI, click the **"Start Screensaver"** button.
-- Create a shortcut to `PhotoEngine.exe` and add `--mode saver` to the target path.
-- Run from the command line: `PhotoEngine.exe --mode saver`.
+- Press `Win + S` while the background service is running.
+- From the system tray icon, right-click and select "Start Screensaver".
+- Run from the command line: `python PhotoEngine.py --mode saver`.
 
 ---
 
@@ -63,7 +79,7 @@ This method is for users who want to modify the source code or contribute to the
 - **Git**: [Download & Install Git](https://git-scm.com/downloads).
 - **Python**: Version 3.8 or higher. [Download & Install Python](https://www.python.org/downloads/) (ensure you check "Add Python to PATH").
 
-### Method 2: From Source Code
+### Method 2: Development Setup
 
 #### Step 1: Clone the Repository
 ```bash
@@ -95,6 +111,9 @@ python PhotoEngine.py --mode gui
 
 # Run the screensaver
 python PhotoEngine.py --mode saver
+
+# Run in background (tray mode)
+python PhotoEngine.py --mode tray
 ```
 
 ---
@@ -108,10 +127,6 @@ This allows MotionSaver to run automatically in the background. **Administrator 
 1.  **Run in Admin Mode**: Right-click your Command Prompt or PowerShell and select "Run as administrator". Navigate to the MotionSaver directory.
 2.  **Launch Admin GUI**:
     ```bash
-    # If using the executable
-    PhotoEngine.exe --mode admin
-
-    # If running from source
     python PhotoEngine.py --mode admin
     ```
 3.  **Use the GUI**: In the settings window, a "Service Management" section will be visible.
@@ -124,8 +139,8 @@ This allows MotionSaver to run automatically in the background. **Administrator 
 
 ## Configuration
 
--   All settings are stored in a `userconfig.json` file located in a `config` sub-folder, which is created automatically in the same directory as `PhotoEngine.exe`.
--   You can configure everything through the GUI (`PhotoEngine.exe --mode gui`).
+-   All settings are stored in a `userconfig.json` file located in a `config` sub-folder, which is created automatically in the same directory as the source code.
+-   You can configure everything through the GUI (`python PhotoEngine.py --mode gui`).
 
 ---
 
@@ -134,79 +149,64 @@ This allows MotionSaver to run automatically in the background. **Administrator 
 #### Screensaver Doesn't Start
 -   Ensure you have selected a valid video file in the settings.
 -   Check if your video format is supported (MP4 is recommended).
--   If running from source, ensure all dependencies in `requirements.txt` are installed correctly.
+-   Ensure all dependencies in `requirements.txt` are installed correctly.
+-   Make sure the background service is running (`MotionSaver.bat` or `python PhotoEngine.py --mode tray`).
 
 #### Widgets Not Working
--   **Weather/Stock**: These widgets require an active internet connection. Check your firewall settings to ensure `PhotoEngine.exe` is not blocked.
+-   **Weather/Stock**: These widgets require an active internet connection. Check your firewall settings to ensure Python is not blocked.
 -   **Media Widget**: This relies on Windows Media Session. It may not work on older versions of Windows or "N" editions without the Media Feature Pack installed.
 
 #### Permission Errors
 -   If you see permission errors when trying to install the service, make sure you are running the command or the GUI as an Administrator.
 
+#### Background Service Not Working
+-   Ensure Python is added to your system PATH.
+-   Check if the batch file is being blocked by antivirus software.
+-   Try running `python PhotoEngine.py --mode tray` directly from command line to see error messages.
+
 ---
 
 ## Uninstallation
 
-#### If you used the Executable (`.exe`):
-1.  **Stop the Service (if installed)**: Run `PhotoEngine.exe --mode admin` as an Administrator and click "Stop Service", then "Uninstall Service".
-2.  **Stop the Application**: Close any running instance of MotionSaver (check the system tray).
-3.  **Delete the Files**: Delete `PhotoEngine.exe` and the `config` folder that was created alongside it.
+#### Standard Uninstallation:
+1.  **Stop the Service (if installed)**: Run `python PhotoEngine.py --mode admin` as an Administrator and click "Stop Service", then "Uninstall Service".
+2.  **Stop the Background Service**: Close the MotionSaver.bat process or exit from the system tray.
+3.  **Delete the Files**: Delete the entire `MotionSaver` directory.
 
-#### If you installed from Source:
+#### If you used a Virtual Environment:
 1.  **Uninstall the Service (if installed)**: Run `python PhotoEngine.py --mode admin` as an Administrator and use the GUI to stop and uninstall the service.
 2.  **Deactivate Virtual Environment**:
     ```bash
     deactivate
     ```
 3.  **Delete the Project Folder**: Simply delete the entire `MotionSaver` directory.
-   - **Install Service**: Registers MotionSaver as Windows service
-   - **Start Service**: Begins background operation
-   - **Stop Service**: Halts service
-   - **Uninstall Service**: Removes service registration
-
-### Step 3: Manual Service Installation
-```bash
-# Install service manually
-python screensaver_service.py install
-
-# Start service
-python screensaver_service.py start
-
-# Check service status
-sc query ScreenSaverService
-```
-
-### Step 4: Service Configuration
-- Service runs under LocalSystem account by default
-- Configuration file: `config/userconfig.json`
-- Logs: Windows Event Viewer → Applications and Services
-
-### Service Management Commands
-```cmd
-# Install
-sc create ScreenSaverService binPath= "path\to\python.exe path\to\screensaver_service.py"
-
-# Start
-sc start ScreenSaverService
-
-# Stop
-sc stop ScreenSaverService
-
-# Delete
-sc delete ScreenSaverService
-```
 
 ---
 
-## Method 4: Portable Installation
+## Getting Help
 
-**Best for:** USB deployment, temporary installations, or systems without admin rights
+### Resources
+- **GitHub Issues**: [Report bugs or request features](https://github.com/chinmay-sawant/MotionSaver/issues)
+- **Documentation**: Check README.md for feature overview
+- **Configuration**: Review example config files
 
-### Step 1: Portable Python Setup
-1. Download Python portable from [python.org](https://www.python.org/downloads/windows/) or use WinPython
-2. Extract to your portable drive/folder
-3. Add portable Python to PATH temporarily
+### Support Information
+When reporting issues, please include:
+- Python version (`python --version`)
+- Operating System version
+- Error messages (full stack trace)
+- Configuration file (remove sensitive data)
+- Steps to reproduce the issue
 
+### Community
+- **GitHub Discussions**: Share usage tips and configurations
+- **Contributions Welcome**: Fork, improve, and submit pull requests
+
+---
+
+**Created by**: [Chinmay Sawant](https://github.com/chinmay-sawant)  
+**Project**: MotionSaver - Dynamic Video Screensaver  
+**License**: [Check repository for license information]
 ### Step 2: Self-contained Installation
 ```bash
 # Create portable directory structure

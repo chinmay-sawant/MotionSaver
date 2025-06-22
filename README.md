@@ -46,21 +46,35 @@ Due to the complexity of blocking all Windows system shortcuts, **it is possible
 
 ## Quick Start ⚡
 
-1.  **Download**: Grab the latest `PhotoEngine.exe` from the [Releases page](https://github.com/chinmay-sawant/MotionSaver/releases).
-2.  **Run**: Double-click `PhotoEngine.exe`. No installation needed for basic use!
-3.  **Configure**: The settings GUI will open. Set your desired video file, customize widgets, and add a user password.
-4.  **Launch**: Run the screensaver directly from the GUI or using the command line.
+1.  **Clone the Repository**: 
+    ```bash
+    git clone https://github.com/chinmay-sawant/MotionSaver.git
+    cd MotionSaver
+    ```
+2.  **Install Dependencies**: 
+    ```bash
+    pip install -r requirements.txt
+    ```
+3.  **Configure**: Run the settings GUI to configure your video and preferences:
+    ```bash
+    python PhotoEngine.py --mode gui
+    ```
+4.  **Start Background Service**: Use the provided batch file to start listening for the screensaver shortcut:
+    ```bash
+    MotionSaver.bat
+    ```
+5.  **Activate**: Press `Win + S` to launch the screensaver anytime!
 
 For detailed instructions, see the **[INSTALLATION.md](INSTALLATION.md)** file.
 
 ## Usage 👨‍💻
 
-Run `PhotoEngine.exe` with different modes from your command prompt or terminal:
+Run the application with different modes from your command prompt or terminal:
 
--   **Settings GUI**: `PhotoEngine.exe --mode gui` (Default action on double-click)
--   **Screensaver Mode**: `PhotoEngine.exe --mode saver`
--   **System Tray Mode**: `PhotoEngine.exe --mode tray`
--   **Admin Mode (for service management)**: `PhotoEngine.exe --mode admin` (Requires running as Administrator)
+-   **Settings GUI**: `python PhotoEngine.py --mode gui`
+-   **Screensaver Mode**: `python PhotoEngine.py --mode saver`
+-   **System Tray Mode**: `python PhotoEngine.py --mode tray` (or use `MotionSaver.bat`)
+-   **Admin Mode (for service management)**: `python PhotoEngine.py --mode admin` (Requires running as Administrator)
 
 ## Technology Stack 🛠️
 
@@ -90,3 +104,15 @@ I built it for my own personal use, and I'm sharing it in case others find it co
 ## Community & Feedback
 
 If you have any issues, want to report bugs, or would like to leave feedback, please use the [MotionSaver Subreddit](https://www.reddit.com/r/motionsaver/).
+
+## What Works & What Doesn't 🛠️
+
+### ✅ Working Features
+- **Screensaver Activation:** The main feature—activating the screensaver—is fully functional. MotionSaver listens for `Win + S` in the background when you run `MotionSaver.bat`, allowing you to quickly launch the screensaver at any time.
+- **Background Listening:** The app reliably detects the `Win + S` shortcut for screensaver activation when running in tray mode.
+
+### ⚠️ Known Limitations
+- **Low-Level Key Hooks:** Some system key hooks are not fully effective due to Windows restrictions. For example, combinations like `Alt + Win + Tab` can be released or bypassed after pressing the right `Alt` key once.
+- **Shortcut Bypass:** Certain Windows shortcuts (e.g., `Alt+Tab`, `Win+D`) may still exit or minimize the screensaver, as noted in the security warning above.
+
+**Tip:** For the best experience, start the background service using `MotionSaver.bat` and use `Win + S` to activate the screensaver. Be aware of the current limitations with system shortcuts.
