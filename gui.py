@@ -143,12 +143,13 @@ class CroppingWindow(tk.Toplevel):
 class ScreenSaverApp:
     def __init__(self, master):
         # --- Logs Path ---
-        self.logs_path_var = tk.StringVar(value=self.config.get("logs_path", ""))
         self.master = master
         master.title("Screen Saver Settings")
         master.state('zoomed') # Open maximized
 
         self.config = load_config()
+        self.logs_path_var = tk.StringVar(value=self.config.get("logs_path", ""))
+
         self.current_theme = tk.StringVar(value=self.config.get("theme", "light"))
         self.selected_clock_font_family = tk.StringVar(value=self.config.get("clock_font_family", "Segoe UI Emoji"))
         self.selected_clock_font_size = tk.IntVar(value=self.config.get("clock_font_size", 64))
@@ -211,10 +212,7 @@ class ScreenSaverApp:
         logs_frame.columnconfigure(1, weight=1)
         # If logs_path is blank, logger will use the folder where the executable is located.
         current_row += 1
-    def browse_logs_folder(self):
-        folder_selected = filedialog.askdirectory(title="Select Logs Folder")
-        if folder_selected:
-            self.logs_path_var.set(folder_selected)
+    
         pic_frame = ttk.LabelFrame(main_frame, text="Profile Picture", padding="10")
         pic_frame.grid(row=current_row, column=current_col, padx=5, pady=5, sticky="nsew")
         current_col += 1
@@ -506,6 +504,12 @@ class ScreenSaverApp:
 
         self.update_service_status()
 
+    def browse_logs_folder(self):
+        folder_selected = filedialog.askdirectory(title="Select Logs Folder")
+        if folder_selected:
+            self.logs_path_var.set(folder_selected)
+            self.config["logs_path"] = folder_selected
+            save_config(self.config)  # Save the updated config
     def load_users_to_tree(self):
         for i in self.user_tree.get_children():
             self.user_tree.delete(i)

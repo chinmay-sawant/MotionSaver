@@ -541,6 +541,7 @@ def run_in_system_tray():
     global tray_running, win_s_blocker, tray_icon_instance # Add tray_icon_instance here
     tray_running = True
     win_s_blocker = None    
+    
     def on_open_screensaver(icon, item):
         logger.info("Starting screensaver from tray...")
         # Run start_screensaver_with_return in a new thread to avoid blocking the tray icon
@@ -548,16 +549,40 @@ def run_in_system_tray():
         thread = threading.Thread(target=start_screensaver_with_return)
         thread.daemon = True        
         thread.start()
+    
     def on_open_gui(icon, item):
         logger.info("Opening GUI from tray...")
-        # Run GUI in a new thread to avoid blocking the tray icon
-        import threading
-        thread = threading.Thread(target=gui.main)
-        thread.daemon = True
-        thread.start()    
+        try:
+            # Launch GUI in a separate process instead of thread
+            # This ensures proper Tkinter main loop handling
+            script_path = os.path.abspath(__file__)
+            python_exe = sys.executable
+            
+            # Create the GUI process with proper flags
+            if platform.system() == "Windows":
+                # Use CREATE_NO_WINDOW to prevent console window
+                subprocess.Popen([python_exe, script_path, "--mode", "gui"], 
+                               creationflags=subprocess.CREATE_NO_WINDOW)
+            else:
+                subprocess.Popen([python_exe, script_path, "--mode", "gui"])
+            
+            logger.info("GUI process launched successfully")
+        except Exception as e:
+            logger.error(f"Failed to open GUI from tray: {e}")
+            # Fallback: try to import and run GUI directly (less reliable)
+            try:
+                import threading
+                thread = threading.Thread(target=gui.main)
+                thread.daemon = True
+                thread.start()
+                logger.info("GUI started in fallback mode")
+            except Exception as fallback_error:
+                logger.error(f"Fallback GUI launch also failed: {fallback_error}")
+    
     def on_exit_app(icon, item):
         logger.info("Exiting application from tray...")
-        shutdown_system_tray() # Call the centralized shutdown    
+        shutdown_system_tray() # Call the centralized shutdown
+    
     def start_screensaver_with_return():
         """Start screensaver and return to tray mode after authentication."""
         logger.info("Win + S detected or manual start. Starting screensaver...")
