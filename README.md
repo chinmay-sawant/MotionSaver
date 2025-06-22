@@ -86,3 +86,7 @@ Please use this form: [Submit an Issue or Suggestion](https://forms.gle/zhVFJnu5
 This project started as a dream inspired by Wallpaper Engine and the beautiful live wallpapers on macOS. For years, it was just an idea. But with the rise of AI development tools like GitHub Copilot, that dream became a reality in a single weekend. This application is a testament to the power of AI-assisted coding, turning what would have taken months into a 20-hour sprint.
 
 I built it for my own personal use, and I'm sharing it in case others find it cool too. Enjoy!
+
+## Community & Feedback
+
+If you have any issues, want to report bugs, or would like to leave feedback, please use the [MotionSaver Subreddit](https://www.reddit.com/r/motionsaver/).
