@@ -204,18 +204,19 @@ class ScreenSaverApp:
         # --- Logs Path ---
         logs_frame = ttk.LabelFrame(main_frame, text="Logs Location", padding="10")
         logs_frame.grid(row=current_row, column=current_col, padx=5, pady=5, sticky="nsew")
-        current_col += 1
         ttk.Label(logs_frame, text="Logs Folder:").grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)
         self.logs_path_entry = ttk.Entry(logs_frame, textvariable=self.logs_path_var, width=40)
         self.logs_path_entry.grid(row=0, column=1, padx=5, pady=5, sticky=tk.EW)
         ttk.Button(logs_frame, text="Browse...", command=self.browse_logs_folder).grid(row=0, column=2, padx=5, pady=5)
         logs_frame.columnconfigure(1, weight=1)
-        # If logs_path is blank, logger will use the folder where the executable is located.
+        
+        # Move to next row for profile picture
         current_row += 1
+        current_col = 0  # Reset to first column
     
+        # --- Profile Picture ---
         pic_frame = ttk.LabelFrame(main_frame, text="Profile Picture", padding="10")
         pic_frame.grid(row=current_row, column=current_col, padx=5, pady=5, sticky="nsew")
-        current_col += 1
 
         self.profile_pic_path_var = tk.StringVar(value=self.config.get("profile_pic_path", ""))
         self.profile_pic_path_crop_var = tk.StringVar(value=self.config.get("profile_pic_path_crop", ""))
@@ -230,12 +231,16 @@ class ScreenSaverApp:
         ttk.Button(pic_frame, text="Crop Image", command=self.crop_profile_pic).grid(row=0, column=3, padx=5, pady=5)
         pic_frame.columnconfigure(1, weight=1)
 
+        # Move to next column for video path (same row as profile picture)
+        current_col += 1
 
         # --- Video Path ---
         video_frame = ttk.LabelFrame(main_frame, text="Screen Saver Video", padding="10")
         video_frame.grid(row=current_row, column=current_col, padx=5, pady=5, sticky="nsew")
-        current_col = 0 # Reset column
-        current_row += 1 # Move to next row
+        
+        # Move to next row for next section
+        current_row += 1
+        current_col = 0  # Reset to first column
 
         self.video_path_var = tk.StringVar(value=self.config.get("video_path", "video.mp4"))
         ttk.Label(video_frame, text="Path:").grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)

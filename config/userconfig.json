@@ -1,11 +1,11 @@
 {
   "users": [
     {
-      "username": "chinmay",
-      "password_hash": "03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4"
+      "username": "test",
+      "password_hash": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
     }
   ],
-  "default_user_for_display": "chinmay",
+  "default_user_for_display": "test",
   "profile_pic_path": "D:\\Chinmay_Personal_Projects\\ScreenSaver\\a35_crop.jpg",
   "profile_pic_path_crop": "ScreenSaver\\a35_crop.jpg",
   "video_path": "C:\\Users\\acer\\Downloads\\youtube_UiDKAbCisTQ_1920x1080_h264.mp4",
@@ -15,12 +15,12 @@
   "ui_font_family": "MINECRAFT PE",
   "ui_font_size": 30,
   "screensaver_timer_minutes": 10,
-  "enable_stock_widget": true,
+  "enable_stock_widget": false,
   "enable_media_widget": true,
   "stock_market": "NSE",
   "run_as_admin": true,
   "enable_weather_widget": true,
   "weather_pincode": "400068",
   "weather_country": "IN",
-  "logs_path": ""
+  "logs_path": "D:/Chinmay_Personal_Projects/ScreenSaver/logs"
 }
