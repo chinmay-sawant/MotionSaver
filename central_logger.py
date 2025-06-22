@@ -28,14 +28,36 @@ class CentralLogger:
             self._setup_logging()
             CentralLogger._initialized = True
     
+
     def _setup_logging(self):
         """Setup centralized logging configuration."""
-        # Create logs directory if it doesn't exist
-        self.app_dir = os.path.dirname(os.path.abspath(__file__))
-        self.logs_dir = os.path.join(self.app_dir, 'logs')
+        # Try to load logs_path from config if available, using unified config search
+        logs_path = None
+        try:
+            import json
+            from config_utils import find_user_config_path
+            config_path = find_user_config_path()
+            if os.path.exists(config_path):
+                with open(config_path, 'r') as f:
+                    config = json.load(f)
+                    logs_path = config.get('logs_path', None)
+        except Exception:
+            logs_path = None
+
+        # Determine logs directory
+        if logs_path and isinstance(logs_path, str) and logs_path.strip():
+            self.logs_dir = os.path.abspath(logs_path)
+        else:
+            # Use executable location if frozen, else script location
+            if getattr(sys, 'frozen', False):
+                self.app_dir = os.path.dirname(sys.executable)
+            else:
+                self.app_dir = os.path.dirname(os.path.abspath(__file__))
+            self.logs_dir = os.path.join(self.app_dir, 'logs')
+
         if not os.path.exists(self.logs_dir):
             os.makedirs(self.logs_dir, exist_ok=True)
-        
+
         # Define log file paths
         self.main_log_path = os.path.join(self.logs_dir, 'photoengine.log')
         self.error_log_path = os.path.join(self.logs_dir, 'photoengine_errors.log')

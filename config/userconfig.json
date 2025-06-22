@@ -21,5 +21,6 @@
   "run_as_admin": true,
   "enable_weather_widget": true,
   "weather_pincode": "400068",
-  "weather_country": "IN"
+  "weather_country": "IN",
+  "logs_path": ""
 }

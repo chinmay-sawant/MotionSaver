@@ -11,15 +11,14 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from central_logger import get_logger, log_startup, log_shutdown, log_exception
 logger = get_logger('PasswordConfig')
 
-# Adjust path to go one level up to find config files in the root project directory
-CONFIG_FILE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'config'))
-USER_CONFIG_FILE = os.path.join(CONFIG_FILE_DIR, "userconfig.json") 
+from config_utils import find_user_config_path
 DEFAULT_PASSWORD = "1234"
 DEFAULT_USERNAME = "User" # Default for creating a new config if none exists
 
 def load_config():
-    """Load entire user configuration from userconfig.json"""
-    if not os.path.exists(USER_CONFIG_FILE):
+    """Load entire user configuration from userconfig.json (using unified search logic)"""
+    config_path = find_user_config_path()
+    if not os.path.exists(config_path):
         default_hash = hashlib.sha256(DEFAULT_PASSWORD.encode()).hexdigest()
         default_config = {
             "users": [
@@ -38,7 +37,7 @@ def load_config():
         save_config(default_config)
         return default_config
     try:
-        with open(USER_CONFIG_FILE, 'r') as f:
+        with open(config_path, 'r') as f:
             config = json.load(f)
             # Ensure essential keys exist with defaults
             if "users" not in config or not isinstance(config["users"], list) or not config["users"]:
@@ -68,38 +67,32 @@ def load_config():
         }
 
 def save_config(config_data):
-    """Save entire configuration data to userconfig.json"""
+    """Save entire configuration data to userconfig.json (using unified search logic)"""
+    config_path = find_user_config_path()
+    config_dir = os.path.dirname(config_path)
     try:
         # Ensure the config directory exists
-        os.makedirs(CONFIG_FILE_DIR, exist_ok=True)
-        
+        os.makedirs(config_dir, exist_ok=True)
         # Attempt to write to the file
-        with open(USER_CONFIG_FILE, 'w') as f:
+        with open(config_path, 'w') as f:
             json.dump(config_data, f, indent=2)
-        
         # Verify by trying to read it back (optional, but good for diagnostics)
-        # This step is more for confirming the write was successful immediately.
-        # If this fails, it might indicate a more subtle issue than just permissions.
         try:
-            with open(USER_CONFIG_FILE, 'r') as f:
+            with open(config_path, 'r') as f:
                 json.load(f)
-            # print(f"Successfully saved and verified config to {USER_CONFIG_FILE}") # Optional success log        
         except Exception as e_readback:
-            logger.critical(f"CRITICAL ERROR: Config saved to {USER_CONFIG_FILE}, but failed to read back immediately: {e_readback}")
+            logger.critical(f"CRITICAL ERROR: Config saved to {config_path}, but failed to read back immediately: {e_readback}")
             logger.critical(f"This could indicate a problem with file corruption or very intermittent write issues.")
-            # Depending on severity, you might want to return False here or handle it.
-            # For now, we'll assume the primary write was okay if it didn't throw an exception.
-
-        return True    
+        return True
     except IOError as e_io:
-        logger.error(f"IOError saving user config to {USER_CONFIG_FILE}: {e_io}")
+        logger.error(f"IOError saving user config to {config_path}: {e_io}")
         logger.error(f"Please check file permissions and path.")
-        return False    
+        return False
     except Exception as e:
-            logger.error(f"Unexpected error saving user config to {USER_CONFIG_FILE}: {e}")
-            import traceback
-            traceback.print_exc()
-            return False
+        logger.error(f"Unexpected error saving user config to {config_path}: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
 
 def verify_password(username_attempt, password_attempt):
     """Verify if the given username and password are correct."""

@@ -142,6 +142,8 @@ class CroppingWindow(tk.Toplevel):
 
 class ScreenSaverApp:
     def __init__(self, master):
+        # --- Logs Path ---
+        self.logs_path_var = tk.StringVar(value=self.config.get("logs_path", ""))
         self.master = master
         master.title("Screen Saver Settings")
         master.state('zoomed') # Open maximized
@@ -198,7 +200,21 @@ class ScreenSaverApp:
         current_row = 0
         current_col = 0
 
-        # --- Profile Picture ---
+        # --- Logs Path ---
+        logs_frame = ttk.LabelFrame(main_frame, text="Logs Location", padding="10")
+        logs_frame.grid(row=current_row, column=current_col, padx=5, pady=5, sticky="nsew")
+        current_col += 1
+        ttk.Label(logs_frame, text="Logs Folder:").grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)
+        self.logs_path_entry = ttk.Entry(logs_frame, textvariable=self.logs_path_var, width=40)
+        self.logs_path_entry.grid(row=0, column=1, padx=5, pady=5, sticky=tk.EW)
+        ttk.Button(logs_frame, text="Browse...", command=self.browse_logs_folder).grid(row=0, column=2, padx=5, pady=5)
+        logs_frame.columnconfigure(1, weight=1)
+        # If logs_path is blank, logger will use the folder where the executable is located.
+        current_row += 1
+    def browse_logs_folder(self):
+        folder_selected = filedialog.askdirectory(title="Select Logs Folder")
+        if folder_selected:
+            self.logs_path_var.set(folder_selected)
         pic_frame = ttk.LabelFrame(main_frame, text="Profile Picture", padding="10")
         pic_frame.grid(row=current_row, column=current_col, padx=5, pady=5, sticky="nsew")
         current_col += 1
@@ -921,6 +937,7 @@ class ScreenSaverApp:
             messagebox.showerror("Error", f"Failed to uninstall service: {e}")
 
     def save_settings(self):
+        self.config["logs_path"] = self.logs_path_var.get()
         self.config["profile_pic_path"] = self.profile_pic_path_var.get()
         self.config["profile_pic_path_crop"] = self.profile_pic_path_crop_var.get()
         self.config["video_path"] = self.video_path_var.get()

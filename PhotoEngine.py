@@ -21,10 +21,11 @@ try:
 except ImportError:
     from blockit import KeyBlocker # Assuming blockit.py contains a basic KeyBlocker
     logger.info("Using basic key blocker from blockit.py")
-import gui 
+import gui
 import json
 from PIL import Image, ImageDraw # Added for system tray icon
 import pystray # Added for system tray functionality
+from config_utils import find_user_config_path
 
 # Custom UAC elevation functions to replace pyUAC
 def is_admin():
@@ -497,18 +498,13 @@ def start_screensaver(video_path_override=None):
             ctrl_alt_del_detector.restart_pending = True
 
 def load_config():
-    """Load configuration from userconfig.json"""
-    # Correct path to userconfig.json, assuming it's in a 'config' subdirectory
-    # relative to PhotoEngine.py's location.
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    config_path = os.path.join(script_dir, 'config', 'userconfig.json')
-    
+    """Load configuration from userconfig.json (using unified search logic)"""
+    config_path = find_user_config_path()
     default_config = {
         "run_as_admin": False,
         "video_path": None, # Ensure other relevant defaults are present
         # Add other essential default values here if necessary
     }
-    
     try:
         if os.path.exists(config_path):
             with open(config_path, 'r') as f:
@@ -517,11 +513,10 @@ def load_config():
                 for key, value in default_config.items():
                     if key not in config_data:
                         config_data[key] = value
-                return config_data        
+                return config_data
         else:
             logger.info(f"[PhotoEngine] Config file not found at {config_path}. Using defaults.")
             return default_config
-    
     except Exception as e:
         logger.error(f"Error loading config: {e}. Using defaults.")
         return default_config
