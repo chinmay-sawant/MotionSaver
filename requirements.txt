@@ -2,47 +2,21 @@
 opencv-python>=4.5.0
 Pillow>=9.0.0
 olefile>=0.46
-tk
+tk>=0.1.0
 numpy>=1.20.0
 screeninfo>=0.8
 
-# UI and widgets
-matplotlib>=3.5.0
+# Optional dependencies
+matplotlib>=3.5.0  # For advanced UI elements
+
 pygame>=2.0.0
 mutagen>=1.45.0
-pystray>=0.19.0
-
-# Windows integration
+winsdk>=1.0.0b9
 pywin32>=300
 pypiwin32>=223
-winsdk>=1.0.0b9
+pystray>=0.19.0
 
-# Keyboard and hooks
-keyboard>=0.13.0
-pynput>=1.7.0
-
-# Networking and APIs
-requests>=2.25.0
-requests-cache>=0.9.8
-openmeteo_requests>=1.0.0
-pandas>=1.2.0
-retry-requests>=2.0.0
-pgeocode>=0.3.0
-
-# Logging and utilities
-psutil>=5.8.0
-
-# For packaging and compatibility (optional, but useful)
-setuptools>=50.0.0
-
-# For batch file and subprocess compatibility (no pip install needed, but document for clarity)
-# subprocess (standard library)
-# threading (standard library)
-# asyncio (standard library)
-# io (standard library)
-# platform (standard library)
-# getpass (standard library)
-# json (standard library)
-# time (standard library)
-# sys (standard library)
-# os (standard library)
+keyboard>=0.13.0  # For keyboard shortcuts
+requests>=2.25.0  # For network requests
+openmeteo_requests>=1.0.0  # For weather data requests
+pandas>=1.2.0  # For data manipulation
