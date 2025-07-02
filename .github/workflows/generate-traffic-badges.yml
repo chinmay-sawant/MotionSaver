@@ -10,195 +10,180 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # Required to commit changes to the repository
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          # This is important for the action to be able to commit changes
-          # and fetch the existing history.
-          token: ${{ secrets.GH_TOKEN }}
-          fetch-depth: 0 # Fetch all history to read existing traffic_history.json
+          # Fetch all history to ensure the script has the full context.
+          fetch-depth: 0
 
-      - name: Fetch and Generate Badges
-        id: generate_badges
-        uses: actions/github-script@v6
+      - name: Generate and Commit Traffic Data
+        uses: actions/github-script@v7 # Using a more recent version
         with:
           github-token: ${{ secrets.GH_TOKEN }}
           script: |
-            const owner = 'chinmay-sawant';
-            const repo = 'MotionSaver';
-            const badgeDir = '.github/badges'; // Directory to store badges
-            const historyFile = '.github/traffic_history.json'; // File to store historical data
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const badgeDir = '.github/badges';
+            const historyFile = '.github/traffic_history.json';
+            const branch = context.ref.replace('refs/heads/', ''); // Get current branch name
 
-            // Function to create an SVG badge with a "Linux type" dark theme
+            /**
+             * Fetches a file's content and SHA from the repository.
+             * @param {string} filePath - The path to the file in the repo.
+             * @returns {Promise<{content: string|null, sha: string|null}>}
+             */
+            async function getFile(filePath) {
+              try {
+                const response = await github.rest.repos.getContent({
+                  owner,
+                  repo,
+                  path: filePath,
+                  ref: branch, // Fetch from the current branch
+                });
+                if (response.data && response.data.content) {
+                  return {
+                    content: Buffer.from(response.data.content, 'base64').toString('utf8'),
+                    sha: response.data.sha
+                  };
+                }
+                return { content: null, sha: null };
+              } catch (error) {
+                if (error.status === 404) {
+                  // File doesn't exist, which is a valid case
+                  return { content: null, sha: null };
+                }
+                // Re-throw other unexpected errors
+                console.error(`Error getting file ${filePath}:`, error);
+                throw error;
+              }
+            }
+
+            /**
+             * Commits a file to the repository, creating or updating it.
+             * @param {string} filePath - The path for the file.
+             * @param {string} content - The new content of the file.
+             * @param {string} message - The commit message.
+             * @param {string|null} sha - The SHA of the existing file, or null to create a new one.
+             */
+            async function commitFile(filePath, content, message, sha) {
+              await github.rest.repos.createOrUpdateFileContents({
+                owner,
+                repo,
+                path: filePath,
+                message: message,
+                content: Buffer.from(content).toString('base64'),
+                sha: sha, // The API handles a null sha for new file creation
+                branch: branch,
+              });
+            }
+
+            /**
+             * Creates a themed SVG badge.
+             * @param {string} label - The text for the left part of the badge.
+             * @param {string} message - The text for the right part of the badge.
+             * @param {string} color - The background color for the message part.
+             * @returns {string} - The SVG content as a string.
+             */
             function createBadgeSvg(label, message, color) {
-                const labelLength = label.length;
-                const messageLength = message.length;
-
-                // Adjust width calculation for better fit with different fonts/sizes
-                const labelWidth = labelLength * 7 + 12;
-                const messageWidth = messageLength * 7 + 12;
+                const labelWidth = label.length * 7 + 12;
+                const messageWidth = message.length * 7.5 + 12; // Adjusted for better spacing
                 const totalWidth = labelWidth + messageWidth;
 
-                // "Linux type" theme colors (inspired by Nord/Dracula/Gruvbox palettes)
-                const primaryBgColor = '#3B4252'; // Dark gray-blue (Nord's `nord3`)
-                const labelBgColor = '#4C566A';   // Slightly lighter gray-blue (Nord's `nord2`)
-                const textColor = '#ECEFF4';      // Light almost-white (Nord's `nord6`)
-                const shadowColor = '#2E3440';    // Darker shadow (Nord's `nord0`)
+                const primaryBgColor = '#3B4252';
+                const labelBgColor = '#4C566A';
+                const textColor = '#ECEFF4';
+                const shadowColor = '#2E3440';
 
                 return `
-                    <svg xmlns="http://www.w3.org/2000/svg" width="${totalWidth}" height="20" role="img" aria-label="${label}: ${message}">
-                        <title>${label}: ${message}</title>
-                        <linearGradient id="s" x2="0" y2="100%">
-                            <stop offset="0" stop-color="#bbb" stop-opacity=".1"/>
-                            <stop offset="1" stop-opacity=".1"/>
-                        </linearGradient>
-                        <clipPath id="r"><rect width="${totalWidth}" height="20" rx="3" fill="#fff"/></clipPath>
-                        <g clip-path="url(#r)">
-                            <!-- Overall background for the badge -->
-                            <rect width="${totalWidth}" height="20" fill="${primaryBgColor}"/>
-                            <!-- Background for the label section -->
-                            <rect width="${labelWidth}" height="20" fill="${labelBgColor}"/>
-                            <!-- Background for the message section (uses dynamic color) -->
-                            <rect x="${labelWidth}" width="${messageWidth}" height="20" fill="${color}"/>
-                            <!-- Gradient overlay for subtle effect -->
-                            <rect width="${totalWidth}" height="20" fill="url(#s)"/>
-                        </g>
-                        <g fill="${textColor}" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" text-rendering="geometricPrecision" font-size="110">
-                            <!-- Shadow text for depth -->
-                            <text aria-hidden="true" x="${(labelWidth / 2) * 10}" y="150" fill="${shadowColor}" fill-opacity=".3" transform="scale(.1)" textLength="${(labelWidth - 12) * 10}">${label}</text>
-                            <!-- Main label text -->
-                            <text x="${(labelWidth / 2) * 10}" y="140" transform="scale(.1)" textLength="${(labelWidth - 12) * 10}">${label}</text>
-                            <!-- Shadow text for depth -->
-                            <text aria-hidden="true" x="${(labelWidth + messageWidth / 2) * 10}" y="150" fill="${shadowColor}" fill-opacity=".3" transform="scale(.1)" textLength="${(messageWidth - 12) * 10}">${message}</text>
-                            <!-- Main message text -->
-                            <text x="${(labelWidth + messageWidth / 2) * 10}" y="140" transform="scale(.1)" textLength="${(messageWidth - 12) * 10}">${message}</text>
-                        </g>
-                    </svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="${totalWidth}" height="20" role="img" aria-label="${label}: ${message}">
+                    <title>${label}: ${message}</title>
+                    <linearGradient id="s" x2="0" y2="100%">
+                      <stop offset="0" stop-color="#bbb" stop-opacity=".1"/>
+                      <stop offset="1" stop-opacity=".1"/>
+                    </linearGradient>
+                    <clipPath id="r"><rect width="${totalWidth}" height="20" rx="3" fill="#fff"/></clipPath>
+                    <g clip-path="url(#r)">
+                      <rect width="${labelWidth}" height="20" fill="${labelBgColor}"/>
+                      <rect x="${labelWidth}" width="${messageWidth}" height="20" fill="${color}"/>
+                      <rect width="${totalWidth}" height="20" fill="url(#s)"/>
+                    </g>
+                    <g fill="${textColor}" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" text-rendering="geometricPrecision" font-size="110">
+                      <text aria-hidden="true" x="${(labelWidth / 2) * 10}" y="150" fill="${shadowColor}" fill-opacity=".3" transform="scale(.1)" textLength="${(labelWidth - 10) * 10}">${label}</text>
+                      <text x="${(labelWidth / 2) * 10}" y="140" transform="scale(.1)" textLength="${(labelWidth - 10) * 10}">${label}</text>
+                      <text aria-hidden="true" x="${(labelWidth + messageWidth / 2) * 10}" y="150" fill="${shadowColor}" fill-opacity=".3" transform="scale(.1)" textLength="${(messageWidth - 10) * 10}">${message}</text>
+                      <text x="${(labelWidth + messageWidth / 2) * 10}" y="140" transform="scale(.1)" textLength="${(messageWidth - 10) * 10}">${message}</text>
+                    </g>
+                  </svg>
                 `;
             }
 
-            let historicalData = { clones: {}, views: {} };
-            let historyFileSha = undefined; // To store SHA of history file if it exists
-
-            // Try to fetch existing historical data
+            // Main execution logic
             try {
-                const { data } = await github.rest.repos.getContent({
-                    owner,
-                    repo,
-                    path: historyFile,
-                    ref: github.context.sha
-                });
-                historicalData = JSON.parse(Buffer.from(data.content, 'base64').toString('utf8'));
-                historyFileSha = data.sha; // Store the SHA
-                console.log('Loaded existing historical data.');
-            } catch (error) {
-                if (error.status === 404) {
-                    console.log('No existing historical data file found. Starting fresh.');
-                } else {
-                    console.error('Error loading historical data:', error);
-                }
-            }
+              // --- 1. Load historical data ---
+              console.log(`Loading historical data from ${historyFile} on branch ${branch}...`);
+              const historyFileState = await getFile(historyFile);
+              let historicalData = { clones: {}, views: {} };
+              if (historyFileState.content) {
+                historicalData = JSON.parse(historyFileState.content);
+                console.log('Successfully loaded existing historical data.');
+              } else {
+                console.log('No historical data file found. A new one will be created.');
+              }
 
-            try {
-                // Fetch clones data (last 14 days)
-                const clonesResponse = await github.rest.repos.getClones({ owner, repo, per: 'day' });
-                const currentClones = clonesResponse.data.clones;
+              // --- 2. Fetch new traffic data ---
+              console.log('Fetching latest traffic data from GitHub API...');
+              const { data: clonesResponse } = await github.rest.repos.getClones({ owner, repo, per: 'day' });
+              const { data: viewsResponse } = await github.rest.repos.getViews({ owner, repo, per: 'day' });
 
-                // Fetch views data (last 14 days)
-                const viewsResponse = await github.rest.repos.getViews({ owner, repo, per: 'day' });
-                const currentViews = viewsResponse.data.views;
+              // --- 3. Update historical data ---
+              console.log('Merging new traffic data with historical data...');
+              clonesResponse.clones.forEach(day => {
+                const date = day.timestamp.split('T')[0];
+                historicalData.clones[date] = { count: day.count, uniques: day.uniques };
+              });
+              viewsResponse.views.forEach(day => {
+                const date = day.timestamp.split('T')[0];
+                historicalData.views[date] = { count: day.count, uniques: day.uniques };
+              });
 
-                // Update historical data with new daily entries
-                currentClones.forEach(day => {
-                    const date = day.timestamp.split('T')[0]; // Get YYYY-MM-DD
-                    historicalData.clones[date] = { count: day.count, uniques: day.uniques };
-                });
-                currentViews.forEach(day => {
-                    const date = day.timestamp.split('T')[0]; // Get YYYY-MM-DD
-                    historicalData.views[date] = { count: day.count, uniques: day.uniques };
-                });
+              // --- 4. Calculate all-time totals ---
+              const allTimeTotalClones = Object.values(historicalData.clones).reduce((sum, day) => sum + day.count, 0);
+              const allTimeUniqueCloners = Object.values(historicalData.clones).reduce((sum, day) => sum + day.uniques, 0);
+              const allTimeTotalViews = Object.values(historicalData.views).reduce((sum, day) => sum + day.count, 0);
+              const allTimeUniqueVisitors = Object.values(historicalData.views).reduce((sum, day) => sum + day.uniques, 0);
 
-                // Calculate all-time totals
-                let allTimeTotalClones = 0;
-                let allTimeUniqueClonersCount = 0; // Sum of daily uniques (approximation)
-                Object.values(historicalData.clones).forEach(day => {
-                    allTimeTotalClones += day.count;
-                    allTimeUniqueClonersCount += day.uniques;
-                });
+              console.log(`All-Time Clones: Total=${allTimeTotalClones}, Unique (sum of daily uniques)=${allTimeUniqueCloners}`);
+              console.log(`All-Time Views: Total=${allTimeTotalViews}, Unique (sum of daily uniques)=${allTimeUniqueVisitors}`);
 
-                let allTimeTotalViews = 0;
-                let allTimeUniqueVisitorsCount = 0; // Sum of daily uniques (approximation)
-                Object.values(historicalData.views).forEach(day => {
-                    allTimeTotalViews += day.count;
-                    allTimeUniqueVisitorsCount += day.uniques;
-                });
+              // --- 5. Generate new badge SVGs ---
+              const clonesBadgeSvg = createBadgeSvg('Clones', `${allTimeTotalClones} (Unique: ${allTimeUniqueCloners})`, '#8FBCBB');
+              const viewsBadgeSvg = createBadgeSvg('Views', `${allTimeTotalViews} (Unique: ${allTimeUniqueVisitors})`, '#88C0D0');
 
-                console.log(`All-Time Clones: Total=${allTimeTotalClones}, Unique=${allTimeUniqueClonersCount}`);
-                console.log(`All-Time Views: Total=${allTimeTotalViews}, Unique=${allTimeUniqueVisitorsCount}`);
+              // --- 6. Commit all files ---
+              console.log('Committing updated files to the repository...');
 
-                // Generate SVG badges with all-time totals
-                const clonesBadgeSvg = createBadgeSvg('Clones', `${allTimeTotalClones} (Unique: ${allTimeUniqueClonersCount})`, '#8FBCBB');
-                const viewsBadgeSvg = createBadgeSvg('Views', `${allTimeTotalViews} (Unique: ${allTimeUniqueVisitorsCount})`, '#88C0D0');
+              // Commit history file
+              const newHistoryContent = JSON.stringify(historicalData, null, 2);
+              await commitFile(historyFile, newHistoryContent, 'feat: Update GitHub traffic history', historyFileState.sha);
+              console.log(`- Committed ${historyFile}`);
 
-                // Commit the updated historical data file
-                const historyContent = JSON.stringify(historicalData, null, 2);
-                await github.rest.repos.createOrUpdateFileContents({
-                    owner,
-                    repo,
-                    path: historyFile,
-                    message: 'feat: Update GitHub traffic history',
-                    content: Buffer.from(historyContent).toString('base64'),
-                    sha: historyFileSha // Use the stored SHA, will be undefined for new file
-                });
+              // Get SHAs for existing badges before committing
+              const clonesBadgeState = await getFile(`${badgeDir}/clones_badge.svg`);
+              const viewsBadgeState = await getFile(`${badgeDir}/views_badge.svg`);
 
-                // Get SHAs for badge files
-                let clonesBadgeSha = undefined;
-                try {
-                    const { data } = await github.rest.repos.getContent({ owner, repo, path: `${badgeDir}/clones_badge.svg`, ref: github.context.sha });
-                    clonesBadgeSha = data.sha;
-                } catch (error) { /* file not found, sha remains undefined */ }
+              // Commit badges
+              await commitFile(`${badgeDir}/clones_badge.svg`, clonesBadgeSvg, 'feat: Update clones traffic badge', clonesBadgeState.sha);
+              console.log(`- Committed ${badgeDir}/clones_badge.svg`);
 
-                let viewsBadgeSha = undefined;
-                try {
-                    const { data } = await github.rest.repos.getContent({ owner, repo, path: `${badgeDir}/views_badge.svg`, ref: github.context.sha });
-                    viewsBadgeSha = data.sha;
-                } catch (error) { /* file not found, sha remains undefined */ }
+              await commitFile(`${badgeDir}/views_badge.svg`, viewsBadgeSvg, 'feat: Update views traffic badge', viewsBadgeState.sha);
+              console.log(`- Committed ${badgeDir}/views_badge.svg`);
 
-
-                // Create or update badge files
-                await github.rest.repos.createOrUpdateFileContents({
-                    owner,
-                    repo,
-                    path: `${badgeDir}/clones_badge.svg`,
-                    message: 'feat: Update clones traffic badge',
-                    content: Buffer.from(clonesBadgeSvg).toString('base64'),
-                    sha: clonesBadgeSha
-                });
-
-                await github.rest.repos.createOrUpdateFileContents({
-                    owner,
-                    repo,
-                    path: `${badgeDir}/views_badge.svg`,
-                    message: 'feat: Update views traffic badge',
-                    content: Buffer.from(viewsBadgeSvg).toString('base64'),
-                    sha: viewsBadgeSha
-                });
-
-                console.log('Traffic badges and history updated successfully!');
+              console.log('✅ Traffic badges and history updated successfully!');
 
             } catch (error) {
-                console.error('Error fetching or generating traffic data:', error);
-                core.setFailed(`Action failed with error: ${error.message}`);
+              console.error('Error during workflow execution:', error);
+              core.setFailed(`Action failed with error: ${error.message}`);
             }
-
-      - name: Commit generated badges and history (if not already committed by github-script)
-        uses: EndBug/add-and-commit@v9
-        with:
-          add: |
-            .github/badges/*.svg
-            .github/traffic_history.json
-          message: "Automated: Update GitHub traffic badges and history"
-          committer_name: GitHub Actions
-          committer_email: actions@github.com
-          github_token: ${{ secrets.GH_TOKEN }}
