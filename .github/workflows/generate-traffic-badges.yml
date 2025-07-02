@@ -4,7 +4,7 @@ name: Generate GitHub Traffic Badges
 
 on:
   schedule:
-    - cron: "0 * * * *" # Runs every hour. Adjust as needed (e.g., '0 0 * * *' for daily)
+    - cron: "0 0 * * *" # Runs daily at midnight UTC to collect new data
   workflow_dispatch: # Allows manual triggering
 
 jobs:
@@ -15,17 +15,20 @@ jobs:
         uses: actions/checkout@v4
         with:
           # This is important for the action to be able to commit changes
-          token: ${{ secrets.GH_TOKEN }} # Use your PAT secret name here
+          # and fetch the existing history.
+          token: ${{ secrets.GH_TOKEN }}
+          fetch-depth: 0 # Fetch all history to read existing traffic_history.json
 
       - name: Fetch and Generate Badges
         id: generate_badges
         uses: actions/github-script@v6
         with:
-          github-token: ${{ secrets.GH_TOKEN }} # Use your PAT secret name here
+          github-token: ${{ secrets.GH_TOKEN }}
           script: |
             const owner = 'chinmay-sawant';
             const repo = 'MotionSaver';
             const badgeDir = '.github/badges'; // Directory to store badges
+            const historyFile = '.github/traffic_history.json'; // File to store historical data
 
             // Function to create an SVG badge with a "Linux type" dark theme
             function createBadgeSvg(label, message, color) {
@@ -33,8 +36,8 @@ jobs:
                 const messageLength = message.length;
 
                 // Adjust width calculation for better fit with different fonts/sizes
-                const labelWidth = labelLength * 7 + 10; // Adjusted for a slightly more compact look
-                const messageWidth = messageLength * 7 + 10; // Adjusted for a slightly more compact look
+                const labelWidth = labelLength * 7 + 12;
+                const messageWidth = messageLength * 7 + 12;
                 const totalWidth = labelWidth + messageWidth;
 
                 // "Linux type" theme colors (inspired by Nord/Dracula/Gruvbox palettes)
@@ -63,41 +66,100 @@ jobs:
                         </g>
                         <g fill="${textColor}" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" text-rendering="geometricPrecision" font-size="110">
                             <!-- Shadow text for depth -->
-                            <text aria-hidden="true" x="${(labelWidth / 2) * 10}" y="150" fill="${shadowColor}" fill-opacity=".3" transform="scale(.1)" textLength="${(labelWidth - 10) * 10}">${label}</text>
+                            <text aria-hidden="true" x="${(labelWidth / 2) * 10}" y="150" fill="${shadowColor}" fill-opacity=".3" transform="scale(.1)" textLength="${(labelWidth - 12) * 10}">${label}</text>
                             <!-- Main label text -->
-                            <text x="${(labelWidth / 2) * 10}" y="140" transform="scale(.1)" textLength="${(labelWidth - 10) * 10}">${label}</text>
+                            <text x="${(labelWidth / 2) * 10}" y="140" transform="scale(.1)" textLength="${(labelWidth - 12) * 10}">${label}</text>
                             <!-- Shadow text for depth -->
-                            <text aria-hidden="true" x="${(labelWidth + messageWidth / 2) * 10}" y="150" fill="${shadowColor}" fill-opacity=".3" transform="scale(.1)" textLength="${(messageWidth - 10) * 10}">${message}</text>
+                            <text aria-hidden="true" x="${(labelWidth + messageWidth / 2) * 10}" y="150" fill="${shadowColor}" fill-opacity=".3" transform="scale(.1)" textLength="${(messageWidth - 12) * 10}">${message}</text>
                             <!-- Main message text -->
-                            <text x="${(labelWidth + messageWidth / 2) * 10}" y="140" transform="scale(.1)" textLength="${(messageWidth - 10) * 10}">${message}</text>
+                            <text x="${(labelWidth + messageWidth / 2) * 10}" y="140" transform="scale(.1)" textLength="${(messageWidth - 12) * 10}">${message}</text>
                         </g>
                     </svg>
                 `;
             }
 
+            let historicalData = { clones: {}, views: {} };
+
+            // Try to fetch existing historical data
             try {
-                // Fetch clones data using the correct method: github.rest.repos.getClones
-                const clonesResponse = await github.rest.repos.getClones({
+                const { data } = await github.rest.repos.getContent({
                     owner,
                     repo,
-                    per: 'day' // Can be 'day' or 'week'
+                    path: historyFile,
+                    ref: github.context.ref // Ensure we read from the current branch
                 });
-                const totalClones = clonesResponse.data.count;
-                const uniqueCloners = clonesResponse.data.uniques;
+                historicalData = JSON.parse(Buffer.from(data.content, 'base64').toString('utf8'));
+                console.log('Loaded existing historical data.');
+            } catch (error) {
+                if (error.status === 404) {
+                    console.log('No existing historical data file found. Starting fresh.');
+                } else {
+                    console.error('Error loading historical data:', error);
+                }
+            }
 
-                // Fetch views data using the correct method: github.rest.repos.getViews
-                const viewsResponse = await github.rest.repos.getViews({
+            try {
+                // Fetch clones data (last 14 days)
+                const clonesResponse = await github.rest.repos.getClones({ owner, repo, per: 'day' });
+                const currentClones = clonesResponse.data.clones;
+
+                // Fetch views data (last 14 days)
+                const viewsResponse = await github.rest.repos.getViews({ owner, repo, per: 'day' });
+                const currentViews = viewsResponse.data.views;
+
+                // Update historical data with new daily entries
+                currentClones.forEach(day => {
+                    const date = day.timestamp.split('T')[0]; // Get YYYY-MM-DD
+                    historicalData.clones[date] = { count: day.count, uniques: day.uniques };
+                });
+                currentViews.forEach(day => {
+                    const date = day.timestamp.split('T')[0]; // Get YYYY-MM-DD
+                    historicalData.views[date] = { count: day.count, uniques: day.uniques };
+                });
+
+                // Calculate all-time totals
+                let allTimeTotalClones = 0;
+                let allTimeUniqueCloners = new Set(); // Use a Set to count unique cloners across all days
+                Object.values(historicalData.clones).forEach(day => {
+                    allTimeTotalClones += day.count;
+                    // Note: Unique cloners cannot be perfectly summed this way across days
+                    // as the same unique cloner might appear on multiple days.
+                    // For a true "all-time unique cloners", GitHub API doesn't provide this.
+                    // We'll sum unique counts per day for now, which is an approximation.
+                    allTimeUniqueCloners.add(...Array(day.uniques).fill(null).map((_,i) => `${day.date}-${i}`)); // Placeholder for unique counting
+                });
+                // A better approach for unique cloners would require a separate API or more complex tracking.
+                // For simplicity, we'll sum the daily unique counts, but acknowledge it's not truly global unique.
+                let allTimeUniqueClonersCount = 0;
+                Object.values(historicalData.clones).forEach(day => {
+                    allTimeUniqueClonersCount += day.uniques;
+                });
+
+
+                let allTimeTotalViews = 0;
+                let allTimeUniqueVisitorsCount = 0;
+                Object.values(historicalData.views).forEach(day => {
+                    allTimeTotalViews += day.count;
+                    allTimeUniqueVisitorsCount += day.uniques;
+                });
+
+                console.log(`All-Time Clones: Total=${allTimeTotalClones}, Unique=${allTimeUniqueClonersCount}`);
+                console.log(`All-Time Views: Total=${allTimeTotalViews}, Unique=${allTimeUniqueVisitorsCount}`);
+
+                // Generate SVG badges with all-time totals
+                const clonesBadgeSvg = createBadgeSvg('Clones', `${allTimeTotalClones} (Unique: ${allTimeUniqueClonersCount})`, '#8FBCBB');
+                const viewsBadgeSvg = createBadgeSvg('Views', `${allTimeTotalViews} (Unique: ${allTimeUniqueVisitorsCount})`, '#88C0D0');
+
+                // Commit the updated historical data file
+                const historyContent = JSON.stringify(historicalData, null, 2);
+                await github.rest.repos.createOrUpdateFileContents({
                     owner,
                     repo,
-                    per: 'day' // Can be 'day' or 'week'
+                    path: historyFile,
+                    message: 'feat: Update GitHub traffic history',
+                    content: Buffer.from(historyContent).toString('base64'),
+                    sha: (await github.rest.repos.getContent({ owner, repo, path: historyFile }).catch(() => ({}))).data?.sha
                 });
-                const totalViews = viewsResponse.data.count;
-                const uniqueVisitors = viewsResponse.data.uniques;
-
-                // Generate SVG badges with theme-appropriate colors
-                // Using a slightly desaturated green for clones and blue for views
-                const clonesBadgeSvg = createBadgeSvg('Clones', `${totalClones} (Unique: ${uniqueCloners})`, '#8FBCBB'); // Nord's `nord7` (greenish-blue)
-                const viewsBadgeSvg = createBadgeSvg('Views', `${totalViews} (Unique: ${uniqueVisitors})`, '#88C0D0'); // Nord's `nord8` (blue)
 
                 // Create or update badge files
                 await github.rest.repos.createOrUpdateFileContents({
@@ -118,21 +180,20 @@ jobs:
                     sha: (await github.rest.repos.getContent({ owner, repo, path: `${badgeDir}/views_badge.svg` }).catch(() => ({}))).data?.sha
                 });
 
-                console.log('Traffic badges generated and committed successfully!');
+                console.log('Traffic badges and history updated successfully!');
 
             } catch (error) {
                 console.error('Error fetching or generating traffic data:', error);
                 core.setFailed(`Action failed with error: ${error.message}`);
             }
 
-      - name: Commit generated badges (if not already committed by github-script)
-        # This step is a fallback/redundant if createOrUpdateFileContents works correctly,
-        # but useful for ensuring changes are pushed.
+      - name: Commit generated badges and history (if not already committed by github-script)
         uses: EndBug/add-and-commit@v9
         with:
-          add: ".github/badges/*.svg"
-          message: "Automated: Update GitHub traffic badges"
+          add: |
+            .github/badges/*.svg
+            .github/traffic_history.json
+          message: "Automated: Update GitHub traffic badges and history"
           committer_name: GitHub Actions
           committer_email: actions@github.com
-          # Corrected: Use 'github_token' instead of 'token' for EndBug/add-and-commit@v9
           github_token: ${{ secrets.GH_TOKEN }}
