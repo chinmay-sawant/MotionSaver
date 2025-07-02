@@ -27,16 +27,21 @@ jobs:
             const repo = 'MotionSaver';
             const badgeDir = '.github/badges'; // Directory to store badges
 
-            // Function to create an SVG badge with dark theme colors
+            // Function to create an SVG badge with a "Linux type" dark theme
             function createBadgeSvg(label, message, color) {
-                const labelWidth = label.length * 8 + 10; // Approximate width for label
-                const messageWidth = message.length * 8 + 10; // Approximate width for message
+                const labelLength = label.length;
+                const messageLength = message.length;
+
+                // Adjust width calculation for better fit with different fonts/sizes
+                const labelWidth = labelLength * 7 + 10; // Adjusted for a slightly more compact look
+                const messageWidth = messageLength * 7 + 10; // Adjusted for a slightly more compact look
                 const totalWidth = labelWidth + messageWidth;
 
-                // Dark theme colors
-                const darkBackgroundColor = '#282a36'; // A common dark theme background (e.g., Dracula theme background)
-                const labelSectionColor = '#44475a'; // Slightly lighter dark for the label section
-                const textColor = '#f8f8f2'; // Light text color for contrast
+                // "Linux type" theme colors (inspired by Nord/Dracula/Gruvbox palettes)
+                const primaryBgColor = '#3B4252'; // Dark gray-blue (Nord's `nord3`)
+                const labelBgColor = '#4C566A';   // Slightly lighter gray-blue (Nord's `nord2`)
+                const textColor = '#ECEFF4';      // Light almost-white (Nord's `nord6`)
+                const shadowColor = '#2E3440';    // Darker shadow (Nord's `nord0`)
 
                 return `
                     <svg xmlns="http://www.w3.org/2000/svg" width="${totalWidth}" height="20" role="img" aria-label="${label}: ${message}">
@@ -47,10 +52,10 @@ jobs:
                         </linearGradient>
                         <clipPath id="r"><rect width="${totalWidth}" height="20" rx="3" fill="#fff"/></clipPath>
                         <g clip-path="url(#r)">
-                            <!-- Overall dark background for the badge -->
-                            <rect width="${totalWidth}" height="20" fill="${darkBackgroundColor}"/>
+                            <!-- Overall background for the badge -->
+                            <rect width="${totalWidth}" height="20" fill="${primaryBgColor}"/>
                             <!-- Background for the label section -->
-                            <rect width="${labelWidth}" height="20" fill="${labelSectionColor}"/>
+                            <rect width="${labelWidth}" height="20" fill="${labelBgColor}"/>
                             <!-- Background for the message section (uses dynamic color) -->
                             <rect x="${labelWidth}" width="${messageWidth}" height="20" fill="${color}"/>
                             <!-- Gradient overlay for subtle effect -->
@@ -58,13 +63,13 @@ jobs:
                         </g>
                         <g fill="${textColor}" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" text-rendering="geometricPrecision" font-size="110">
                             <!-- Shadow text for depth -->
-                            <text aria-hidden="true" x="${(labelWidth / 2) * 10}" y="150" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="${(label.length * 8 + 10) * 10}">${label}</text>
+                            <text aria-hidden="true" x="${(labelWidth / 2) * 10}" y="150" fill="${shadowColor}" fill-opacity=".3" transform="scale(.1)" textLength="${(labelWidth - 10) * 10}">${label}</text>
                             <!-- Main label text -->
-                            <text x="${(labelWidth / 2) * 10}" y="140" transform="scale(.1)" textLength="${(label.length * 8 + 10) * 10}">${label}</text>
+                            <text x="${(labelWidth / 2) * 10}" y="140" transform="scale(.1)" textLength="${(labelWidth - 10) * 10}">${label}</text>
                             <!-- Shadow text for depth -->
-                            <text aria-hidden="true" x="${(labelWidth + messageWidth / 2) * 10}" y="150" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="${(message.length * 8 + 10) * 10}">${message}</text>
+                            <text aria-hidden="true" x="${(labelWidth + messageWidth / 2) * 10}" y="150" fill="${shadowColor}" fill-opacity=".3" transform="scale(.1)" textLength="${(messageWidth - 10) * 10}">${message}</text>
                             <!-- Main message text -->
-                            <text x="${(labelWidth + messageWidth / 2) * 10}" y="140" transform="scale(.1)" textLength="${(message.length * 8 + 10) * 10}">${message}</text>
+                            <text x="${(labelWidth + messageWidth / 2) * 10}" y="140" transform="scale(.1)" textLength="${(messageWidth - 10) * 10}">${message}</text>
                         </g>
                     </svg>
                 `;
@@ -89,9 +94,10 @@ jobs:
                 const totalViews = viewsResponse.data.count;
                 const uniqueVisitors = viewsResponse.data.uniques;
 
-                // Generate SVG badges
-                const clonesBadgeSvg = createBadgeSvg('Clones', `${totalClones} (Unique: ${uniqueCloners})`, '4c1'); // Green color for clones
-                const viewsBadgeSvg = createBadgeSvg('Views', `${totalViews} (Unique: ${uniqueVisitors})`, 'blue'); // Blue color for views
+                // Generate SVG badges with theme-appropriate colors
+                // Using a slightly desaturated green for clones and blue for views
+                const clonesBadgeSvg = createBadgeSvg('Clones', `${totalClones} (Unique: ${uniqueCloners})`, '#8FBCBB'); // Nord's `nord7` (greenish-blue)
+                const viewsBadgeSvg = createBadgeSvg('Views', `${totalViews} (Unique: ${uniqueVisitors})`, '#88C0D0'); // Nord's `nord8` (blue)
 
                 // Create or update badge files
                 await github.rest.repos.createOrUpdateFileContents({
