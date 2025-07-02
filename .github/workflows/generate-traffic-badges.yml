@@ -27,14 +27,16 @@ jobs:
             const repo = 'MotionSaver';
             const badgeDir = '.github/badges'; // Directory to store badges
 
-            // Function to create an SVG badge
+            // Function to create an SVG badge with dark theme colors
             function createBadgeSvg(label, message, color) {
-                // Simple SVG structure for a badge
                 const labelWidth = label.length * 8 + 10; // Approximate width for label
                 const messageWidth = message.length * 8 + 10; // Approximate width for message
                 const totalWidth = labelWidth + messageWidth;
-                const labelX = labelWidth / 2;
-                const messageX = labelWidth + messageWidth / 2;
+
+                // Dark theme colors
+                const darkBackgroundColor = '#282a36'; // A common dark theme background (e.g., Dracula theme background)
+                const labelSectionColor = '#44475a'; // Slightly lighter dark for the label section
+                const textColor = '#f8f8f2'; // Light text color for contrast
 
                 return `
                     <svg xmlns="http://www.w3.org/2000/svg" width="${totalWidth}" height="20" role="img" aria-label="${label}: ${message}">
@@ -45,15 +47,24 @@ jobs:
                         </linearGradient>
                         <clipPath id="r"><rect width="${totalWidth}" height="20" rx="3" fill="#fff"/></clipPath>
                         <g clip-path="url(#r)">
-                            <rect width="${labelWidth}" height="20" fill="#555"/>
+                            <!-- Overall dark background for the badge -->
+                            <rect width="${totalWidth}" height="20" fill="${darkBackgroundColor}"/>
+                            <!-- Background for the label section -->
+                            <rect width="${labelWidth}" height="20" fill="${labelSectionColor}"/>
+                            <!-- Background for the message section (uses dynamic color) -->
                             <rect x="${labelWidth}" width="${messageWidth}" height="20" fill="${color}"/>
+                            <!-- Gradient overlay for subtle effect -->
                             <rect width="${totalWidth}" height="20" fill="url(#s)"/>
                         </g>
-                        <g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" text-rendering="geometricPrecision" font-size="110">
-                            <text aria-hidden="true" x="${labelX * 10}" y="150" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="${(label.length * 8 + 10) * 10}">${label}</text>
-                            <text x="${labelX * 10}" y="140" transform="scale(.1)" textLength="${(label.length * 8 + 10) * 10}">${label}</text>
-                            <text aria-hidden="true" x="${messageX * 10}" y="150" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="${(message.length * 8 + 10) * 10}">${message}</text>
-                            <text x="${messageX * 10}" y="140" transform="scale(.1)" textLength="${(message.length * 8 + 10) * 10}">${message}</text>
+                        <g fill="${textColor}" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" text-rendering="geometricPrecision" font-size="110">
+                            <!-- Shadow text for depth -->
+                            <text aria-hidden="true" x="${(labelWidth / 2) * 10}" y="150" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="${(label.length * 8 + 10) * 10}">${label}</text>
+                            <!-- Main label text -->
+                            <text x="${(labelWidth / 2) * 10}" y="140" transform="scale(.1)" textLength="${(label.length * 8 + 10) * 10}">${label}</text>
+                            <!-- Shadow text for depth -->
+                            <text aria-hidden="true" x="${(labelWidth + messageWidth / 2) * 10}" y="150" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="${(message.length * 8 + 10) * 10}">${message}</text>
+                            <!-- Main message text -->
+                            <text x="${(labelWidth + messageWidth / 2) * 10}" y="140" transform="scale(.1)" textLength="${(message.length * 8 + 10) * 10}">${message}</text>
                         </g>
                     </svg>
                 `;
@@ -79,8 +90,8 @@ jobs:
                 const uniqueVisitors = viewsResponse.data.uniques;
 
                 // Generate SVG badges
-                const clonesBadgeSvg = createBadgeSvg('Clones', `${totalClones} (Unique: ${uniqueCloners})`, '4c1'); // Green color
-                const viewsBadgeSvg = createBadgeSvg('Views', `${totalViews} (Unique: ${uniqueVisitors})`, 'blue'); // Blue color
+                const clonesBadgeSvg = createBadgeSvg('Clones', `${totalClones} (Unique: ${uniqueCloners})`, '4c1'); // Green color for clones
+                const viewsBadgeSvg = createBadgeSvg('Views', `${totalViews} (Unique: ${uniqueVisitors})`, 'blue'); // Blue color for views
 
                 // Create or update badge files
                 await github.rest.repos.createOrUpdateFileContents({
