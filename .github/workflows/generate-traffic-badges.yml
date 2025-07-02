@@ -79,6 +79,7 @@ jobs:
             }
 
             let historicalData = { clones: {}, views: {} };
+            let historyFileSha = undefined; // To store SHA of history file if it exists
 
             // Try to fetch existing historical data
             try {
@@ -86,10 +87,10 @@ jobs:
                     owner,
                     repo,
                     path: historyFile,
-                    // CORRECTED: Use github.context.sha for a reliable reference to the current commit
                     ref: github.context.sha
                 });
                 historicalData = JSON.parse(Buffer.from(data.content, 'base64').toString('utf8'));
+                historyFileSha = data.sha; // Store the SHA
                 console.log('Loaded existing historical data.');
             } catch (error) {
                 if (error.status === 404) {
@@ -148,9 +149,22 @@ jobs:
                     path: historyFile,
                     message: 'feat: Update GitHub traffic history',
                     content: Buffer.from(historyContent).toString('base64'),
-                    // Use the SHA of the existing file if it exists, otherwise omit for creation
-                    sha: (await github.rest.repos.getContent({ owner, repo, path: historyFile, ref: github.context.sha }).catch(() => ({}))).data?.sha
+                    sha: historyFileSha // Use the stored SHA, will be undefined for new file
                 });
+
+                // Get SHAs for badge files
+                let clonesBadgeSha = undefined;
+                try {
+                    const { data } = await github.rest.repos.getContent({ owner, repo, path: `${badgeDir}/clones_badge.svg`, ref: github.context.sha });
+                    clonesBadgeSha = data.sha;
+                } catch (error) { /* file not found, sha remains undefined */ }
+
+                let viewsBadgeSha = undefined;
+                try {
+                    const { data } = await github.rest.repos.getContent({ owner, repo, path: `${badgeDir}/views_badge.svg`, ref: github.context.sha });
+                    viewsBadgeSha = data.sha;
+                } catch (error) { /* file not found, sha remains undefined */ }
+
 
                 // Create or update badge files
                 await github.rest.repos.createOrUpdateFileContents({
@@ -159,7 +173,7 @@ jobs:
                     path: `${badgeDir}/clones_badge.svg`,
                     message: 'feat: Update clones traffic badge',
                     content: Buffer.from(clonesBadgeSvg).toString('base64'),
-                    sha: (await github.rest.repos.getContent({ owner, repo, path: `${badgeDir}/clones_badge.svg`, ref: github.context.sha }).catch(() => ({}))).data?.sha
+                    sha: clonesBadgeSha
                 });
 
                 await github.rest.repos.createOrUpdateFileContents({
@@ -168,7 +182,7 @@ jobs:
                     path: `${badgeDir}/views_badge.svg`,
                     message: 'feat: Update views traffic badge',
                     content: Buffer.from(viewsBadgeSvg).toString('base64'),
-                    sha: (await github.rest.repos.getContent({ owner, repo, path: `${badgeDir}/views_badge.svg`, ref: github.context.sha }).catch(() => ({}))).data?.sha
+                    sha: viewsBadgeSha
                 });
 
                 console.log('Traffic badges and history updated successfully!');
