@@ -2,6 +2,17 @@
 
 Transform your dull desktop into a lively and dynamic space! MotionSaver brings your screen to life with video wallpapers when you're away, combining the elegance of macOS live wallpapers with powerful customization for Windows.
 
+
+## Support & Contribute ⭐
+
+If you like this application, please consider [starring the GitHub repository ⭐](https://github.com/chinmay-sawant/MotionSaver) to show your support!
+
+- **🐞 Found an issue?**  
+    Please [log it under Issues](https://github.com/chinmay-sawant/MotionSaver/issues) so it can be tracked and resolved.
+
+- **👩‍💻 Want to contribute?**  
+    If you're a developer, feel free to assign issues to yourself—just leave a comment 📝 indicating when you expect to complete it. Contributions of all kinds are welcome!
+
 ## Demo 🎬
 
 Check out MotionSaver in action:
