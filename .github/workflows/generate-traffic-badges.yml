@@ -60,8 +60,8 @@ jobs:
             }
 
             try {
-                // Fetch clones data
-                const clonesResponse = await github.rest.repos.getClonesActivity({
+                // Fetch clones data using the correct method: github.rest.repos.getClones
+                const clonesResponse = await github.rest.repos.getClones({
                     owner,
                     repo,
                     per: 'day' // Can be 'day' or 'week'
@@ -69,8 +69,8 @@ jobs:
                 const totalClones = clonesResponse.data.count;
                 const uniqueCloners = clonesResponse.data.uniques;
 
-                // Fetch views data
-                const viewsResponse = await github.rest.repos.getViewsActivity({
+                // Fetch views data using the correct method: github.rest.repos.getViews
+                const viewsResponse = await github.rest.repos.getViews({
                     owner,
                     repo,
                     per: 'day' // Can be 'day' or 'week'
