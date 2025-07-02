@@ -1,30 +1,30 @@
 
-        <svg xmlns="http://www.w3.org/2000/svg" width="204" height="20" role="img" aria-label="Views: 2291 (Unique: 701)">
-            <title>Views: 2291 (Unique: 701)</title>
+        <svg xmlns="http://www.w3.org/2000/svg" width="181" height="20" role="img" aria-label="Views: 2132 (Unique: 679)">
+            <title>Views: 2132 (Unique: 679)</title>
             <linearGradient id="s" x2="0" y2="100%">
                 <stop offset="0" stop-color="#bbb" stop-opacity=".1"/>
                 <stop offset="1" stop-opacity=".1"/>
             </linearGradient>
-            <clipPath id="r"><rect width="204" height="20" rx="3" fill="#fff"/></clipPath>
+            <clipPath id="r"><rect width="181" height="20" rx="3" fill="#fff"/></clipPath>
             <g clip-path="url(#r)">
-                <!-- Overall dark background for the badge -->
-                <rect width="204" height="20" fill="#282a36"/>
+                <!-- Overall background for the badge -->
+                <rect width="181" height="20" fill="#3B4252"/>
                 <!-- Background for the label section -->
-                <rect width="50" height="20" fill="#44475a"/>
+                <rect width="45" height="20" fill="#4C566A"/>
                 <!-- Background for the message section (uses dynamic color) -->
-                <rect x="50" width="154" height="20" fill="blue"/>
+                <rect x="45" width="136" height="20" fill="#88C0D0"/>
                 <!-- Gradient overlay for subtle effect -->
-                <rect width="204" height="20" fill="url(#s)"/>
+                <rect width="181" height="20" fill="url(#s)"/>
             </g>
-            <g fill="#f8f8f2" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" text-rendering="geometricPrecision" font-size="110">
+            <g fill="#ECEFF4" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" text-rendering="geometricPrecision" font-size="110">
                 <!-- Shadow text for depth -->
-                <text aria-hidden="true" x="250" y="150" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="500">Views</text>
+                <text aria-hidden="true" x="225" y="150" fill="#2E3440" fill-opacity=".3" transform="scale(.1)" textLength="350">Views</text>
                 <!-- Main label text -->
-                <text x="250" y="140" transform="scale(.1)" textLength="500">Views</text>
+                <text x="225" y="140" transform="scale(.1)" textLength="350">Views</text>
                 <!-- Shadow text for depth -->
-                <text aria-hidden="true" x="1270" y="150" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="1540">2291 (Unique: 701)</text>
+                <text aria-hidden="true" x="1130" y="150" fill="#2E3440" fill-opacity=".3" transform="scale(.1)" textLength="1260">2132 (Unique: 679)</text>
                 <!-- Main message text -->
-                <text x="1270" y="140" transform="scale(.1)" textLength="1540">2291 (Unique: 701)</text>
+                <text x="1130" y="140" transform="scale(.1)" textLength="1260">2132 (Unique: 679)</text>
             </g>
         </svg>
     
