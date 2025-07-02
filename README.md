@@ -1,8 +1,6 @@
 ### Repository Traffic Stats
 
-![GitHub Clones](https://github.com/chinmay-sawant/MotionSaver/blob/master/.github/badges/clones_badge.svg)
-
-![GitHub Views](https://github.com/chinmay-sawant/MotionSaver/blob/master/.github/badges/views_badge.svg)
+![GitHub Clones](https://github.com/chinmay-sawant/MotionSaver/blob/master/.github/badges/clones_badge.svg)&nbsp;&nbsp;![GitHub Views](https://github.com/chinmay-sawant/MotionSaver/blob/master/.github/badges/views_badge.svg)
 
 # MotionSaver: Your Dynamic Video Screensaver 🚀
 
