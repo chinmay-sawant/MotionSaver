@@ -134,5 +134,5 @@ jobs:
           message: "Automated: Update GitHub traffic badges"
           committer_name: GitHub Actions
           committer_email: actions@github.com
-          # Use the GITHUB_TOKEN provided by the workflow, which has write access
-          token: ${{ secrets.GH_TOKEN }}
+          # Corrected: Use 'github_token' instead of 'token' for EndBug/add-and-commit@v9
+          github_token: ${{ secrets.GH_TOKEN }}
