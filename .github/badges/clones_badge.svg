@@ -7,14 +7,23 @@
             </linearGradient>
             <clipPath id="r"><rect width="188" height="20" rx="3" fill="#fff"/></clipPath>
             <g clip-path="url(#r)">
-                <rect width="58" height="20" fill="#555"/>
+                <!-- Overall dark background for the badge -->
+                <rect width="188" height="20" fill="#282a36"/>
+                <!-- Background for the label section -->
+                <rect width="58" height="20" fill="#44475a"/>
+                <!-- Background for the message section (uses dynamic color) -->
                 <rect x="58" width="130" height="20" fill="4c1"/>
+                <!-- Gradient overlay for subtle effect -->
                 <rect width="188" height="20" fill="url(#s)"/>
             </g>
-            <g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" text-rendering="geometricPrecision" font-size="110">
+            <g fill="#f8f8f2" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" text-rendering="geometricPrecision" font-size="110">
+                <!-- Shadow text for depth -->
                 <text aria-hidden="true" x="290" y="150" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="580">Clones</text>
+                <!-- Main label text -->
                 <text x="290" y="140" transform="scale(.1)" textLength="580">Clones</text>
+                <!-- Shadow text for depth -->
                 <text aria-hidden="true" x="1230" y="150" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="1300">60 (Unique: 49)</text>
+                <!-- Main message text -->
                 <text x="1230" y="140" transform="scale(.1)" textLength="1300">60 (Unique: 49)</text>
             </g>
         </svg>
