@@ -1,6 +1,6 @@
 
-        <svg xmlns="http://www.w3.org/2000/svg" width="167" height="20" role="img" aria-label="Clones: 60 (Unique: 49)">
-            <title>Clones: 60 (Unique: 49)</title>
+        <svg xmlns="http://www.w3.org/2000/svg" width="167" height="20" role="img" aria-label="Clones: 62 (Unique: 50)">
+            <title>Clones: 62 (Unique: 50)</title>
             <linearGradient id="s" x2="0" y2="100%">
                 <stop offset="0" stop-color="#bbb" stop-opacity=".1"/>
                 <stop offset="1" stop-opacity=".1"/>
@@ -22,9 +22,9 @@
                 <!-- Main label text -->
                 <text x="260" y="140" transform="scale(.1)" textLength="420">Clones</text>
                 <!-- Shadow text for depth -->
-                <text aria-hidden="true" x="1095" y="150" fill="#2E3440" fill-opacity=".3" transform="scale(.1)" textLength="1050">60 (Unique: 49)</text>
+                <text aria-hidden="true" x="1095" y="150" fill="#2E3440" fill-opacity=".3" transform="scale(.1)" textLength="1050">62 (Unique: 50)</text>
                 <!-- Main message text -->
-                <text x="1095" y="140" transform="scale(.1)" textLength="1050">60 (Unique: 49)</text>
+                <text x="1095" y="140" transform="scale(.1)" textLength="1050">62 (Unique: 50)</text>
             </g>
         </svg>
     
