@@ -1,0 +1,121 @@
+# .github/workflows/generate-traffic-badges.yml
+
+name: Generate GitHub Traffic Badges
+
+on:
+  schedule:
+    - cron: "0 * * * *" # Runs every hour. Adjust as needed (e.g., '0 0 * * *' for daily)
+  workflow_dispatch: # Allows manual triggering
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          # This is important for the action to be able to commit changes
+          token: ${{ secrets.GH_TOKEN }} # Use your PAT secret name here
+
+      - name: Fetch and Generate Badges
+        id: generate_badges
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GH_TOKEN }} # Use your PAT secret name here
+          script: |
+            const owner = 'chinmay-sawant';
+            const repo = 'MotionSaver';
+            const badgeDir = '.github/badges'; // Directory to store badges
+
+            // Function to create an SVG badge
+            function createBadgeSvg(label, message, color) {
+                // Simple SVG structure for a badge
+                const labelWidth = label.length * 8 + 10; // Approximate width for label
+                const messageWidth = message.length * 8 + 10; // Approximate width for message
+                const totalWidth = labelWidth + messageWidth;
+                const labelX = labelWidth / 2;
+                const messageX = labelWidth + messageWidth / 2;
+
+                return `
+                    <svg xmlns="http://www.w3.org/2000/svg" width="${totalWidth}" height="20" role="img" aria-label="${label}: ${message}">
+                        <title>${label}: ${message}</title>
+                        <linearGradient id="s" x2="0" y2="100%">
+                            <stop offset="0" stop-color="#bbb" stop-opacity=".1"/>
+                            <stop offset="1" stop-opacity=".1"/>
+                        </linearGradient>
+                        <clipPath id="r"><rect width="${totalWidth}" height="20" rx="3" fill="#fff"/></clipPath>
+                        <g clip-path="url(#r)">
+                            <rect width="${labelWidth}" height="20" fill="#555"/>
+                            <rect x="${labelWidth}" width="${messageWidth}" height="20" fill="${color}"/>
+                            <rect width="${totalWidth}" height="20" fill="url(#s)"/>
+                        </g>
+                        <g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" text-rendering="geometricPrecision" font-size="110">
+                            <text aria-hidden="true" x="${labelX * 10}" y="150" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="${(label.length * 8 + 10) * 10}">${label}</text>
+                            <text x="${labelX * 10}" y="140" transform="scale(.1)" textLength="${(label.length * 8 + 10) * 10}">${label}</text>
+                            <text aria-hidden="true" x="${messageX * 10}" y="150" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="${(message.length * 8 + 10) * 10}">${message}</text>
+                            <text x="${messageX * 10}" y="140" transform="scale(.1)" textLength="${(message.length * 8 + 10) * 10}">${message}</text>
+                        </g>
+                    </svg>
+                `;
+            }
+
+            try {
+                // Fetch clones data
+                const clonesResponse = await github.rest.repos.getClonesActivity({
+                    owner,
+                    repo,
+                    per: 'day' // Can be 'day' or 'week'
+                });
+                const totalClones = clonesResponse.data.count;
+                const uniqueCloners = clonesResponse.data.uniques;
+
+                // Fetch views data
+                const viewsResponse = await github.rest.repos.getViewsActivity({
+                    owner,
+                    repo,
+                    per: 'day' // Can be 'day' or 'week'
+                });
+                const totalViews = viewsResponse.data.count;
+                const uniqueVisitors = viewsResponse.data.uniques;
+
+                // Generate SVG badges
+                const clonesBadgeSvg = createBadgeSvg('Clones', `${totalClones} (Unique: ${uniqueCloners})`, '4c1'); // Green color
+                const viewsBadgeSvg = createBadgeSvg('Views', `${totalViews} (Unique: ${uniqueVisitors})`, 'blue'); // Blue color
+
+                // Create or update badge files
+                await github.rest.repos.createOrUpdateFileContents({
+                    owner,
+                    repo,
+                    path: `${badgeDir}/clones_badge.svg`,
+                    message: 'feat: Update clones traffic badge',
+                    content: Buffer.from(clonesBadgeSvg).toString('base64'),
+                    sha: (await github.rest.repos.getContent({ owner, repo, path: `${badgeDir}/clones_badge.svg` }).catch(() => ({}))).data?.sha
+                });
+
+                await github.rest.repos.createOrUpdateFileContents({
+                    owner,
+                    repo,
+                    path: `${badgeDir}/views_badge.svg`,
+                    message: 'feat: Update views traffic badge',
+                    content: Buffer.from(viewsBadgeSvg).toString('base64'),
+                    sha: (await github.rest.repos.getContent({ owner, repo, path: `${badgeDir}/views_badge.svg` }).catch(() => ({}))).data?.sha
+                });
+
+                console.log('Traffic badges generated and committed successfully!');
+
+            } catch (error) {
+                console.error('Error fetching or generating traffic data:', error);
+                core.setFailed(`Action failed with error: ${error.message}`);
+            }
+
+      - name: Commit generated badges (if not already committed by github-script)
+        # This step is a fallback/redundant if createOrUpdateFileContents works correctly,
+        # but useful for ensuring changes are pushed.
+        uses: EndBug/add-and-commit@v9
+        with:
+          add: ".github/badges/*.svg"
+          message: "Automated: Update GitHub traffic badges"
+          committer_name: GitHub Actions
+          committer_email: actions@github.com
+          # Use the GITHUB_TOKEN provided by the workflow, which has write access
+          token: ${{ secrets.GH_TOKEN }}
