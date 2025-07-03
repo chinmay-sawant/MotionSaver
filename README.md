@@ -131,3 +131,33 @@ If you have any issues, want to report bugs, or would like to leave feedback, pl
 - **Shortcut Bypass:** Certain Windows shortcuts (e.g., `Alt+Tab`, `Win+D`) may still exit or minimize the screensaver, as noted in the security warning above.
 
 **Tip:** For the best experience, start the background service using `MotionSaver.bat` and use `Win + S` to activate the screensaver. Be aware of the current limitations with system shortcuts.
+
+
+## Troubleshooting Common Issues 🛠️
+
+### `pip` Not Found
+
+If you see an error like `'pip' is not recognized as an internal or external command`:
+
+- Make sure Python is installed. You can check by running `python --version` in your terminal.
+- If Python is installed but `pip` is missing, try:
+    - On Windows: Run `python -m ensurepip --upgrade` or `python -m pip install --upgrade pip`.
+    - Add Python and the `Scripts` folder to your system `PATH` environment variable.
+- Restart your terminal after making changes.
+
+### `ModuleNotFoundError`
+
+If you get an error such as `ModuleNotFoundError: No module named 'xyz'`:
+
+- Ensure all dependencies are installed:  
+  ```bash
+  pip install -r requirements.txt
+  ```
+- If the error persists, check that you are using the correct Python environment (especially if you use virtual environments).
+- You can install missing modules individually:  
+  ```bash
+  pip install module_name
+  ```
+- If you have multiple versions of Python, try using `python -m pip install ...` to ensure you are installing to the right interpreter.
+
+If you continue to have issues, please open an [issue on GitHub](https://github.com/chinmay-sawant/MotionSaver/issues) with details.
