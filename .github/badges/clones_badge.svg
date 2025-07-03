@@ -1,30 +1,21 @@
 
-        <svg xmlns="http://www.w3.org/2000/svg" width="171" height="20" role="img" aria-label="Clones: 62 (Unique: 52)">
-            <title>Clones: 62 (Unique: 52)</title>
-            <linearGradient id="s" x2="0" y2="100%">
-                <stop offset="0" stop-color="#bbb" stop-opacity=".1"/>
-                <stop offset="1" stop-opacity=".1"/>
-            </linearGradient>
-            <clipPath id="r"><rect width="171" height="20" rx="3" fill="#fff"/></clipPath>
-            <g clip-path="url(#r)">
-                <!-- Overall background for the badge -->
-                <rect width="171" height="20" fill="#3B4252"/>
-                <!-- Background for the label section -->
-                <rect width="54" height="20" fill="#4C566A"/>
-                <!-- Background for the message section (uses dynamic color) -->
-                <rect x="54" width="117" height="20" fill="#8FBCBB"/>
-                <!-- Gradient overlay for subtle effect -->
-                <rect width="171" height="20" fill="url(#s)"/>
-            </g>
-            <g fill="#ECEFF4" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" text-rendering="geometricPrecision" font-size="110">
-                <!-- Shadow text for depth -->
-                <text aria-hidden="true" x="270" y="150" fill="#2E3440" fill-opacity=".3" transform="scale(.1)" textLength="420">Clones</text>
-                <!-- Main label text -->
-                <text x="270" y="140" transform="scale(.1)" textLength="420">Clones</text>
-                <!-- Shadow text for depth -->
-                <text aria-hidden="true" x="1125" y="150" fill="#2E3440" fill-opacity=".3" transform="scale(.1)" textLength="1050">62 (Unique: 52)</text>
-                <!-- Main message text -->
-                <text x="1125" y="140" transform="scale(.1)" textLength="1050">62 (Unique: 52)</text>
-            </g>
-        </svg>
+      <svg xmlns="http://www.w3.org/2000/svg" width="193.5" height="20" role="img" aria-label="Clones: 140 (Unique: 104)">
+        <title>Clones: 140 (Unique: 104)</title>
+        <linearGradient id="s" x2="0" y2="100%">
+          <stop offset="0" stop-color="#bbb" stop-opacity=".1"/>
+          <stop offset="1" stop-opacity=".1"/>
+        </linearGradient>
+        <clipPath id="r"><rect width="193.5" height="20" rx="3" fill="#fff"/></clipPath>
+        <g clip-path="url(#r)">
+          <rect width="54" height="20" fill="#4C566A"/>
+          <rect x="54" width="139.5" height="20" fill="#8FBCBB"/>
+          <rect width="193.5" height="20" fill="url(#s)"/>
+        </g>
+        <g fill="#ECEFF4" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" text-rendering="geometricPrecision" font-size="110">
+          <text aria-hidden="true" x="270" y="150" fill="#2E3440" fill-opacity=".3" transform="scale(.1)" textLength="440">Clones</text>
+          <text x="270" y="140" transform="scale(.1)" textLength="440">Clones</text>
+          <text aria-hidden="true" x="1237.5" y="150" fill="#2E3440" fill-opacity=".3" transform="scale(.1)" textLength="1295">140 (Unique: 104)</text>
+          <text x="1237.5" y="140" transform="scale(.1)" textLength="1295">140 (Unique: 104)</text>
+        </g>
+      </svg>
     
