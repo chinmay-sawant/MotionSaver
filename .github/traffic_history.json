@@ -37,8 +37,8 @@
       "uniques": 66
     },
     "2025-07-03": {
-      "count": 19,
-      "uniques": 15
+      "count": 21,
+      "uniques": 16
     }
   },
   "views": {
@@ -99,8 +99,8 @@
       "uniques": 574
     },
     "2025-07-03": {
-      "count": 255,
-      "uniques": 53
+      "count": 316,
+      "uniques": 66
     }
   }
 }
