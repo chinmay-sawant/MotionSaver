@@ -127,12 +127,11 @@ jobs:
               const historyFileState = await getFile(historyFile);
               let historicalData = { clones: {}, views: {}, releases: {} };
               if (historyFileState.content) {
-                historicalData = JSON.parse(historyFileState.content);
-                // Ensure releases object exists for backward compatibility
-                if (!historicalData.releases) {
-                    historicalData.releases = {};
-                }
-                console.log('Successfully loaded existing historical data.');
+                const loadedData = JSON.parse(historyFileState.content);
+                historicalData.clones = loadedData.clones || {};
+                historicalData.views = loadedData.views || {};
+                // Releases data will be fully replaced by the new fetch.
+                console.log('Successfully loaded existing historical data for clones and views.');
               } else {
                 console.log('No historical data file found. A new one will be created.');
               }
@@ -145,10 +144,23 @@ jobs:
               console.log('Fetching release download counts...');
               const releases = await github.paginate(github.rest.repos.listReleases, { owner, repo });
               let totalDownloads = 0;
+              const releasesData = {};
+
               for (const release of releases) {
+                let releaseTotal = 0;
+                const assetsData = {};
                 for (const asset of release.assets) {
-                  totalDownloads += asset.download_count;
+                  releaseTotal += asset.download_count;
+                  assetsData[asset.name] = asset.download_count;
                 }
+                
+                if (release.tag_name) {
+                    releasesData[release.tag_name] = {
+                        total_downloads: releaseTotal,
+                        assets: assetsData
+                    };
+                }
+                totalDownloads += releaseTotal;
               }
 
               // --- 3. Update historical data ---
@@ -161,8 +173,11 @@ jobs:
                 const date = day.timestamp.split('T')[0];
                 historicalData.views[date] = { count: day.count, uniques: day.uniques };
               });
-              // Update the total download count in our historical data
-              historicalData.releases.totalDownloads = totalDownloads;
+              // Update the releases data
+              historicalData.releases = {
+                total_downloads: totalDownloads,
+                by_release: releasesData
+              };
 
 
               // --- 4. Calculate all-time totals ---
@@ -170,42 +185,65 @@ jobs:
               const allTimeUniqueCloners = Object.values(historicalData.clones).reduce((sum, day) => sum + day.uniques, 0);
               const allTimeTotalViews = Object.values(historicalData.views).reduce((sum, day) => sum + day.count, 0);
               const allTimeUniqueVisitors = Object.values(historicalData.views).reduce((sum, day) => sum + day.uniques, 0);
-              const allTimeReleaseDownloads = historicalData.releases.totalDownloads;
+              const allTimeTotalDownloads = historicalData.releases.total_downloads || 0;
 
               console.log(`All-Time Clones: Total=${allTimeTotalClones}, Unique (sum of daily uniques)=${allTimeUniqueCloners}`);
               console.log(`All-Time Views: Total=${allTimeTotalViews}, Unique (sum of daily uniques)=${allTimeUniqueVisitors}`);
-              console.log(`All-Time Release Downloads: Total=${allTimeReleaseDownloads}`);
-
+              console.log(`All-Time Release Downloads: Total=${allTimeTotalDownloads}`);
+              if (historicalData.releases.by_release) {
+                console.log('Downloads by Release:');
+                for (const [tagName, data] of Object.entries(historicalData.releases.by_release)) {
+                    console.log(`- ${tagName}: ${data.total_downloads} downloads`);
+                }
+              }
 
               // --- 5. Generate new badge SVGs ---
               const clonesBadgeSvg = createBadgeSvg('Clones', `${allTimeTotalClones} (Unique: ${allTimeUniqueCloners})`, '#8FBCBB');
               const viewsBadgeSvg = createBadgeSvg('Views', `${allTimeTotalViews} (Unique: ${allTimeUniqueVisitors})`, '#88C0D0');
-              const downloadsBadgeSvg = createBadgeSvg('Downloads', `${allTimeReleaseDownloads}`, '#A3BE8C');
-
+              const totalDownloadsBadgeSvg = createBadgeSvg('Total Downloads', `${allTimeTotalDownloads}`, '#A3BE8C');
+              
+              const releaseBadgesSvgs = {};
+              if (historicalData.releases.by_release) {
+                  for (const [tagName, data] of Object.entries(historicalData.releases.by_release)) {
+                      const badgeLabel = `Release ${tagName}`;
+                      const badgeMessage = `${data.total_downloads} downloads`;
+                      releaseBadgesSvgs[tagName] = createBadgeSvg(badgeLabel, badgeMessage, '#B48EAD');
+                  }
+              }
 
               // --- 6. Commit all files ---
               console.log('Committing updated files to the repository...');
 
               // Commit history file
               const newHistoryContent = JSON.stringify(historicalData, null, 2);
-              await commitFile(historyFile, newHistoryContent, 'feat: Update GitHub traffic history', historyFileState.sha);
+              await commitFile(historyFile, newHistoryContent, 'feat: Update GitHub traffic and downloads history', historyFileState.sha);
               console.log(`- Committed ${historyFile}`);
 
               // Get SHAs for existing badges before committing
               const clonesBadgeState = await getFile(`${badgeDir}/clones_badge.svg`);
               const viewsBadgeState = await getFile(`${badgeDir}/views_badge.svg`);
-              const downloadsBadgeState = await getFile(`${badgeDir}/release_downloads_badge.svg`);
+              const totalDownloadsBadgeState = await getFile(`${badgeDir}/total_downloads_badge.svg`);
 
-              // Commit badges
+              // Commit main badges
               await commitFile(`${badgeDir}/clones_badge.svg`, clonesBadgeSvg, 'feat: Update clones traffic badge', clonesBadgeState.sha);
               console.log(`- Committed ${badgeDir}/clones_badge.svg`);
 
               await commitFile(`${badgeDir}/views_badge.svg`, viewsBadgeSvg, 'feat: Update views traffic badge', viewsBadgeState.sha);
               console.log(`- Committed ${badgeDir}/views_badge.svg`);
 
-              await commitFile(`${badgeDir}/release_downloads_badge.svg`, downloadsBadgeSvg, 'feat: Update release downloads badge', downloadsBadgeState.sha);
-              console.log(`- Committed ${badgeDir}/release_downloads_badge.svg`);
+              await commitFile(`${badgeDir}/total_downloads_badge.svg`, totalDownloadsBadgeSvg, 'feat: Update total downloads badge', totalDownloadsBadgeState.sha);
+              console.log(`- Committed ${badgeDir}/total_downloads_badge.svg`);
 
+              // Commit release-specific badges
+              if (releaseBadgesSvgs) {
+                  for (const [tagName, svgContent] of Object.entries(releaseBadgesSvgs)) {
+                      const safeTagName = tagName.replace(/[^a-zA-Z0-9.-]/g, '_');
+                      const badgePath = `${badgeDir}/release_${safeTagName}_badge.svg`;
+                      const badgeState = await getFile(badgePath);
+                      await commitFile(badgePath, svgContent, `feat: Update download badge for release ${tagName}`, badgeState.sha);
+                      console.log(`- Committed ${badgePath}`);
+                  }
+              }
 
               console.log('✅ Traffic badges, download counts, and history updated successfully!');
 
