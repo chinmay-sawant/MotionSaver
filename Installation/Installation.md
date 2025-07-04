@@ -1,7 +1,4 @@
 # MotionSaver Installation Guide
-
-This guide will walk you through the installation of MotionSaver on your Windows system. Each step includes a reference to an image you should upload to your GitHub repository (e.g., `installations/step1.png`).
-
 ---
 
 ## Directory Structure

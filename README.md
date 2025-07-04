@@ -12,26 +12,12 @@
 
 Transform your dull desktop into a lively and dynamic space! MotionSaver brings your screen to life with video wallpapers when you're away, combining the elegance of macOS live wallpapers with powerful customization for Windows.
 
-## Quick Start ⚡
-1. **⬇️ Download & Extract**:  
-  - [Download MotionSaver](https://github.com/chinmay-sawant/MotionSaver/releases/download/V2/MotionSaver_V2.zip)
-  - Extract the contents to `D:/MotionSaver`
+## Installation & Usage ⚡
 
-2. **🛠️ Configure Settings (First Time Only):**  
-  - Go to the `MotionSaver` folder.
-  - **Right-click `Gui.bat` → Run as administrator**  
-    This opens the settings GUI. Set your video, widgets, password, and other preferences here.  
-    *(Admin is required for some features and to save settings in protected folders.)*
-  > **Default Password:** The initial password is `test`. You can (and should) change this in the settings GUI for better security.
+For detailed installation steps, refer to the  
+[Installation Guide](https://github.com/chinmay-sawant/MotionSaver/blob/master/Installation/Installation.md).
 
-3. **🚀 Start the Background Service:**  
-  - **Right-click `MotionSaver.bat` → Run as administrator**  
-    This starts the screensaver background service in the tray.
-
-4. **⚡ Activate the Screensaver:**  
-  - Press **Win + S** anytime to launch the screensaver!
-
-
+To learn how to use MotionSaver after installation, see the [Usage](#usage-) section below.
 ---
 
 ### Upcoming Updates 🆕
@@ -93,12 +79,14 @@ Due to the complexity of blocking all Windows system shortcuts, **it is possible
 
 ## Usage 👨‍💻
 
+
 Run the application with different modes from your command prompt or terminal:
 
--   **Settings GUI**: `python PhotoEngine.py --mode gui`
--   **Screensaver Mode**: `python PhotoEngine.py --mode saver`
--   **System Tray Mode**: `python PhotoEngine.py --mode tray` (or use `MotionSaver.bat`)
--   **Admin Mode (for service management)**: `python PhotoEngine.py --mode admin` (Requires running as Administrator)
+-   **Settings GUI**: Run `Gui.bat` as administrator
+-   **Screensaver Mode**: Use `MotionSaver.bat` to start the screensaver service
+-   **System Tray Mode**: Use `MotionSaver.bat` to run in the background
+
+No Python commands are required for normal usage.
 
 ## Technology Stack 🛠️
 
@@ -140,33 +128,3 @@ If you have any issues, want to report bugs, or would like to leave feedback, pl
 - **Shortcut Bypass:** Certain Windows shortcuts (e.g., `Alt+Tab`, `Win+D`) may still exit or minimize the screensaver, as noted in the security warning above.
 
 **Tip:** For the best experience, start the background service using `MotionSaver.bat` and use `Win + S` to activate the screensaver. Be aware of the current limitations with system shortcuts.
-
-
-## Troubleshooting Common Issues 🛠️
-
-### `pip` Not Found
-
-If you see an error like `'pip' is not recognized as an internal or external command`:
-
-- Make sure Python is installed. You can check by running `python --version` in your terminal.
-- If Python is installed but `pip` is missing, try:
-    - On Windows: Run `python -m ensurepip --upgrade` or `python -m pip install --upgrade pip`.
-    - Add Python and the `Scripts` folder to your system `PATH` environment variable.
-- Restart your terminal after making changes.
-
-### `ModuleNotFoundError`
-
-If you get an error such as `ModuleNotFoundError: No module named 'xyz'`:
-
-- Ensure all dependencies are installed:  
-  ```bash
-  pip install -r requirements.txt
-  ```
-- If the error persists, check that you are using the correct Python environment (especially if you use virtual environments).
-- You can install missing modules individually:  
-  ```bash
-  pip install module_name
-  ```
-- If you have multiple versions of Python, try using `python -m pip install ...` to ensure you are installing to the right interpreter.
-
-If you continue to have issues, please open an [issue on GitHub](https://github.com/chinmay-sawant/MotionSaver/issues) with details.
