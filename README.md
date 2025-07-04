@@ -13,20 +13,24 @@
 Transform your dull desktop into a lively and dynamic space! MotionSaver brings your screen to life with video wallpapers when you're away, combining the elegance of macOS live wallpapers with powerful customization for Windows.
 
 ## Quick Start ⚡
+1. **⬇️ Download & Extract**:  
+  - [Download MotionSaver](https://github.com/chinmay-sawant/MotionSaver/releases/download/V2/MotionSaver_V2.zip)
+  - Extract the contents to `D:/MotionSaver`
 
-1.  **🛠️ Configure Settings (First Time Only):**  
-    - Go to the `MotionSaver` folder.
-    - **Right-click `Gui.bat` → Run as administrator**  
-      This opens the settings GUI. Set your video, widgets, password, and other preferences here.  
-      *(Admin is required for some features and to save settings in protected folders.)*
-    > **Default Password:** The initial password is `test`. You can (and should) change this in the settings GUI for better security.
+2. **🛠️ Configure Settings (First Time Only):**  
+  - Go to the `MotionSaver` folder.
+  - **Right-click `Gui.bat` → Run as administrator**  
+    This opens the settings GUI. Set your video, widgets, password, and other preferences here.  
+    *(Admin is required for some features and to save settings in protected folders.)*
+  > **Default Password:** The initial password is `test`. You can (and should) change this in the settings GUI for better security.
 
-2.  **🚀 Start the Background Service:**  
-    - **Right-click `MotionSaver.bat` → Run as administrator**  
-      This starts the screensaver background service in the tray.
+3. **🚀 Start the Background Service:**  
+  - **Right-click `MotionSaver.bat` → Run as administrator**  
+    This starts the screensaver background service in the tray.
 
-3.  **⚡ Activate the Screensaver:**  
-    - Press **Win + S** anytime to launch the screensaver!
+4. **⚡ Activate the Screensaver:**  
+  - Press **Win + S** anytime to launch the screensaver!
+
 
 ---
 
