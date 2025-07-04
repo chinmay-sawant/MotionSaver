@@ -23,6 +23,7 @@ D:/MotionSaver
 
 ### 1. Download & Save to D Drive
 - Download the latest MotionSaver release from the [Releases page](https://github.com/chinmay-sawant/MotionSaver/releases).
+- Click [here to download MotionSaver v2](https://github.com/chinmay-sawant/MotionSaver/releases/download/V2/MotionSaver_V2.zip).
 - Save the downloaded file directly to your `D:/` drive.
 - ![Step 1: Downloaded File in D Drive](https://github.com/chinmay-sawant/MotionSaver/raw/master/Installation/step1.png)
 
