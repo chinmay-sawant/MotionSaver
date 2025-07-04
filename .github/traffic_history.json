@@ -41,8 +41,8 @@
       "uniques": 30
     },
     "2025-07-04": {
-      "count": 25,
-      "uniques": 17
+      "count": 30,
+      "uniques": 21
     }
   },
   "views": {
@@ -110,5 +110,8 @@
       "count": 624,
       "uniques": 194
     }
+  },
+  "releases": {
+    "totalDownloads": 6
   }
 }
