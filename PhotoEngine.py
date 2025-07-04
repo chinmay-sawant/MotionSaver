@@ -370,38 +370,65 @@ def start_screensaver(video_path_override=None):
 
             # --- Relaunch tray with same elevation ---
             try:
-                logger.info("Restarting system tray after screensaver login...")
-                script_path = os.path.abspath(__file__)
-                python_exe = sys.executable
-                
+                logger.info("Attempting to restart system tray after successful screensaver login...")
+                # Refactored for PyInstaller one-folder logic
+                if getattr(sys, 'frozen', False):
+                    # For frozen executable, use the executable directly
+                    python_exe = sys.executable
+                    script_args = "--min --no-elevate"
+                    logger.debug(f"Detected frozen executable. python_exe={python_exe}, args={script_args}")
+                else:
+                    # For script mode
+                    script_path = os.path.abspath(__file__)
+                    python_exe = sys.executable
+                    script_args = f'"{script_path}" --min --no-elevate'
+                    logger.debug(f"Detected script mode. python_exe={python_exe}, args={script_args}")
+
                 # Check if we're running as admin and preserve elevation
                 if is_admin():
                     logger.info("Restarting tray with admin privileges...")
                     import ctypes
+                    logger.debug(f"Using ShellExecuteW to restart tray with: {python_exe} {script_args}")
                     # Use ShellExecuteW to maintain admin privileges
-                    ctypes.windll.shell32.ShellExecuteW(
+                    result = ctypes.windll.shell32.ShellExecuteW(
                         None,
-                        "runas", 
+                        "runas",
                         python_exe,
-                        f'"{script_path}" --min --no-elevate',
+                        script_args,
                         None,
                         0  # SW_HIDE
                     )
+                    logger.debug(f"ShellExecuteW result: {result}")
+                    if result <= 32:  # ShellExecuteW returns > 32 for success
+                        logger.error(f"ShellExecuteW failed with result: {result}")
                 else:
                     logger.info("Restarting tray without admin privileges...")
-                    subprocess.Popen([python_exe, script_path, "--min"], 
+                    if getattr(sys, 'frozen', False):
+                        # For frozen executable
+                        cmd_args = [python_exe, "--min", "--no-elevate"]
+                    else:
+                        # For script mode
+                        script_path = os.path.abspath(__file__)
+                        cmd_args = [python_exe, script_path, "--min", "--no-elevate"]
+                    
+                    logger.debug(f"Using subprocess.Popen to restart tray: {cmd_args}")
+                    proc = subprocess.Popen(cmd_args,
                                    creationflags=subprocess.CREATE_NO_WINDOW if platform.system() == "Windows" else 0)
-                
+                    logger.debug(f"subprocess.Popen returned pid: {proc.pid if proc else 'unknown'}")
+
                 logger.info("New tray process started, exiting current process.")
+                # Add a small delay to ensure the new process starts before we exit
+                time.sleep(1)
                 os._exit(0)
             except Exception as e:
-                logger.error(f"Failed to restart tray after login: {e}")
+                logger.error(f"Failed to restart tray after login: {e}", exc_info=True)
         else:
             try:
+                logger.info("Login cancelled or failed. Attempting to refocus root window.")
                 if root and root.winfo_exists():
                     root.focus_set()
             except tk.TclError:
-                logger.debug("Root window already destroyed.")
+                logger.debug("Root window already destroyed during login cancel/failure.")
             logger.info("Login cancelled or failed.")
 
     # Initial call to black out monitors, delayed slightly for fullscreen to establish
@@ -848,6 +875,7 @@ def register_service():
         print("Error: 'sc' command not found. Is your Windows environment correctly set up?")
     except Exception as e:
         print(f"An unexpected error occurred during service registration: {e}")
+
 
 if __name__ == "__main__":
     logger.info("Starting PhotoEngine...")

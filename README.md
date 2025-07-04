@@ -8,54 +8,25 @@ Transform your dull desktop into a lively and dynamic space! MotionSaver brings 
 
 ## Quick Start ⚡
 
-1.  **Install Python on D Drive (or C Drive is also fine)**:  
-    Download the latest Python installer from the [official Python website](https://www.python.org/downloads/).
+1.  **🛠️ Configure Settings (First Time Only):**  
+    - Go to the `MotionSaver` folder.
+    - **Right-click `Gui.bat` → Run as administrator**  
+      This opens the settings GUI. Set your video, widgets, password, and other preferences here.  
+      *(Admin is required for some features and to save settings in protected folders.)*
+    > **Default Password:** The initial password is `test`. You can (and should) change this in the settings GUI for better security.
 
-    - **Run the installer** and choose **"Customize installation"**.
-    - On the next screen, keep the default options and click **Next**.
-    - Under **"Advanced Options"**, check **"Add Python to PATH"**.
-    - Click **"Browse..."** next to the install location and set it to a folder on your D drive, for example:  
-      `D:\PythonXY\`  
-      (Replace `XY` with your Python version, e.g., `311` for Python 3.11.)
-    - Click **"Install"** to complete the installation.
+2.  **🚀 Start the Background Service:**  
+    - **Right-click `MotionSaver.bat` → Run as administrator**  
+      This starts the screensaver background service in the tray.
 
-    > **Note:**  
-    > If you missed adding Python to PATH during installation, you can add these folders manually:
-    > - `D:\PythonXY\`
-    > - `D:\PythonXY\Scripts\`
-    >  
-    > To do this, open **System Properties** → **Advanced** → **Environment Variables**, edit the `Path` variable, and add the above paths.  
-    > Restart your terminal or command prompt after updating the `PATH`.
+3.  **⚡ Activate the Screensaver:**  
+    - Press **Win + S** anytime to launch the screensaver!
 
-2.  **Clone the Repository**:  
-    ```bash
-    # Execute these commands in Windows CMD
-    cd /d D:/
-    git clone https://github.com/chinmay-sawant/MotionSaver.git
-    cd MotionSaver
-    ```
- 
-3.  **Install Dependencies**: 
-    ```bash
-    pip install -r requirements.txt
-    ```
+---
 
-    > **Tip:**  
-    > If you encounter a `ModuleNotFoundError` after this step, you can install the missing module manually:
-    > - Run: `pip install module_name`
-    > - Replace `module_name` with the actual name shown in the error message.
-    >
-    > For example, if you see `ModuleNotFoundError: No module named 'opencv-python'`, run:
-    > `pip install opencv-python`
-4.  **Configure**: Run the settings GUI to configure your video and preferences:
-    ```bash
-    python PhotoEngine.py --mode gui
-    ```
-5.  **Start Background Service**: Use the provided batch file to start listening for the screensaver shortcut:
-    ```bash
-    MotionSaver.bat
-    ```
-6.  **Activate**: Press `Win + S` to launch the screensaver anytime!
+### Upcoming Updates 🆕
+- 🔑 **Key blocking will only be enabled after pressing Win + S** (for better usability).
+- 🖥️ **Register the batch file as a Windows service** so MotionSaver starts automatically in the background when Windows boots.
 
 ## Support & Contribute ⭐
 

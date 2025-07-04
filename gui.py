@@ -868,7 +868,7 @@ class ScreenSaverApp:
         # Only process if the crop was actually saved (not cancelled)
         if hasattr(cropper, 'crop_saved') and cropper.crop_saved and hasattr(cropper, 'image_path') and os.path.exists(cropper.image_path):
             try:
-                rel_path = os.path.relpath(cropper.image_path, PROJECT_ROOT)
+                rel_path = os.path.abspath(cropper.image_path)
                 if ".." not in rel_path:
                     self.profile_pic_path_crop_var.set(rel_path)
                 else:
