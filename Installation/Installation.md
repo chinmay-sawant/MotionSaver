@@ -115,5 +115,3 @@ Make sure your extracted folder matches this structure before proceeding.
 - Please open an issue on the [GitHub Issues page](https://github.com/chinmay-sawant/MotionSaver/issues).
 
 ---
-
-> Upload your screenshots to the `installations` folder in your GitHub repository and update the image links above if needed.
