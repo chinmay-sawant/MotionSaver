@@ -27,6 +27,7 @@ Transform your dull desktop into a lively and dynamic space! MotionSaver brings 
 ### Upcoming Updates 🆕
 - 🔑 **Key blocking will only be enabled after pressing Win + S** (for better usability).
 - 🖥️ **Register the batch file as a Windows service** so MotionSaver starts automatically in the background when Windows boots.
+- ⏲️ **Automatic Activation After Idle:** The screensaver will automatically activate if your computer is idle for more than 2 minutes. This feature is configurable in the settings GUI.
 
 ## Support & Contribute ⭐
 
