@@ -47,6 +47,7 @@ Transform your dull desktop into a lively and dynamic space! MotionSaver brings 
     >
     > For example, if you see `ModuleNotFoundError: No module named 'opencv-python'`, run:
     > `pip install opencv-python`
+
 4.  **Configure**: Run the settings GUI to configure your video and preferences:
     ```bash
     python PhotoEngine.py --mode gui
