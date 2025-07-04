@@ -125,18 +125,31 @@ jobs:
               // --- 1. Load historical data ---
               console.log(`Loading historical data from ${historyFile} on branch ${branch}...`);
               const historyFileState = await getFile(historyFile);
-              let historicalData = { clones: {}, views: {} };
+              let historicalData = { clones: {}, views: {}, releases: {} };
               if (historyFileState.content) {
                 historicalData = JSON.parse(historyFileState.content);
+                // Ensure releases object exists for backward compatibility
+                if (!historicalData.releases) {
+                    historicalData.releases = {};
+                }
                 console.log('Successfully loaded existing historical data.');
               } else {
                 console.log('No historical data file found. A new one will be created.');
               }
 
-              // --- 2. Fetch new traffic data ---
+              // --- 2. Fetch new traffic and release data ---
               console.log('Fetching latest traffic data from GitHub API...');
               const { data: clonesResponse } = await github.rest.repos.getClones({ owner, repo, per: 'day' });
               const { data: viewsResponse } = await github.rest.repos.getViews({ owner, repo, per: 'day' });
+
+              console.log('Fetching release download counts...');
+              const releases = await github.paginate(github.rest.repos.listReleases, { owner, repo });
+              let totalDownloads = 0;
+              for (const release of releases) {
+                for (const asset of release.assets) {
+                  totalDownloads += asset.download_count;
+                }
+              }
 
               // --- 3. Update historical data ---
               console.log('Merging new traffic data with historical data...');
@@ -148,19 +161,27 @@ jobs:
                 const date = day.timestamp.split('T')[0];
                 historicalData.views[date] = { count: day.count, uniques: day.uniques };
               });
+              // Update the total download count in our historical data
+              historicalData.releases.totalDownloads = totalDownloads;
+
 
               // --- 4. Calculate all-time totals ---
               const allTimeTotalClones = Object.values(historicalData.clones).reduce((sum, day) => sum + day.count, 0);
               const allTimeUniqueCloners = Object.values(historicalData.clones).reduce((sum, day) => sum + day.uniques, 0);
               const allTimeTotalViews = Object.values(historicalData.views).reduce((sum, day) => sum + day.count, 0);
               const allTimeUniqueVisitors = Object.values(historicalData.views).reduce((sum, day) => sum + day.uniques, 0);
+              const allTimeReleaseDownloads = historicalData.releases.totalDownloads;
 
               console.log(`All-Time Clones: Total=${allTimeTotalClones}, Unique (sum of daily uniques)=${allTimeUniqueCloners}`);
               console.log(`All-Time Views: Total=${allTimeTotalViews}, Unique (sum of daily uniques)=${allTimeUniqueVisitors}`);
+              console.log(`All-Time Release Downloads: Total=${allTimeReleaseDownloads}`);
+
 
               // --- 5. Generate new badge SVGs ---
               const clonesBadgeSvg = createBadgeSvg('Clones', `${allTimeTotalClones} (Unique: ${allTimeUniqueCloners})`, '#8FBCBB');
               const viewsBadgeSvg = createBadgeSvg('Views', `${allTimeTotalViews} (Unique: ${allTimeUniqueVisitors})`, '#88C0D0');
+              const downloadsBadgeSvg = createBadgeSvg('Downloads', `${allTimeReleaseDownloads}`, '#A3BE8C');
+
 
               // --- 6. Commit all files ---
               console.log('Committing updated files to the repository...');
@@ -173,6 +194,7 @@ jobs:
               // Get SHAs for existing badges before committing
               const clonesBadgeState = await getFile(`${badgeDir}/clones_badge.svg`);
               const viewsBadgeState = await getFile(`${badgeDir}/views_badge.svg`);
+              const downloadsBadgeState = await getFile(`${badgeDir}/release_downloads_badge.svg`);
 
               // Commit badges
               await commitFile(`${badgeDir}/clones_badge.svg`, clonesBadgeSvg, 'feat: Update clones traffic badge', clonesBadgeState.sha);
@@ -181,7 +203,11 @@ jobs:
               await commitFile(`${badgeDir}/views_badge.svg`, viewsBadgeSvg, 'feat: Update views traffic badge', viewsBadgeState.sha);
               console.log(`- Committed ${badgeDir}/views_badge.svg`);
 
-              console.log('✅ Traffic badges and history updated successfully!');
+              await commitFile(`${badgeDir}/release_downloads_badge.svg`, downloadsBadgeSvg, 'feat: Update release downloads badge', downloadsBadgeState.sha);
+              console.log(`- Committed ${badgeDir}/release_downloads_badge.svg`);
+
+
+              console.log('✅ Traffic badges, download counts, and history updated successfully!');
 
             } catch (error) {
               console.error('Error during workflow execution:', error);
