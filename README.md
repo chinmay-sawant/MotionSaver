@@ -4,7 +4,6 @@
 ![Total Clones](https://github.com/chinmay-sawant/MotionSaver/blob/master/.github/badges/clones_badge.svg)
 ![Release V1](https://github.com/chinmay-sawant/MotionSaver/blob/master/.github/badges/release_V1_badge.svg)
 ![Release V2](https://github.com/chinmay-sawant/MotionSaver/blob/master/.github/badges/release_V2_badge.svg)
-![Release Downloads](https://github.com/chinmay-sawant/MotionSaver/blob/master/.github/badges/release_downloads_badge.svg)
 ![Total Downloads](https://github.com/chinmay-sawant/MotionSaver/blob/master/.github/badges/total_downloads_badge.svg)
 ![Total Views](https://github.com/chinmay-sawant/MotionSaver/blob/master/.github/badges/views_badge.svg)
 
