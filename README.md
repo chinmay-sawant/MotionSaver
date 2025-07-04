@@ -6,6 +6,56 @@
 
 Transform your dull desktop into a lively and dynamic space! MotionSaver brings your screen to life with video wallpapers when you're away, combining the elegance of macOS live wallpapers with powerful customization for Windows.
 
+## Quick Start ⚡
+
+1.  **Install Python on D Drive (or C Drive is also fine)**:  
+    Download the latest Python installer from the [official Python website](https://www.python.org/downloads/).
+
+    - **Run the installer** and choose **"Customize installation"**.
+    - On the next screen, keep the default options and click **Next**.
+    - Under **"Advanced Options"**, check **"Add Python to PATH"**.
+    - Click **"Browse..."** next to the install location and set it to a folder on your D drive, for example:  
+      `D:\PythonXY\`  
+      (Replace `XY` with your Python version, e.g., `311` for Python 3.11.)
+    - Click **"Install"** to complete the installation.
+
+    > **Note:**  
+    > If you missed adding Python to PATH during installation, you can add these folders manually:
+    > - `D:\PythonXY\`
+    > - `D:\PythonXY\Scripts\`
+    >  
+    > To do this, open **System Properties** → **Advanced** → **Environment Variables**, edit the `Path` variable, and add the above paths.  
+    > Restart your terminal or command prompt after updating the `PATH`.
+
+2.  **Clone the Repository**:  
+    ```bash
+    # Execute these commands in Windows CMD
+    cd /d D:/
+    git clone https://github.com/chinmay-sawant/MotionSaver.git
+    cd MotionSaver
+    ```
+ 
+3.  **Install Dependencies**: 
+    ```bash
+    pip install -r requirements.txt
+    ```
+
+    > **Tip:**  
+    > If you encounter a `ModuleNotFoundError` after this step, you can install the missing module manually:
+    > - Run: `pip install module_name`
+    > - Replace `module_name` with the actual name shown in the error message.
+    >
+    > For example, if you see `ModuleNotFoundError: No module named 'opencv-python'`, run:
+    > `pip install opencv-python`
+4.  **Configure**: Run the settings GUI to configure your video and preferences:
+    ```bash
+    python PhotoEngine.py --mode gui
+    ```
+5.  **Start Background Service**: Use the provided batch file to start listening for the screensaver shortcut:
+    ```bash
+    MotionSaver.bat
+    ```
+6.  **Activate**: Press `Win + S` to launch the screensaver anytime!
 
 ## Support & Contribute ⭐
 
@@ -58,59 +108,6 @@ Due to the complexity of blocking all Windows system shortcuts, **it is possible
 - **Easy-to-use GUI**: A simple interface to manage all your settings.
 - **Widget Management**: Toggle any widget on or off.
 - **Video & Profile Management**: Easily select videos and manage user profiles.
-
-## Quick Start ⚡
-
-1.  **Install Python on D Drive (or C Drive is also fine)**:  
-    Download the latest Python installer from the [official Python website](https://www.python.org/downloads/).
-
-    - **Run the installer** and choose **"Customize installation"**.
-    - On the next screen, keep the default options and click **Next**.
-    - Under **"Advanced Options"**, check **"Add Python to PATH"**.
-    - Click **"Browse..."** next to the install location and set it to a folder on your D drive, for example:  
-      `D:\PythonXY\`  
-      (Replace `XY` with your Python version, e.g., `311` for Python 3.11.)
-    - Click **"Install"** to complete the installation.
-
-    > **Note:**  
-    > If you missed adding Python to PATH during installation, you can add these folders manually:
-    > - `D:\PythonXY\`
-    > - `D:\PythonXY\Scripts\`
-    >  
-    > To do this, open **System Properties** → **Advanced** → **Environment Variables**, edit the `Path` variable, and add the above paths.  
-    > Restart your terminal or command prompt after updating the `PATH`.
-
-2.  **Clone the Repository**:  
-    ```bash
-    # Execute these commands in Windows CMD
-    cd /d D:/
-    git clone https://github.com/chinmay-sawant/MotionSaver.git
-    cd MotionSaver
-    ```
- 
-3.  **Install Dependencies**: 
-    ```bash
-    pip install -r requirements.txt
-    ```
-
-    > **Tip:**  
-    > If you encounter a `ModuleNotFoundError` after this step, you can install the missing module manually:
-    > - Run: `pip install module_name`
-    > - Replace `module_name` with the actual name shown in the error message.
-    >
-    > For example, if you see `ModuleNotFoundError: No module named 'opencv-python'`, run:
-    > `pip install opencv-python`
-4.  **Configure**: Run the settings GUI to configure your video and preferences:
-    ```bash
-    python PhotoEngine.py --mode gui
-    ```
-5.  **Start Background Service**: Use the provided batch file to start listening for the screensaver shortcut:
-    ```bash
-    MotionSaver.bat
-    ```
-6.  **Activate**: Press `Win + S` to launch the screensaver anytime!
-
-For detailed instructions, see the **[INSTALLATION.md](INSTALLATION.md)** file.
 
 ## Usage 👨‍💻
 
