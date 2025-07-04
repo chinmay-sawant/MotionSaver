@@ -65,7 +65,7 @@ Make sure your extracted folder matches this structure before proceeding.
 > You can customize this later by replacing the `AMG.mp4` file or using the settings GUI.
 
 ### 5. Customize Settings Using Gui.bat 
-- Double-click `Gui.bat` in the `D:/MotionSaver` folder to open the settings GUI.
+- Right-click `Gui.bat` (Run as admin) in the `D:/MotionSaver` folder to open the settings GUI.
 - Use the interface to change the video, images, password, or other preferences for your screensaver.
 - After making changes, click **Save** in the GUI to apply your settings.
 - ![Step 5: Customizing with GUI](https://github.com/chinmay-sawant/MotionSaver/raw/master/Installation/step5.png)
