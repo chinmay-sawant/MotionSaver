@@ -112,6 +112,20 @@
     }
   },
   "releases": {
-    "totalDownloads": 6
+    "total_downloads": 6,
+    "by_release": {
+      "V2": {
+        "total_downloads": 2,
+        "assets": {
+          "MotionSaver_V2.zip": 2
+        }
+      },
+      "V1": {
+        "total_downloads": 4,
+        "assets": {
+          "MotionSaver-v1.zip": 4
+        }
+      }
+    }
   }
 }
