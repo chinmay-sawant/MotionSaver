@@ -7,7 +7,7 @@
 ![Total Downloads](https://github.com/chinmay-sawant/MotionSaver/blob/master/.github/badges/total_downloads_badge.svg)
 ![Total Views](https://github.com/chinmay-sawant/MotionSaver/blob/master/.github/badges/views_badge.svg)
 
-# MotionSaver: Your Dynamic Video Screensaver 🚀
+# MotionSaver: Your Dynamic Video Screensaver/Lockscreen 🚀
 
 Transform your dull desktop into a lively and dynamic space! MotionSaver brings your screen to life with video wallpapers when you're away, combining the elegance of macOS live wallpapers with powerful customization for Windows.
 
