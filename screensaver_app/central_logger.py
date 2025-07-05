@@ -35,7 +35,7 @@ class CentralLogger:
         logs_path = None
         try:
             import json
-            from config_utils import find_user_config_path
+            from utils.config_utils import find_user_config_path
             config_path = find_user_config_path()
             if os.path.exists(config_path):
                 with open(config_path, 'r') as f:

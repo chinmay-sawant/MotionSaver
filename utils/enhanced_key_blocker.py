@@ -15,7 +15,7 @@ from datetime import datetime, timedelta
 from utils.key_blocker import KeyBlocker
 
 # Initialize central logging
-from central_logger import get_logger, log_startup, log_shutdown, log_exception
+from screensaver_app.central_logger import get_logger, log_startup, log_shutdown, log_exception
 logger = get_logger('EnhancedKeyBlocker')
 
 class EnhancedKeyBlocker:

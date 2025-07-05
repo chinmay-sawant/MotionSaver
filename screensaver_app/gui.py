@@ -9,8 +9,14 @@ import subprocess
 import win32serviceutil
 import win32service
 
+# Ensure parent directory is in sys.path for package imports
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+if parent_dir not in sys.path:
+    sys.path.insert(0, parent_dir)
+
 # Initialize central logging
-from central_logger import get_logger, log_startup, log_shutdown, log_exception
+from screensaver_app.central_logger import get_logger, log_startup, log_shutdown, log_exception
 logger = get_logger('GUI')
 
 # Assuming PasswordConfig.py is in the same directory (package)

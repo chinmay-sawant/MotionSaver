@@ -7,25 +7,30 @@ import subprocess # Added for service registration
 import threading
 import time
 
-# Initialize central logging first
-from central_logger import get_logger, log_startup, log_shutdown, log_exception
+# Ensure parent directory is in sys.path for package imports
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+if parent_dir not in sys.path:
+    sys.path.insert(0, parent_dir)
+
+from screensaver_app.central_logger import get_logger, log_startup, log_shutdown, log_exception
 logger = get_logger('PhotoEngine')
 
 from screensaver_app.video_player import VideoClockScreenSaver 
 from screensaver_app.PasswordConfig import verify_password_dialog_macos
-from screensaver_service import launch_in_user_session
+from screensaver_app.screensaver_service import launch_in_user_session
 # Try to import enhanced blocker first, fallback to basic blocker
 try:
-    from enhanced_key_blocker import EnhancedKeyBlocker as KeyBlocker
+    from utils.enhanced_key_blocker import EnhancedKeyBlocker as KeyBlocker
     logger.info("Using enhanced key blocker")
 except ImportError:
-    from blockit import KeyBlocker # Assuming blockit.py contains a basic KeyBlocker
+    from utils.blockit import KeyBlocker # Assuming blockit.py contains a basic KeyBlocker
     logger.info("Using basic key blocker from blockit.py")
-import gui
+import screensaver_app.gui as gui
 import json
 from PIL import Image, ImageDraw # Added for system tray icon
 import pystray # Added for system tray functionality
-from config_utils import find_user_config_path
+from utils.config_utils import find_user_config_path
 
 # Custom UAC elevation functions to replace pyUAC
 def is_admin():
@@ -641,7 +646,7 @@ def run_in_system_tray():
         try:
             # Try to import the same KeyBlocker that's being used in the main script
             try:
-                from enhanced_key_blocker import EnhancedKeyBlocker as CurrentKeyBlocker
+                from utils.enhanced_key_blocker import EnhancedKeyBlocker as CurrentKeyBlocker
                 is_enhanced = True
             except ImportError:
                 from utils.key_blocker import KeyBlocker as CurrentKeyBlocker
@@ -931,4 +936,3 @@ if __name__ == "__main__":
             logger.info("Elevation check skipped due to --no-elevate flag.")
         admin_main()
     logger.info("PhotoEngine finished.")
-
