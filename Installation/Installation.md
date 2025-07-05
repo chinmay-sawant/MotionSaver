@@ -92,6 +92,22 @@ Make sure your extracted folder matches this structure before proceeding.
     - The lockscreen should trigger—enter your Windows lockscreen password.
     - After unlocking, you can use **Alt + Tab** to switch windows.
 
+**Q: I want to change the video. What are the steps?**
+- You can either:
+    - Download a sample 1080p 30fps video from the [Demo Videos folder](https://github.com/chinmay-sawant/MotionSaver/tree/master/Demo_Videos).
+        - Avoid using 4K or 60fps videos, as these may cause lag on some systems.
+        - Alternatively, download any 1080p 30fps video from YouTube or use a personal video, and save it to any directory (e.g., Downloads).
+    - After downloading your preferred video, open `Gui.bat` as described in Step 5.
+- In the GUI, use the option for changing the video file (see image below).
+- Select your new video file and click **Save** to apply the changes.
+> **Note:** After changing the video, make sure to restart the MotionSaver application. You can do this by clicking **Exit** in the system tray icon or by closing `PhotoEngine.exe` and `MotionSaver.bat` using Task Manager. Then, relaunch `MotionSaver.bat` to apply the changes.
+- ![Change Video in GUI](https://github.com/chinmay-sawant/MotionSaver/raw/master/Installation/change_video.png)
+
+**Q: My FPS feels glitchy, like it's running below 30 FPS. What should I do?**
+1. Try changing the video using the GUI as shown above in the "I want to change the video" section.
+2. Download another short 1080p video (about 10 seconds) from YouTube or any online source and test if the issue persists.
+3. If you still experience problems, please upload your log files under a new issue on [GitHub Issues](https://github.com/chinmay-sawant/MotionSaver/issues), including your Instagram handle (if applicable) and your Windows version. This will help the developers diagnose the problem more effectively.
+
 **Q: My antivirus thinks MotionSaver is a virus. What should I do?**
 - MotionSaver is safe to use, but some antivirus programs may flag it because it includes batch files and executables.
 - To resolve this, add the `D:/MotionSaver` folder to your antivirus exclusion list or temporarily disable your antivirus during installation.
@@ -113,5 +129,6 @@ Make sure your extracted folder matches this structure before proceeding.
 
 **Q: Where do I report bugs or get help?**
 - Please open an issue on the [GitHub Issues page](https://github.com/chinmay-sawant/MotionSaver/issues).
+
 
 ---
