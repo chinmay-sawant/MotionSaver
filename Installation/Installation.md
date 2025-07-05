@@ -49,6 +49,9 @@ The `D:/MotionSaver` folder contains all the files and subfolders required for M
 - **MotionSaver.bat**: Main batch file to start the screensaver service.
 - **PhotoEngine.exe**: Executable for image processing tasks.
 - **_internal/**: Internal files and dependencies required by the application.
+- **StopMotionSaver.bat**: Batch file to stop the screensaver service.
+- **unhooks.exe**: Utility to release keyboard hooks when stopping the service.
+- **Note**: The `StopMotionSaver.bat` file is a new addition in version 2. It allows you to stop the MotionSaver service and release any keyboard hooks that may be blocking system shortcuts.
 
 Make sure your extracted folder matches this structure before proceeding.
 - ![Step 3: Folder Structure in D Drive](https://github.com/chinmay-sawant/MotionSaver/raw/master/Installation/step3.png)
