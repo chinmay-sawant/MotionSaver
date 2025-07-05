@@ -19,10 +19,10 @@ jobs:
       - name: Generate and Commit Traffic Data
         uses: actions/github-script@v7
         with:
-          # Use the built-in GITHUB_TOKEN for authentication
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const { exec } = require('@actions/exec'); // THIS LINE IS NOW CORRECT
+            // The 'exec' function is automatically provided by actions/github-script@v7.
+            // No need to 'require' it.
             const fs = require('fs');
             const path = require('path');
 
