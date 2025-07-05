@@ -123,9 +123,9 @@
     "total_downloads": 108,
     "by_release": {
       "V2": {
-        "total_downloads": 104,
+        "total_downloads": 3,
         "assets": {
-          "MotionSaver_V2.zip": 104
+          "MotionSaver_V2.zip": 3
         }
       },
       "V1": {
