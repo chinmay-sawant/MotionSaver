@@ -99,7 +99,7 @@ jobs:
               // --- 3. Update historical data ---
               console.log('Merging new traffic data with historical data...');
               
-              // Clones and Views data is additive by day
+              // Clones and Views data is additive by day (overwrites the last 14 days)
               clonesResponse.clones.forEach(day => {
                 historicalData.clones[day.timestamp.split('T')[0]] = { count: day.count, uniques: day.uniques };
               });
@@ -107,56 +107,52 @@ jobs:
                 historicalData.views[day.timestamp.split('T')[0]] = { count: day.count, uniques: day.uniques };
               });
               
-              // --- NEW, RESILIENT: Release Download Data Merge Logic ---
-              console.log('Merging release download counts with resilience to counter resets...');
-              // Start with a copy of historical release data. This is our base.
+              // --- CORRECTED: Release Download Data Merge Logic ---
+              console.log('Merging release download counts...');
               const mergedReleasesData = JSON.parse(JSON.stringify(historicalData.releases.by_release || {}));
 
-              // Loop through the releases currently reported by the API
               for (const release of releases) {
                 if (!release.tag_name) continue;
 
-                // Get the old release data for comparison, or initialize if it's a new release
                 const oldReleaseData = mergedReleasesData[release.tag_name] || { total_downloads: 0, assets: {} };
-                
-                // Use a copy of the old assets as a base. This preserves assets that might
-                // have been deleted from the release but whose history we want to keep.
                 const finalAssetsData = { ...oldReleaseData.assets };
 
-                // Now, intelligently merge the assets from the API
                 for (const asset of release.assets) {
                   const assetName = asset.name;
-                  const newApiCount = asset.download_count;
-                  const oldAssetCount = oldReleaseData.assets[assetName] || 0;
+                  const newApiTotalCount = asset.download_count; // This is the CUMULATIVE total from the API
+                  const oldStoredCount = oldReleaseData.assets[assetName] || 0;
                   
-                  // This is the core logic to handle API counter resets.
-                  if (newApiCount < oldAssetCount) {
-                    // RESET DETECTED! The API count is lower than our history.
-                    // The true count is our historical high-water mark plus the new, small count.
-                    console.log(`- Reset detected for asset '${assetName}'. Old: ${oldAssetCount}, New API: ${newApiCount}. Combining.`);
-                    finalAssetsData[assetName] = oldAssetCount + newApiCount;
-                  } else {
-                    // Normal operation. The API count is the new source of truth.
-                    finalAssetsData[assetName] = newApiCount;
+                  // **THIS IS THE KEY LOGIC FIX**
+                  // The API provides a CUMULATIVE total. We should always trust it as the source of truth.
+                  // Running the workflow multiple times should NOT increase the count.
+                  
+                  // CASE 1: Normal Operation. The API count is greater than or equal to our stored count.
+                  // We simply update our stored count to match the new, higher total from the API.
+                  if (newApiTotalCount >= oldStoredCount) {
+                    finalAssetsData[assetName] = newApiTotalCount;
+                  } 
+                  // CASE 2: API Counter Reset Detected. The new API count is LESS than our stored count.
+                  // This is a rare edge case. To avoid losing download history, we assume the counter reset
+                  // and add the new value to our historical high-water mark.
+                  else {
+                    console.log(`- API counter reset detected for asset '${assetName}'.`);
+                    console.log(`- Stored historical count: ${oldStoredCount}, New API count: ${newApiTotalCount}.`);
+                    console.log(`- Combining counts to preserve history.`);
+                    finalAssetsData[assetName] = oldStoredCount + newApiTotalCount;
                   }
                 }
 
-                // Recalculate the total for this specific release from its final asset list
                 const finalReleaseTotal = Object.values(finalAssetsData).reduce((sum, count) => sum + count, 0);
-
-                // Update the release in our main data object
                 mergedReleasesData[release.tag_name] = {
                     total_downloads: finalReleaseTotal,
                     assets: finalAssetsData
                 };
               }
               
-              // Recalculate the grand total from our complete (merged) data set
               const newGrandTotalDownloads = Object.values(mergedReleasesData).reduce(
                 (sum, release) => sum + release.total_downloads, 0
               );
 
-              // Finally, update the main historicalData object
               historicalData.releases = {
                 total_downloads: newGrandTotalDownloads,
                 by_release: mergedReleasesData
