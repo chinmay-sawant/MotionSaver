@@ -1,5 +1,3 @@
-# .github/workflows/generate-traffic-badges.yml
-
 name: Generate GitHub Traffic Badges
 
 on:
@@ -20,7 +18,7 @@ jobs:
           fetch-depth: 0
 
       - name: Generate and Commit Traffic Data
-        uses: actions/github-script@v7 # Using a more recent version
+        uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GH_TOKEN }}
           script: |
@@ -28,7 +26,7 @@ jobs:
             const repo = context.repo.repo;
             const badgeDir = '.github/badges';
             const historyFile = '.github/traffic_history.json';
-            const branch = context.ref.replace('refs/heads/', ''); // Get current branch name
+            const branch = context.ref.replace('refs/heads/', '');
 
             /**
              * Fetches a file's content and SHA from the repository.
@@ -41,7 +39,7 @@ jobs:
                   owner,
                   repo,
                   path: filePath,
-                  ref: branch, // Fetch from the current branch
+                  ref: branch,
                 });
                 if (response.data && response.data.content) {
                   return {
@@ -52,10 +50,8 @@ jobs:
                 return { content: null, sha: null };
               } catch (error) {
                 if (error.status === 404) {
-                  // File doesn't exist, which is a valid case
-                  return { content: null, sha: null };
+                  return { content: null, sha: null }; // File doesn't exist, a valid case.
                 }
-                // Re-throw other unexpected errors
                 console.error(`Error getting file ${filePath}:`, error);
                 throw error;
               }
@@ -75,7 +71,7 @@ jobs:
                 path: filePath,
                 message: message,
                 content: Buffer.from(content).toString('base64'),
-                sha: sha, // The API handles a null sha for new file creation
+                sha: sha,
                 branch: branch,
               });
             }
@@ -88,36 +84,35 @@ jobs:
              * @returns {string} - The SVG content as a string.
              */
             function createBadgeSvg(label, message, color) {
-                const labelWidth = label.length * 7 + 12;
-                const messageWidth = message.length * 7.5 + 12; // Adjusted for better spacing
-                const totalWidth = labelWidth + messageWidth;
+              const labelWidth = label.length * 7 + 12;
+              const messageWidth = message.length * 7.5 + 12;
+              const totalWidth = labelWidth + messageWidth;
 
-                const primaryBgColor = '#3B4252';
-                const labelBgColor = '#4C566A';
-                const textColor = '#ECEFF4';
-                const shadowColor = '#2E3440';
+              const labelBgColor = '#4C566A';
+              const textColor = '#ECEFF4';
+              const shadowColor = '#2E3440';
 
-                return `
-                  <svg xmlns="http://www.w3.org/2000/svg" width="${totalWidth}" height="20" role="img" aria-label="${label}: ${message}">
-                    <title>${label}: ${message}</title>
-                    <linearGradient id="s" x2="0" y2="100%">
-                      <stop offset="0" stop-color="#bbb" stop-opacity=".1"/>
-                      <stop offset="1" stop-opacity=".1"/>
-                    </linearGradient>
-                    <clipPath id="r"><rect width="${totalWidth}" height="20" rx="3" fill="#fff"/></clipPath>
-                    <g clip-path="url(#r)">
-                      <rect width="${labelWidth}" height="20" fill="${labelBgColor}"/>
-                      <rect x="${labelWidth}" width="${messageWidth}" height="20" fill="${color}"/>
-                      <rect width="${totalWidth}" height="20" fill="url(#s)"/>
-                    </g>
-                    <g fill="${textColor}" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" text-rendering="geometricPrecision" font-size="110">
-                      <text aria-hidden="true" x="${(labelWidth / 2) * 10}" y="150" fill="${shadowColor}" fill-opacity=".3" transform="scale(.1)" textLength="${(labelWidth - 10) * 10}">${label}</text>
-                      <text x="${(labelWidth / 2) * 10}" y="140" transform="scale(.1)" textLength="${(labelWidth - 10) * 10}">${label}</text>
-                      <text aria-hidden="true" x="${(labelWidth + messageWidth / 2) * 10}" y="150" fill="${shadowColor}" fill-opacity=".3" transform="scale(.1)" textLength="${(messageWidth - 10) * 10}">${message}</text>
-                      <text x="${(labelWidth + messageWidth / 2) * 10}" y="140" transform="scale(.1)" textLength="${(messageWidth - 10) * 10}">${message}</text>
-                    </g>
-                  </svg>
-                `;
+              return `
+                <svg xmlns="http://www.w3.org/2000/svg" width="${totalWidth}" height="20" role="img" aria-label="${label}: ${message}">
+                  <title>${label}: ${message}</title>
+                  <linearGradient id="s" x2="0" y2="100%">
+                    <stop offset="0" stop-color="#bbb" stop-opacity=".1"/>
+                    <stop offset="1" stop-opacity=".1"/>
+                  </linearGradient>
+                  <clipPath id="r"><rect width="${totalWidth}" height="20" rx="3" fill="#fff"/></clipPath>
+                  <g clip-path="url(#r)">
+                    <rect width="${labelWidth}" height="20" fill="${labelBgColor}"/>
+                    <rect x="${labelWidth}" width="${messageWidth}" height="20" fill="${color}"/>
+                    <rect width="${totalWidth}" height="20" fill="url(#s)"/>
+                  </g>
+                  <g fill="${textColor}" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" text-rendering="geometricPrecision" font-size="110">
+                    <text aria-hidden="true" x="${(labelWidth / 2) * 10}" y="150" fill="${shadowColor}" fill-opacity=".3" transform="scale(.1)" textLength="${(labelWidth - 10) * 10}">${label}</text>
+                    <text x="${(labelWidth / 2) * 10}" y="140" transform="scale(.1)" textLength="${(labelWidth - 10) * 10}">${label}</text>
+                    <text aria-hidden="true" x="${(labelWidth + messageWidth / 2) * 10}" y="150" fill="${shadowColor}" fill-opacity=".3" transform="scale(.1)" textLength="${(messageWidth - 10) * 10}">${message}</text>
+                    <text x="${(labelWidth + messageWidth / 2) * 10}" y="140" transform="scale(.1)" textLength="${(messageWidth - 10) * 10}">${message}</text>
+                  </g>
+                </svg>
+              `;
             }
 
             // Main execution logic
@@ -125,13 +120,13 @@ jobs:
               // --- 1. Load historical data ---
               console.log(`Loading historical data from ${historyFile} on branch ${branch}...`);
               const historyFileState = await getFile(historyFile);
-              let historicalData = { clones: {}, views: {}, releases: {} };
+              let historicalData = { clones: {}, views: {}, releases: { total_downloads: 0, by_release: {} } };
               if (historyFileState.content) {
                 const loadedData = JSON.parse(historyFileState.content);
                 historicalData.clones = loadedData.clones || {};
                 historicalData.views = loadedData.views || {};
-                // Releases data will be fully replaced by the new fetch.
-                console.log('Successfully loaded existing historical data for clones and views.');
+                historicalData.releases = loadedData.releases || { total_downloads: 0, by_release: {} };
+                console.log('Successfully loaded existing historical data.');
               } else {
                 console.log('No historical data file found. A new one will be created.');
               }
@@ -143,8 +138,12 @@ jobs:
 
               console.log('Fetching release download counts...');
               const releases = await github.paginate(github.rest.repos.listReleases, { owner, repo });
-              let totalDownloads = 0;
-              const releasesData = {};
+
+              // This object will hold the fresh data from the API
+              const newApiData = {
+                  total_downloads: 0,
+                  by_release: {}
+              };
 
               for (const release of releases) {
                 let releaseTotal = 0;
@@ -153,17 +152,49 @@ jobs:
                   releaseTotal += asset.download_count;
                   assetsData[asset.name] = asset.download_count;
                 }
-                
+
                 if (release.tag_name) {
-                    releasesData[release.tag_name] = {
+                    newApiData.by_release[release.tag_name] = {
                         total_downloads: releaseTotal,
                         assets: assetsData
                     };
                 }
-                totalDownloads += releaseTotal;
+                newApiData.total_downloads += releaseTotal;
               }
 
-              // --- 3. Update historical data ---
+              // --- 3. Accumulate Download Counts (NEW LOGIC) ---
+              console.log('Calculating new cumulative download counts...');
+              let cumulativeTotalDownloads = historicalData.releases.total_downloads || 0;
+              const cumulativeReleasesData = historicalData.releases.by_release || {};
+
+              // Iterate over the releases found in the latest API call
+              for (const [tagName, newReleaseData] of Object.entries(newApiData.by_release)) {
+                  const oldReleaseTotal = cumulativeReleasesData[tagName]?.total_downloads || 0;
+                  const newReleaseTotal = newReleaseData.total_downloads;
+
+                  // Calculate the difference, ensuring it's not negative
+                  const diff = Math.max(0, newReleaseTotal - oldReleaseTotal);
+                  
+                  if (diff > 0) {
+                      console.log(`Release ${tagName} has ${diff} new downloads.`);
+                      cumulativeTotalDownloads += diff;
+                  }
+                  
+                  // Always update the release data with the latest from the API
+                  cumulativeReleasesData[tagName] = newReleaseData;
+              }
+              
+              // This ensures that if the overall total from the API is higher for any reason 
+              // (e.g., a new release not accounted for), we take the higher value.
+              cumulativeTotalDownloads = Math.max(cumulativeTotalDownloads, newApiData.total_downloads);
+
+              // Update historical data with the new cumulative totals
+              historicalData.releases = {
+                  total_downloads: cumulativeTotalDownloads,
+                  by_release: cumulativeReleasesData
+              };
+
+              // --- 4. Update historical traffic data (Clones and Views) ---
               console.log('Merging new traffic data with historical data...');
               clonesResponse.clones.forEach(day => {
                 const date = day.timestamp.split('T')[0];
@@ -173,23 +204,17 @@ jobs:
                 const date = day.timestamp.split('T')[0];
                 historicalData.views[date] = { count: day.count, uniques: day.uniques };
               });
-              // Update the releases data
-              historicalData.releases = {
-                total_downloads: totalDownloads,
-                by_release: releasesData
-              };
 
-
-              // --- 4. Calculate all-time totals ---
+              // --- 5. Calculate all-time totals for badges ---
               const allTimeTotalClones = Object.values(historicalData.clones).reduce((sum, day) => sum + day.count, 0);
               const allTimeUniqueCloners = Object.values(historicalData.clones).reduce((sum, day) => sum + day.uniques, 0);
               const allTimeTotalViews = Object.values(historicalData.views).reduce((sum, day) => sum + day.count, 0);
               const allTimeUniqueVisitors = Object.values(historicalData.views).reduce((sum, day) => sum + day.uniques, 0);
-              const allTimeTotalDownloads = historicalData.releases.total_downloads || 0;
+              const allTimeTotalDownloads = historicalData.releases.total_downloads;
 
               console.log(`All-Time Clones: Total=${allTimeTotalClones}, Unique (sum of daily uniques)=${allTimeUniqueCloners}`);
               console.log(`All-Time Views: Total=${allTimeTotalViews}, Unique (sum of daily uniques)=${allTimeUniqueVisitors}`);
-              console.log(`All-Time Release Downloads: Total=${allTimeTotalDownloads}`);
+              console.log(`All-Time Release Downloads (Cumulative): Total=${allTimeTotalDownloads}`);
               if (historicalData.releases.by_release) {
                 console.log('Downloads by Release:');
                 for (const [tagName, data] of Object.entries(historicalData.releases.by_release)) {
@@ -197,7 +222,7 @@ jobs:
                 }
               }
 
-              // --- 5. Generate new badge SVGs ---
+              // --- 6. Generate new badge SVGs ---
               const clonesBadgeSvg = createBadgeSvg('Clones', `${allTimeTotalClones} (Unique: ${allTimeUniqueCloners})`, '#8FBCBB');
               const viewsBadgeSvg = createBadgeSvg('Views', `${allTimeTotalViews} (Unique: ${allTimeUniqueVisitors})`, '#88C0D0');
               const totalDownloadsBadgeSvg = createBadgeSvg('Total Downloads', `${allTimeTotalDownloads}`, '#A3BE8C');
@@ -211,41 +236,38 @@ jobs:
                   }
               }
 
-              // --- 6. Commit all files ---
+              // --- 7. Commit all files ---
               console.log('Committing updated files to the repository...');
-
-              // Commit history file
               const newHistoryContent = JSON.stringify(historicalData, null, 2);
-              await commitFile(historyFile, newHistoryContent, 'feat: Update GitHub traffic and downloads history', historyFileState.sha);
-              console.log(`- Committed ${historyFile}`);
+              if (newHistoryContent !== historyFileState.content) {
+                await commitFile(historyFile, newHistoryContent, 'feat: Update GitHub traffic and downloads history', historyFileState.sha);
+                console.log(`- Committed ${historyFile}`);
 
-              // Get SHAs for existing badges before committing
-              const clonesBadgeState = await getFile(`${badgeDir}/clones_badge.svg`);
-              const viewsBadgeState = await getFile(`${badgeDir}/views_badge.svg`);
-              const totalDownloadsBadgeState = await getFile(`${badgeDir}/total_downloads_badge.svg`);
+                // Get SHAs for existing badges before committing
+                const clonesBadgeState = await getFile(`${badgeDir}/clones_badge.svg`);
+                const viewsBadgeState = await getFile(`${badgeDir}/views_badge.svg`);
+                const totalDownloadsBadgeState = await getFile(`${badgeDir}/total_downloads_badge.svg`);
 
-              // Commit main badges
-              await commitFile(`${badgeDir}/clones_badge.svg`, clonesBadgeSvg, 'feat: Update clones traffic badge', clonesBadgeState.sha);
-              console.log(`- Committed ${badgeDir}/clones_badge.svg`);
+                // Commit main badges
+                await commitFile(`${badgeDir}/clones_badge.svg`, clonesBadgeSvg, 'feat: Update clones traffic badge', clonesBadgeState.sha);
+                console.log(`- Committed ${badgeDir}/clones_badge.svg`);
+                await commitFile(`${badgeDir}/views_badge.svg`, viewsBadgeSvg, 'feat: Update views traffic badge', viewsBadgeState.sha);
+                console.log(`- Committed ${badgeDir}/views_badge.svg`);
+                await commitFile(`${badgeDir}/total_downloads_badge.svg`, totalDownloadsBadgeSvg, 'feat: Update total downloads badge', totalDownloadsBadgeState.sha);
+                console.log(`- Committed ${badgeDir}/total_downloads_badge.svg`);
 
-              await commitFile(`${badgeDir}/views_badge.svg`, viewsBadgeSvg, 'feat: Update views traffic badge', viewsBadgeState.sha);
-              console.log(`- Committed ${badgeDir}/views_badge.svg`);
-
-              await commitFile(`${badgeDir}/total_downloads_badge.svg`, totalDownloadsBadgeSvg, 'feat: Update total downloads badge', totalDownloadsBadgeState.sha);
-              console.log(`- Committed ${badgeDir}/total_downloads_badge.svg`);
-
-              // Commit release-specific badges
-              if (releaseBadgesSvgs) {
-                  for (const [tagName, svgContent] of Object.entries(releaseBadgesSvgs)) {
-                      const safeTagName = tagName.replace(/[^a-zA-Z0-9.-]/g, '_');
-                      const badgePath = `${badgeDir}/release_${safeTagName}_badge.svg`;
-                      const badgeState = await getFile(badgePath);
-                      await commitFile(badgePath, svgContent, `feat: Update download badge for release ${tagName}`, badgeState.sha);
-                      console.log(`- Committed ${badgePath}`);
-                  }
+                // Commit release-specific badges
+                for (const [tagName, svgContent] of Object.entries(releaseBadgesSvgs)) {
+                    const safeTagName = tagName.replace(/[^a-zA-Z0-9.-]/g, '_');
+                    const badgePath = `${badgeDir}/release_${safeTagName}_badge.svg`;
+                    const badgeState = await getFile(badgePath);
+                    await commitFile(badgePath, svgContent, `feat: Update download badge for release ${tagName}`, badgeState.sha);
+                    console.log(`- Committed ${badgePath}`);
+                }
+                console.log('✅ Traffic badges, download counts, and history updated successfully!');
+              } else {
+                console.log('✅ No changes detected in traffic or download data. Nothing to commit.');
               }
-
-              console.log('✅ Traffic badges, download counts, and history updated successfully!');
 
             } catch (error) {
               console.error('Error during workflow execution:', error);
