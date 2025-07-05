@@ -14,7 +14,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          # Fetch all history to ensure the script has the full context.
           fetch-depth: 0
 
       - name: Generate and Commit Traffic Data
@@ -30,15 +29,11 @@ jobs:
             const repo = context.repo.repo;
             const badgeDir = '.github/badges';
             const historyFile = '.github/traffic_history.json';
-            const branch = context.ref.replace('refs/heads/', '');
 
             /**
              * Writes a file locally to the runner's filesystem.
-             * @param {string} filePath - The path for the file.
-             * @param {string} content - The new content of the file.
              */
             function writeFile(filePath, content) {
-              // Ensure the directory exists before writing the file
               const dir = path.dirname(filePath);
               if (!fs.existsSync(dir)) {
                 fs.mkdirSync(dir, { recursive: true });
@@ -49,10 +44,6 @@ jobs:
 
             /**
              * Creates a themed SVG badge.
-             * @param {string} label - The text for the left part of the badge.
-             * @param {string} message - The text for the right part of the badge.
-             * @param {string} color - The background color for the message part.
-             * @returns {string} - The SVG content as a string.
              */
             function createBadgeSvg(label, message, color) {
               const labelWidth = label.length * 7 + 12;
@@ -95,43 +86,56 @@ jobs:
                 console.log('No historical data file found. A new one will be created.');
               }
 
-              // --- 2. Fetch new traffic and release data ---
-              console.log('Fetching latest traffic data from GitHub API...');
+              // --- 2. Fetch new API data ---
+              console.log('Fetching latest data from GitHub API...');
               const { data: clonesResponse } = await github.rest.repos.getClones({ owner, repo, per: 'day' });
               const { data: viewsResponse } = await github.rest.repos.getViews({ owner, repo, per: 'day' });
-              console.log('Fetching release download counts...');
               const releases = await github.paginate(github.rest.repos.listReleases, { owner, repo });
-              const newApiData = { total_downloads: 0, by_release: {} };
+              
+              const newApiDataByRelease = {};
               for (const release of releases) {
-                let releaseTotal = 0;
                 const assetsData = {};
                 for (const asset of release.assets) {
-                  releaseTotal += asset.download_count;
                   assetsData[asset.name] = asset.download_count;
                 }
                 if (release.tag_name) {
-                  newApiData.by_release[release.tag_name] = { total_downloads: releaseTotal, assets: assetsData };
+                  newApiDataByRelease[release.tag_name] = { assets: assetsData };
                 }
-                newApiData.total_downloads += releaseTotal;
               }
 
-              // --- 3. Accumulate Download Counts ---
+              // --- 3. Accumulate Download Counts (FIXED LOGIC) ---
               console.log('Calculating new cumulative download counts...');
-              let cumulativeTotalDownloads = historicalData.releases.total_downloads || 0;
               const cumulativeReleasesData = historicalData.releases.by_release || {};
-              for (const [tagName, newReleaseData] of Object.entries(newApiData.by_release)) {
-                const oldReleaseTotal = cumulativeReleasesData[tagName]?.total_downloads || 0;
-                const newReleaseTotal = newReleaseData.total_downloads;
-                const diff = Math.max(0, newReleaseTotal - oldReleaseTotal);
-                if (diff > 0) {
-                  cumulativeTotalDownloads += diff;
-                }
-                cumulativeReleasesData[tagName] = newReleaseData;
-              }
-              cumulativeTotalDownloads = Math.max(cumulativeTotalDownloads, newApiData.total_downloads);
-              historicalData.releases = { total_downloads: cumulativeTotalDownloads, by_release: cumulativeReleasesData };
 
-              // --- 4. Update historical traffic data (Clones and Views) ---
+              // Iterate over releases from the API to update cumulative data
+              for (const [tagName, newReleaseData] of Object.entries(newApiDataByRelease)) {
+                // If the release is new, initialize it in our history
+                if (!cumulativeReleasesData[tagName]) {
+                  cumulativeReleasesData[tagName] = { total_downloads: 0, assets: {} };
+                }
+                const historicalRelease = cumulativeReleasesData[tagName];
+
+                // Iterate over assets to update their counts
+                for (const [assetName, newAssetCount] of Object.entries(newReleaseData.assets)) {
+                  const oldAssetCount = historicalRelease.assets[assetName] || 0;
+                  // Count is the higher of the old or new value, ensuring it only ever increases
+                  historicalRelease.assets[assetName] = Math.max(oldAssetCount, newAssetCount);
+                }
+
+                // Recalculate the total for the release by summing its cumulative asset counts
+                historicalRelease.total_downloads = Object.values(historicalRelease.assets).reduce((sum, count) => sum + count, 0);
+              }
+              
+              // The grand total is the sum of all cumulative per-release totals.
+              // This is the most reliable way to calculate it, preserving deleted releases.
+              const cumulativeTotalDownloads = Object.values(cumulativeReleasesData).reduce((sum, release) => sum + release.total_downloads, 0);
+              
+              historicalData.releases = {
+                  total_downloads: cumulativeTotalDownloads,
+                  by_release: cumulativeReleasesData
+              };
+
+              // --- 4. Update Clones and Views ---
               clonesResponse.clones.forEach(day => {
                 historicalData.clones[day.timestamp.split('T')[0]] = { count: day.count, uniques: day.uniques };
               });
@@ -139,44 +143,31 @@ jobs:
                 historicalData.views[day.timestamp.split('T')[0]] = { count: day.count, uniques: day.uniques };
               });
               
-              // --- 5. Check if there are any changes ---
+              // --- 5. Check for changes before committing ---
               const newHistoryContent = JSON.stringify(historicalData, null, 2);
               if (newHistoryContent.trim() === originalHistoryContent.trim()) {
                   console.log('✅ No changes detected in traffic or download data. Nothing to commit.');
                   return; // Exit script early
               }
 
-              // --- 6. Calculate all-time totals and generate SVGs ---
+              // --- 6. Generate SVGs from final data ---
               console.log('Data has changed. Generating new badges...');
               const allTimeTotalClones = Object.values(historicalData.clones).reduce((sum, day) => sum + day.count, 0);
-              const allTimeUniqueCloners = Object.values(historicalData.clones).reduce((sum, day) => sum + day.uniques, 0);
               const allTimeTotalViews = Object.values(historicalData.views).reduce((sum, day) => sum + day.count, 0);
-              const allTimeUniqueVisitors = Object.values(historicalData.views).reduce((sum, day) => sum + day.uniques, 0);
-              const allTimeTotalDownloads = historicalData.releases.total_downloads;
-
-              const clonesBadgeSvg = createBadgeSvg('Clones', `${allTimeTotalClones} (Unique: ${allTimeUniqueCloners})`, '#8FBCBB');
-              const viewsBadgeSvg = createBadgeSvg('Views', `${allTimeTotalViews} (Unique: ${allTimeUniqueVisitors})`, '#88C0D0');
-              const totalDownloadsBadgeSvg = createBadgeSvg('Total Downloads', `${allTimeTotalDownloads}`, '#A3BE8C');
               
-              // --- 7. Write all files to local disk ---
-              console.log('Writing updated files to local disk...');
               writeFile(historyFile, newHistoryContent);
-              writeFile(`${badgeDir}/clones_badge.svg`, clonesBadgeSvg);
-              writeFile(`${badgeDir}/views_badge.svg`, viewsBadgeSvg);
-              writeFile(`${badgeDir}/total_downloads_badge.svg`, totalDownloadsBadgeSvg);
+              writeFile(`${badgeDir}/clones_badge.svg`, createBadgeSvg('Clones', `${allTimeTotalClones}`, '#8FBCBB'));
+              writeFile(`${badgeDir}/views_badge.svg`, createBadgeSvg('Views', `${allTimeTotalViews}`, '#88C0D0'));
+              writeFile(`${badgeDir}/total_downloads_badge.svg`, createBadgeSvg('Total Downloads', `${historicalData.releases.total_downloads}`, '#A3BE8C'));
               
-              if (historicalData.releases.by_release) {
-                for (const [tagName, data] of Object.entries(historicalData.releases.by_release)) {
+              for (const [tagName, data] of Object.entries(historicalData.releases.by_release)) {
                   const safeTagName = tagName.replace(/[^a-zA-Z0-9.-]/g, '_');
                   const badgePath = `${badgeDir}/release_${safeTagName}_badge.svg`;
-                  const badgeLabel = `Release ${tagName}`;
-                  const badgeMessage = `${data.total_downloads} downloads`;
-                  const svgContent = createBadgeSvg(badgeLabel, badgeMessage, '#B48EAD');
+                  const svgContent = createBadgeSvg(`Downloads ${tagName}`, `${data.total_downloads}`, '#B48EAD');
                   writeFile(badgePath, svgContent);
-                }
               }
               
-              // --- 8. Commit all changes in a single commit ---
+              // --- 7. Commit all changes in one commit ---
               console.log('Committing all changes to the repository...');
               await exec('git', ['config', '--global', 'user.name', 'github-actions[bot]']);
               await exec('git', ['config', '--global', 'user.email', 'github-actions[bot]@users.noreply.github.com']);
