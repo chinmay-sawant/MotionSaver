@@ -120,12 +120,12 @@
     }
   },
   "releases": {
-    "total_downloads": 123,
+    "total_downloads": 133,
     "by_release": {
       "V2": {
-        "total_downloads": 119,
+        "total_downloads": 129,
         "assets": {
-          "MotionSaver_V2.zip": 119
+          "MotionSaver_V2.zip": 129
         }
       },
       "V1": {
