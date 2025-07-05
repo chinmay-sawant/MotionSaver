@@ -1,5 +1,3 @@
-import tkinter as tk
-import argparse
 import os
 import platform 
 import sys
