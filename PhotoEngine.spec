@@ -12,12 +12,10 @@ a = Analysis(
         ('config', 'config'),
         # Include screensaver_app and all its contents (including icons)
         ('screensaver_app', 'screensaver_app'),
-        # Include widgets and all its contents
-        ('widgets', 'widgets'),
+        # Include widgets and all its contents (corrected path)
+        ('screensaver_app/widgets', 'screensaver_app/widgets'),
         # Include utils and all its contents
         ('utils', 'utils'),
-        # Include all .py files in the root
-        ('*.py', '.'),
         # requirements and batch file
         ('requirements.txt', '.'),
         ('MotionSaver.bat', '.'),
