@@ -21,7 +21,7 @@ jobs:
         with:
           github-token: ${{ secrets.GH_TOKEN }}
           script: |
-            const { exec } = require('@actions/exec');
+            // const { exec } = require('@actions/exec'); // THIS LINE IS REMOVED
             const fs = require('fs');
             const path = require('path');
 
@@ -103,31 +103,24 @@ jobs:
                 }
               }
 
-              // --- 3. Accumulate Download Counts (FIXED LOGIC) ---
+              // --- 3. Accumulate Download Counts ---
               console.log('Calculating new cumulative download counts...');
               const cumulativeReleasesData = historicalData.releases.by_release || {};
 
-              // Iterate over releases from the API to update cumulative data
               for (const [tagName, newReleaseData] of Object.entries(newApiDataByRelease)) {
-                // If the release is new, initialize it in our history
                 if (!cumulativeReleasesData[tagName]) {
                   cumulativeReleasesData[tagName] = { total_downloads: 0, assets: {} };
                 }
                 const historicalRelease = cumulativeReleasesData[tagName];
 
-                // Iterate over assets to update their counts
                 for (const [assetName, newAssetCount] of Object.entries(newReleaseData.assets)) {
                   const oldAssetCount = historicalRelease.assets[assetName] || 0;
-                  // Count is the higher of the old or new value, ensuring it only ever increases
                   historicalRelease.assets[assetName] = Math.max(oldAssetCount, newAssetCount);
                 }
 
-                // Recalculate the total for the release by summing its cumulative asset counts
                 historicalRelease.total_downloads = Object.values(historicalRelease.assets).reduce((sum, count) => sum + count, 0);
               }
               
-              // The grand total is the sum of all cumulative per-release totals.
-              // This is the most reliable way to calculate it, preserving deleted releases.
               const cumulativeTotalDownloads = Object.values(cumulativeReleasesData).reduce((sum, release) => sum + release.total_downloads, 0);
               
               historicalData.releases = {
@@ -147,7 +140,7 @@ jobs:
               const newHistoryContent = JSON.stringify(historicalData, null, 2);
               if (newHistoryContent.trim() === originalHistoryContent.trim()) {
                   console.log('✅ No changes detected in traffic or download data. Nothing to commit.');
-                  return; // Exit script early
+                  return;
               }
 
               // --- 6. Generate SVGs from final data ---
