@@ -7,7 +7,7 @@ import json
 import os
 
 # Initialize central logging
-from central_logger import get_logger, log_startup, log_shutdown, log_exception
+from screensaver_app.central_logger import get_logger, log_startup, log_shutdown, log_exception
 logger = get_logger('KeyBlocker')
 
 # Registry-based blocking (Windows only)

@@ -1,3 +1,5 @@
+import tkinter as tk
+import argparse
 import os
 import platform 
 import sys
@@ -5,8 +7,13 @@ import subprocess # Added for service registration
 import threading
 import time
 
-# Initialize central logging first
-from central_logger import get_logger, log_startup, log_shutdown, log_exception
+# Ensure parent directory is in sys.path for package imports
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+if parent_dir not in sys.path:
+    sys.path.insert(0, parent_dir)
+
+from screensaver_app.central_logger import get_logger, log_startup, log_shutdown, log_exception
 logger = get_logger('PhotoEngine')
 
 from screensaver_app.video_player import VideoClockScreenSaver 
@@ -929,4 +936,3 @@ if __name__ == "__main__":
             logger.info("Elevation check skipped due to --no-elevate flag.")
         admin_main()
     logger.info("PhotoEngine finished.")
-

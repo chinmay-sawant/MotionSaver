@@ -10,7 +10,7 @@ import sys
 
 # Add central logging
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from central_logger import get_logger, log_startup, log_shutdown, log_exception
+from screensaver_app.central_logger import get_logger, log_startup, log_shutdown, log_exception
 logger = get_logger('StockWidget')
 
 class StockWidget:

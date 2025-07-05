@@ -10,7 +10,7 @@ import win32serviceutil
 import win32service
 
 # Initialize central logging
-from central_logger import get_logger, log_startup, log_shutdown, log_exception
+from screensaver_app.central_logger import get_logger, log_startup, log_shutdown, log_exception
 logger = get_logger('GUI')
 
 # Assuming PasswordConfig.py is in the same directory (package)
