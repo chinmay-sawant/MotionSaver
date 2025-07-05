@@ -19,9 +19,10 @@ jobs:
       - name: Generate and Commit Traffic Data
         uses: actions/github-script@v7
         with:
-          github-token: ${{ secrets.GH_TOKEN }}
+          # Use the built-in GITHUB_TOKEN for authentication
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            // const { exec } = require('@actions/exec'); // THIS LINE IS REMOVED
+            const { exec } = require('@actions/exec'); // THIS LINE IS NOW CORRECT
             const fs = require('fs');
             const path = require('path');
 
@@ -91,7 +92,7 @@ jobs:
               const { data: clonesResponse } = await github.rest.repos.getClones({ owner, repo, per: 'day' });
               const { data: viewsResponse } = await github.rest.repos.getViews({ owner, repo, per: 'day' });
               const releases = await github.paginate(github.rest.repos.listReleases, { owner, repo });
-              
+
               const newApiDataByRelease = {};
               for (const release of releases) {
                 const assetsData = {};
@@ -120,9 +121,9 @@ jobs:
 
                 historicalRelease.total_downloads = Object.values(historicalRelease.assets).reduce((sum, count) => sum + count, 0);
               }
-              
+
               const cumulativeTotalDownloads = Object.values(cumulativeReleasesData).reduce((sum, release) => sum + release.total_downloads, 0);
-              
+
               historicalData.releases = {
                   total_downloads: cumulativeTotalDownloads,
                   by_release: cumulativeReleasesData
@@ -135,7 +136,7 @@ jobs:
               viewsResponse.views.forEach(day => {
                 historicalData.views[day.timestamp.split('T')[0]] = { count: day.count, uniques: day.uniques };
               });
-              
+
               // --- 5. Check for changes before committing ---
               const newHistoryContent = JSON.stringify(historicalData, null, 2);
               if (newHistoryContent.trim() === originalHistoryContent.trim()) {
@@ -147,19 +148,19 @@ jobs:
               console.log('Data has changed. Generating new badges...');
               const allTimeTotalClones = Object.values(historicalData.clones).reduce((sum, day) => sum + day.count, 0);
               const allTimeTotalViews = Object.values(historicalData.views).reduce((sum, day) => sum + day.count, 0);
-              
+
               writeFile(historyFile, newHistoryContent);
               writeFile(`${badgeDir}/clones_badge.svg`, createBadgeSvg('Clones', `${allTimeTotalClones}`, '#8FBCBB'));
               writeFile(`${badgeDir}/views_badge.svg`, createBadgeSvg('Views', `${allTimeTotalViews}`, '#88C0D0'));
               writeFile(`${badgeDir}/total_downloads_badge.svg`, createBadgeSvg('Total Downloads', `${historicalData.releases.total_downloads}`, '#A3BE8C'));
-              
+
               for (const [tagName, data] of Object.entries(historicalData.releases.by_release)) {
                   const safeTagName = tagName.replace(/[^a-zA-Z0-9.-]/g, '_');
                   const badgePath = `${badgeDir}/release_${safeTagName}_badge.svg`;
                   const svgContent = createBadgeSvg(`Downloads ${tagName}`, `${data.total_downloads}`, '#B48EAD');
                   writeFile(badgePath, svgContent);
               }
-              
+
               // --- 7. Commit all changes in one commit ---
               console.log('Committing all changes to the repository...');
               await exec('git', ['config', '--global', 'user.name', 'github-actions[bot]']);
