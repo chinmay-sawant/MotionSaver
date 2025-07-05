@@ -61,78 +61,30 @@ jobs:
              */
             async function commitMultipleFiles(files, commitMessage) {
               console.log('Starting multi-file commit process...');
-
-              // 1. Get the current branch's latest commit SHA
-              const { data: refData } = await github.rest.git.getRef({
-                owner,
-                repo,
-                ref: `heads/${branch}`,
-              });
+              const { data: refData } = await github.rest.git.getRef({ owner, repo, ref: `heads/${branch}` });
               const baseCommitSha = refData.object.sha;
-              console.log(`- Base commit SHA: ${baseCommitSha}`);
-
-              // 2. Get the tree SHA of the base commit
-              const { data: commitData } = await github.rest.git.getCommit({
-                owner,
-                repo,
-                commit_sha: baseCommitSha,
-              });
+              const { data: commitData } = await github.rest.git.getCommit({ owner, repo, commit_sha: baseCommitSha });
               const baseTreeSha = commitData.tree.sha;
-              console.log(`- Base tree SHA: ${baseTreeSha}`);
-
-              // 3. Create a blob for each file content
               const blobPromises = files.map(file =>
-                github.rest.git.createBlob({
-                  owner,
-                  repo,
-                  content: file.content,
-                  encoding: 'utf-8',
-                })
+                github.rest.git.createBlob({ owner, repo, content: file.content, encoding: 'utf-8' })
               );
               const blobResults = await Promise.all(blobPromises);
-              console.log(`- Created ${blobResults.length} blobs.`);
-
-              // 4. Create a new tree with the file changes
               const tree = blobResults.map((blob, index) => ({
                 path: files[index].path,
-                mode: '100644', // file mode
-                type: 'blob',
-                sha: blob.data.sha,
+                mode: '100644', type: 'blob', sha: blob.data.sha,
               }));
-
-              const { data: treeData } = await github.rest.git.createTree({
-                owner,
-                repo,
-                base_tree: baseTreeSha,
-                tree,
-              });
+              const { data: treeData } = await github.rest.git.createTree({ owner, repo, base_tree: baseTreeSha, tree });
               const newTreeSha = treeData.sha;
-              console.log(`- Created new tree with SHA: ${newTreeSha}`);
-
-              // 5. Create a new commit pointing to the new tree
               const { data: newCommitData } = await github.rest.git.createCommit({
-                owner,
-                repo,
-                message: commitMessage,
-                tree: newTreeSha,
-                parents: [baseCommitSha],
+                owner, repo, message: commitMessage, tree: newTreeSha, parents: [baseCommitSha],
               });
               const newCommitSha = newCommitData.sha;
-              console.log(`- Created new commit with SHA: ${newCommitSha}`);
-
-              // 6. Update the branch reference to point to the new commit
-              await github.rest.git.updateRef({
-                owner,
-                repo,
-                ref: `heads/${branch}`,
-                sha: newCommitSha,
-              });
+              await github.rest.git.updateRef({ owner, repo, ref: `heads/${branch}`, sha: newCommitSha });
               console.log(`- Updated branch '${branch}' to point to the new commit.`);
             }
 
-
             /**
-             * Creates a themed SVG badge. (Your existing function, no changes needed)
+             * Creates a themed SVG badge.
              * @param {string} label - The text for the left part of the badge.
              * @param {string} message - The text for the right part of the badge.
              * @param {string} color - The background color for the message part.
@@ -142,10 +94,7 @@ jobs:
                 const labelWidth = label.length * 7 + 12;
                 const messageWidth = message.length * 7.5 + 12;
                 const totalWidth = labelWidth + messageWidth;
-                const primaryBgColor = '#3B4252';
-                const labelBgColor = '#4C566A';
-                const textColor = '#ECEFF4';
-                const shadowColor = '#2E3440';
+                const primaryBgColor = '#3B4252'; const labelBgColor = '#4C566A'; const textColor = '#ECEFF4'; const shadowColor = '#2E3440';
                 return `<svg xmlns="http://www.w3.org/2000/svg" width="${totalWidth}" height="20" role="img" aria-label="${label}: ${message}"><title>${label}: ${message}</title><linearGradient id="s" x2="0" y2="100%"><stop offset="0" stop-color="#bbb" stop-opacity=".1"/><stop offset="1" stop-opacity=".1"/></linearGradient><clipPath id="r"><rect width="${totalWidth}" height="20" rx="3" fill="#fff"/></clipPath><g clip-path="url(#r)"><rect width="${labelWidth}" height="20" fill="${labelBgColor}"/><rect x="${labelWidth}" width="${messageWidth}" height="20" fill="${color}"/><rect width="${totalWidth}" height="20" fill="url(#s)"/></g><g fill="${textColor}" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" text-rendering="geometricPrecision" font-size="110"><text aria-hidden="true" x="${(labelWidth / 2) * 10}" y="150" fill="${shadowColor}" fill-opacity=".3" transform="scale(.1)" textLength="${(labelWidth - 10) * 10}">${label}</text><text x="${(labelWidth / 2) * 10}" y="140" transform="scale(.1)" textLength="${(labelWidth - 10) * 10}">${label}</text><text aria-hidden="true" x="${(labelWidth + messageWidth / 2) * 10}" y="150" fill="${shadowColor}" fill-opacity=".3" transform="scale(.1)" textLength="${(messageWidth - 10) * 10}">${message}</text><text x="${(labelWidth + messageWidth / 2) * 10}" y="140" transform="scale(.1)" textLength="${(messageWidth - 10) * 10}">${message}</text></g></svg>`;
             }
 
@@ -159,7 +108,9 @@ jobs:
                 const loadedData = JSON.parse(historyFileContent);
                 historicalData.clones = loadedData.clones || {};
                 historicalData.views = loadedData.views || {};
-                console.log('Successfully loaded existing historical data for clones and views.');
+                // CHANGED: Load existing release data to preserve history
+                historicalData.releases = loadedData.releases || { by_release: {}, total_downloads: 0 };
+                console.log('Successfully loaded existing historical data.');
               } else {
                 console.log('No historical data file found. A new one will be created.');
               }
@@ -169,22 +120,11 @@ jobs:
               const { data: clonesResponse } = await github.rest.repos.getClones({ owner, repo, per: 'day' });
               const { data: viewsResponse } = await github.rest.repos.getViews({ owner, repo, per: 'day' });
               const releases = await github.paginate(github.rest.repos.listReleases, { owner, repo });
-              let totalDownloads = 0;
-              const releasesData = {};
-              for (const release of releases) {
-                let releaseTotal = 0;
-                const assetsData = {};
-                for (const asset of release.assets) {
-                  releaseTotal += asset.download_count;
-                  assetsData[asset.name] = asset.download_count;
-                }
-                if (release.tag_name) {
-                    releasesData[release.tag_name] = { total_downloads: releaseTotal, assets: assetsData };
-                }
-                totalDownloads += releaseTotal;
-              }
-
+              
               // --- 3. Update historical data ---
+              console.log('Merging new traffic data with historical data...');
+              
+              // Clones and Views data is always a complete 14-day set, so we merge it directly
               clonesResponse.clones.forEach(day => {
                 const date = day.timestamp.split('T')[0];
                 historicalData.clones[date] = { count: day.count, uniques: day.uniques };
@@ -193,7 +133,41 @@ jobs:
                 const date = day.timestamp.split('T')[0];
                 historicalData.views[date] = { count: day.count, uniques: day.uniques };
               });
-              historicalData.releases = { total_downloads: totalDownloads, by_release: releasesData };
+              
+              // --- CHANGED: Release Download Data Merge Logic ---
+              console.log('Merging release download counts...');
+              // Start with the existing release data we loaded in Step 1
+              const mergedReleasesData = historicalData.releases.by_release || {};
+
+              // Loop through the fresh data from the API and update our historical object
+              for (const release of releases) {
+                if (!release.tag_name) continue; // Skip drafts or releases without a tag
+
+                let releaseTotalDownloads = 0;
+                const assetsData = {};
+                for (const asset of release.assets) {
+                  releaseTotalDownloads += asset.download_count;
+                  assetsData[asset.name] = asset.download_count;
+                }
+                
+                // Update or add the entry for this release tag. This preserves old
+                // releases that are no longer in the API response.
+                mergedReleasesData[release.tag_name] = {
+                    total_downloads: releaseTotalDownloads,
+                    assets: assetsData
+                };
+              }
+              
+              // Recalculate the grand total from our complete (merged) data set
+              const newTotalDownloads = Object.values(mergedReleasesData).reduce(
+                (sum, release) => sum + release.total_downloads, 0
+              );
+
+              // Finally, update the main historicalData object
+              historicalData.releases = {
+                total_downloads: newTotalDownloads,
+                by_release: mergedReleasesData
+              };
 
               // --- 4. Calculate all-time totals ---
               const allTimeTotalClones = Object.values(historicalData.clones).reduce((sum, day) => sum + day.count, 0);
