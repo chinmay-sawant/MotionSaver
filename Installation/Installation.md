@@ -15,6 +15,9 @@ D:/MotionSaver
 ├── MotionSaver.bat
 ├── PhotoEngine.exe
 ├── _internal/
+└── StopMotionSaver.bat
+└── unhooks.exe
+
 ```
 
 ---
