@@ -116,8 +116,9 @@ Make sure your extracted folder matches this structure before proceeding.
 **Q: Some Windows shortcuts (like Alt+Tab or Win+D) are not working while MotionSaver is running. Why?**
 - MotionSaver is designed to behave like the default Windows lockscreen and uses low-level keyboard hooks to secure the lockscreen experience.
 - As a result, certain Windows shortcuts may be blocked while the screensaver is active.
-- The developers are actively working to ensure that shortcuts are only blocked while the lockscreen is displayed, and not when you are on the desktop.
 - If you need to restore shortcut functionality, pressing **Ctrl + Alt + Del** will release the hooks and allow special shortcuts to work again.
+- If **Ctrl + Alt + Del** does not work, run `StopMotionSaver.bat` as administrator inside `D:/MotionSaver`. This script will attempt to release any stuck keyboard hooks and restore shortcut functionality.  
+- The `StopMotionSaver.bat` script was added in [#14 feature/quickfix](https://github.com/chinmay-sawant/MotionSaver/pull/14).
 - This is a known limitation and will be addressed in future updates.
 
 **Q: How do I send logs to the developers?**
