@@ -172,3 +172,104 @@ document.addEventListener("DOMContentLoaded", () => {
         "<p>Could not load releases. Please check the console for errors or try again later.</p>";
     });
 });
+
+// Fetch and display GitHub issues
+document.addEventListener("DOMContentLoaded", () => {
+  const issuesContainer = document.getElementById("issues-container");
+  if (!issuesContainer) return;
+  const repo = "chinmay-sawant/MotionSaver";
+  fetch(`https://api.github.com/repos/${repo}/issues?state=open`)
+    .then((response) => {
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      return response.json();
+    })
+    .then((issues) => {
+      issuesContainer.innerHTML = "";
+      if (!issues.length) {
+        issuesContainer.innerHTML = "<p>No open issues found.</p>";
+        return;
+      }
+
+      // Helper to get label names in lower case
+      function hasLabel(issue, labelName) {
+        return (issue.labels || []).some(
+          (l) => l.name.toLowerCase() === labelName.toLowerCase()
+        );
+      }
+
+      // Sorting logic
+      const sorted = {
+        "next-release-fix": [],
+        "priority": [],
+        "future-release-fix": [],
+        "observation": [],
+        "other": []
+      };
+
+      issues.forEach((issue) => {
+        if (hasLabel(issue, "next-release-fix")) sorted["next-release-fix"].push(issue);
+        else if (hasLabel(issue, "Priority")) sorted["priority"].push(issue);
+        else if (hasLabel(issue, "future-release-fix")) sorted["future-release-fix"].push(issue);
+        else if (hasLabel(issue, "Observation")) sorted["observation"].push(issue);
+        else sorted["other"].push(issue);
+      });
+
+      function renderIssue(issue) {
+        // Find priority label if any
+        const priorityLabel = (issue.labels || []).find(
+          (l) =>
+            ["priority", "next-release-fix", "future-release-fix", "observation"].includes(
+              l.name.toLowerCase()
+            )
+        );
+        const assigned = issue.assignees && issue.assignees.length
+          ? issue.assignees.map(a => `<a href="${a.html_url}" target="_blank">@${a.login}</a>`).join(", ")
+          : "<em>Unassigned</em>";
+        return `
+          <details>
+            <summary>
+              <a href="${issue.html_url}" target="_blank">#${issue.number} ${issue.title}</a>
+              ${priorityLabel ? `<span style="background:${priorityLabel.color ? '#' + priorityLabel.color : '#888'};color:#fff;border-radius:6px;padding:2px 8px;font-size:0.8em;margin-left:8px;">${priorityLabel.name}</span>` : ""}
+            </summary>
+            <div class="details-content">
+              <p><strong>Assigned to:</strong> ${assigned}</p>
+              <p>${issue.body ? issue.body.substring(0, 300).replace(/\n/g, "<br>") + (issue.body.length > 300 ? "..." : "") : "<em>No description.</em>"}</p>
+              <a href="${issue.html_url}" target="_blank">View on GitHub</a>
+            </div>
+          </details>
+        `;
+      }
+
+      // Render sorted groups
+      const order = [
+        { key: "next-release-fix", label: "Next Release Fix 🟢" },
+        { key: "priority", label: "Priority 🔴" },
+        { key: "future-release-fix", label: "Future Release Fix 🟡" },
+        { key: "observation", label: "Observation 🟠" }
+      ];
+
+      let html = "";
+
+      order.forEach(({ key, label }) => {
+        if (sorted[key].length) {
+          html += `<h3>${label}</h3>`;
+          sorted[key].forEach(issue => {
+            html += renderIssue(issue);
+          });
+        }
+      });
+
+      // Render the rest
+      if (sorted["other"].length) {
+        html += `<h3>Other Issues</h3>`;
+        sorted["other"].forEach(issue => {
+          html += renderIssue(issue);
+        });
+      }
+
+      issuesContainer.innerHTML = html;
+    })
+    .catch((error) => {
+      issuesContainer.innerHTML = "<p>Could not load issues. Please try again later.</p>";
+    });
+});
