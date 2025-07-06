@@ -1,0 +1,165 @@
+:root {
+  --bg-color-dark: #1a1a1a;
+  --text-color-dark: #e0e0e0;
+  --primary-color-dark: #4caf50;
+  --secondary-color-dark: #2c2c2c;
+  --border-color-dark: #444;
+  --header-color-dark: #ffffff;
+
+  --bg-color-light: #f4f4f9;
+  --text-color-light: #333;
+  --primary-color-light: #2e7d32;
+  --secondary-color-light: #ffffff;
+  --border-color-light: #ddd;
+  --header-color-light: #000000;
+}
+
+[data-theme="dark"] {
+  --bg-color: var(--bg-color-dark);
+  --text-color: var(--text-color-dark);
+  --primary-color: var(--primary-color-dark);
+  --secondary-color: var(--secondary-color-dark);
+  --border-color: var(--border-color-dark);
+  --header-color: var(--header-color-dark);
+}
+
+[data-theme="light"] {
+  --bg-color: var(--bg-color-light);
+  --text-color: var(--text-color-light);
+  --primary-color: var(--primary-color-light);
+  --secondary-color: var(--secondary-color-light);
+  --border-color: var(--border-color-light);
+  --header-color: var(--header-color-light);
+}
+
+body {
+  font-family: "Ubuntu", sans-serif;
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  line-height: 1.6;
+  margin: 0;
+  padding: 0;
+  transition: background-color 0.3s, color 0.3s;
+}
+
+.container {
+  max-width: 900px;
+  margin: 2rem auto;
+  padding: 0 2rem;
+}
+
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 2px solid var(--primary-color);
+  padding-bottom: 1rem;
+  margin-bottom: 2rem;
+}
+
+header h1 {
+  color: var(--header-color);
+  margin: 0;
+}
+
+h1,
+h2,
+h3 {
+  color: var(--header-color);
+}
+
+h2 {
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 0.5rem;
+  margin-top: 2.5rem;
+}
+
+section {
+  margin-bottom: 2rem;
+}
+
+.badges {
+  margin: 1.5rem 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-start;
+}
+
+code {
+  background-color: var(--secondary-color);
+  padding: 0.2em 0.4em;
+  border-radius: 3px;
+  font-family: "Ubuntu Mono", monospace;
+}
+
+pre {
+  background-color: var(--secondary-color);
+  padding: 1rem;
+  border-radius: 5px;
+  overflow-x: auto;
+  border: 1px solid var(--border-color);
+}
+
+a {
+  color: var(--primary-color);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 5px;
+  border: 1px solid var(--border-color);
+}
+
+details {
+  background-color: var(--secondary-color);
+  border: 1px solid var(--border-color);
+  border-radius: 5px;
+  margin-bottom: 1rem;
+}
+
+summary {
+  padding: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  outline: none;
+}
+
+summary:hover {
+  background-color: rgba(0, 0, 0, 0.1);
+}
+
+.details-content {
+  padding: 0 1rem 1rem 1rem;
+  border-top: 1px solid var(--border-color);
+}
+
+.release-tag {
+  background-color: var(--primary-color);
+  color: white;
+  padding: 0.2em 0.6em;
+  border-radius: 10px;
+  font-size: 0.8em;
+  margin-left: 10px;
+}
+
+/* Theme Toggle */
+.theme-toggle-btn {
+  background: none;
+  border: 1px solid var(--border-color);
+  color: var(--text-color);
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: 5px 10px;
+  border-radius: 8px;
+  transition: background-color 0.3s, color 0.3s;
+}
+.theme-toggle-btn:hover {
+  background-color: var(--secondary-color);
+}
