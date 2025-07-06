@@ -128,17 +128,35 @@ document.addEventListener("DOMContentLoaded", () => {
         // Use improved markdown parser
         let bodyHtml = markdownToHtml(release.body || "");
 
+        // Aggressively remove extra blank lines and spaces between blocks
+        bodyHtml = bodyHtml
+          // Remove multiple consecutive <br> (keep max 1)
+          .replace(/(<br\s*\/?>\s*){2,}/gi, "<br>")
+          // Remove multiple consecutive </p> (keep max 1)
+          .replace(/(<\/p>\s*){2,}/gi, "</p>")
+          // Remove multiple consecutive <ul> or </ul>
+          .replace(/(<ul>\s*){2,}/gi, "<ul>")
+          .replace(/(<\/ul>\s*){2,}/gi, "</ul>")
+          // Remove empty paragraphs
+          .replace(/<p>\s*<\/p>/gi, "")
+          // Remove <br> or whitespace between block elements (e.g., <h2>, <ul>, <pre>, <blockquote>)
+          .replace(/(<\/(h\d|ul|pre|blockquote|hr)>)\s*<br\s*\/?>\s*(<(h\d|ul|pre|blockquote|hr)[^>]*>)/gi, "$1$3")
+          // Remove <br> or whitespace after opening block and before closing block
+          .replace(/(<(h\d|ul|pre|blockquote|hr)[^>]*>)\s*<br\s*\/?>/gi, "$1")
+          .replace(/<br\s*\/?>\s*(<\/(h\d|ul|pre|blockquote|hr)>)/gi, "$1")
+          // Remove leading/trailing <br> and whitespace
+          .replace(/^(<br\s*\/?>|\s)+/i, "")
+          .replace(/(<br\s*\/?>|\s)+$/i, "");
+
         releaseElement.innerHTML = `
                       <summary>
-                          ${release.name}
-                          <span class="release-tag">${
-                            release.tag_name
-                          }</span>
+                          <a href="${release.html_url}" target="_blank">${release.name}</a>
+                          <span class="release-tag">${release.tag_name}</span>
                           <small> - Published on ${new Date(
                             release.published_at
                           ).toLocaleDateString()}</small>
                       </summary>
-                      <div class="details-content">
+                      <div class="details-content" style="margin-top:0;margin-bottom:0;padding-top:0.5em;padding-bottom:0.5em;">
                           ${
                             bodyHtml ||
                             "<p>No description provided for this release.</p>"
@@ -163,6 +181,9 @@ document.addEventListener("DOMContentLoaded", () => {
                           </ul>
                       </div>
                   `;
+        // Remove vertical whitespace around the details element
+        releaseElement.style.marginTop = "0";
+        releaseElement.style.marginBottom = "0";
         releasesContainer.appendChild(releaseElement);
       });
     })
