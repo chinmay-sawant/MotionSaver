@@ -30,10 +30,13 @@ D:/MotionSaver
 - Save the downloaded file directly to your `D:/` drive.
 - ![Step 1: Downloaded File in D Drive](https://github.com/chinmay-sawant/MotionSaver/raw/master/Installation/step1.png)
 
-### 2. Extract to D Drive
+### 2. Extract to D Drive 📦
 - Use an extraction tool like WinRAR or 7-Zip.
 - Right-click the downloaded archive and select **Extract Here** to extract all files directly into the `D:/` drive.
 - Ensure the folder structure matches the example below.
+- **If you don't have a D drive:**  
+    [Click here for instructions](#i-only-have-a-c-drive-no-d-drive-what-should-i-do) to move the `MotionSaver` folder to your `C:/` drive so the path is `C:/MotionSaver`.  
+    ![No D Drive - Use C Drive](https://github.com/chinmay-sawant/MotionSaver/raw/master/Installation/No_D_Drive.png)
 - ![Step 2: Extracted Files in D Drive](https://github.com/chinmay-sawant/MotionSaver/raw/master/Installation/step2.png)
 
 ### 3. Overview of the `D:/MotionSaver` Folder
@@ -134,7 +137,13 @@ Make sure your extracted folder matches this structure before proceeding.
 - Attach the relevant log files from the `logs` folder to your issue by dragging and dropping them or using the attachment option on GitHub.
 - This helps the developers diagnose and resolve your issue more efficiently.
 
-**Q: I only have a C drive (no D drive). What should I do?**
+**Q: I only have a C drive (no D drive). What should I do?** <a id="i-only-have-a-c-drive-no-d-drive-what-should-i-do"></a>  
+If you only have a C drive, you can still use MotionSaver by extracting the `MotionSaver` folder to `C:/MotionSaver` instead of `D:/MotionSaver`. Make sure the folder structure remains the same.
+
+- Move the extracted `MotionSaver` folder to your `C:/` drive so the path is `C:/MotionSaver`.
+- Update any references to `D:/MotionSaver` in your settings or configuration files to `C:/MotionSaver`.
+- ![No D Drive - Use C Drive](https://github.com/chinmay-sawant/MotionSaver/raw/master/Installation/No_D_Drive.png)
+- Proceed with the rest of the installation steps as described above.
 1. Try opening `Gui.bat` and update all folder paths from `D:/` to `C:/`.
 2. If `Gui.bat` does not open, manually edit the `config.json` file in the `config` folder and change all paths to use the `C:/` drive.
 3. After updating the paths, launch `MotionSaver.bat` from the new location on your C drive.
