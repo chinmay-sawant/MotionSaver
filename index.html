@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MotionSaver - Dynamic Video Screensaver</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@300;400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg-color-dark: #1a1a1a;
+        --text-color-dark: #e0e0e0;
+        --primary-color-dark: #4caf50;
+        --secondary-color-dark: #2c2c2c;
+        --border-color-dark: #444;
+        --header-color-dark: #ffffff;
+
+        --bg-color-light: #f4f4f9;
+        --text-color-light: #333;
+        --primary-color-light: #2e7d32;
+        --secondary-color-light: #ffffff;
+        --border-color-light: #ddd;
+        --header-color-light: #000000;
+      }
+
+      [data-theme="dark"] {
+        --bg-color: var(--bg-color-dark);
+        --text-color: var(--text-color-dark);
+        --primary-color: var(--primary-color-dark);
+        --secondary-color: var(--secondary-color-dark);
+        --border-color: var(--border-color-dark);
+        --header-color: var(--header-color-dark);
+      }
+
+      [data-theme="light"] {
+        --bg-color: var(--bg-color-light);
+        --text-color: var(--text-color-light);
+        --primary-color: var(--primary-color-light);
+        --secondary-color: var(--secondary-color-light);
+        --border-color: var(--border-color-light);
+        --header-color: var(--header-color-light);
+      }
+
+      body {
+        font-family: "Ubuntu", sans-serif;
+        background-color: var(--bg-color);
+        color: var(--text-color);
+        line-height: 1.6;
+        margin: 0;
+        padding: 0;
+        transition: background-color 0.3s, color 0.3s;
+      }
+
+      .container {
+        max-width: 900px;
+        margin: 2rem auto;
+        padding: 0 2rem;
+      }
+
+      header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 2px solid var(--primary-color);
+        padding-bottom: 1rem;
+        margin-bottom: 2rem;
+      }
+
+      header h1 {
+        color: var(--header-color);
+        margin: 0;
+      }
+
+      h1,
+      h2,
+      h3 {
+        color: var(--header-color);
+      }
+
+      h2 {
+        border-bottom: 1px solid var(--border-color);
+        padding-bottom: 0.5rem;
+        margin-top: 2.5rem;
+      }
+
+      section {
+        margin-bottom: 2rem;
+      }
+
+      .badges {
+        margin: 1.5rem 0;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        justify-content: flex-start;
+      }
+
+      code {
+        background-color: var(--secondary-color);
+        padding: 0.2em 0.4em;
+        border-radius: 3px;
+        font-family: "Ubuntu Mono", monospace;
+      }
+
+      pre {
+        background-color: var(--secondary-color);
+        padding: 1rem;
+        border-radius: 5px;
+        overflow-x: auto;
+        border: 1px solid var(--border-color);
+      }
+
+      a {
+        color: var(--primary-color);
+        text-decoration: none;
+      }
+
+      a:hover {
+        text-decoration: underline;
+      }
+
+      img {
+        max-width: 100%;
+        height: auto;
+        border-radius: 5px;
+        border: 1px solid var(--border-color);
+      }
+
+      details {
+        background-color: var(--secondary-color);
+        border: 1px solid var(--border-color);
+        border-radius: 5px;
+        margin-bottom: 1rem;
+      }
+
+      summary {
+        padding: 1rem;
+        font-weight: 500;
+        cursor: pointer;
+        outline: none;
+      }
+
+      summary:hover {
+        background-color: rgba(0, 0, 0, 0.1);
+      }
+
+      .details-content {
+        padding: 0 1rem 1rem 1rem;
+        border-top: 1px solid var(--border-color);
+      }
+
+      .release-tag {
+        background-color: var(--primary-color);
+        color: white;
+        padding: 0.2em 0.6em;
+        border-radius: 10px;
+        font-size: 0.8em;
+        margin-left: 10px;
+      }
+
+      /* Theme Toggle */
+      .theme-toggle-btn {
+        background: none;
+        border: 1px solid var(--border-color);
+        color: var(--text-color);
+        font-size: 1.5rem;
+        cursor: pointer;
+        padding: 5px 10px;
+        border-radius: 8px;
+        transition: background-color 0.3s, color 0.3s;
+      }
+      .theme-toggle-btn:hover {
+        background-color: var(--secondary-color);
+      }
+    </style>
+  </head>
+  <body data-theme="dark">
+    <div class="container">
+      <header>
+        <h1>MotionSaver 🚀</h1>
+        <button id="theme-toggle" class="theme-toggle-btn">🌙</button>
+      </header>
+
+      <main>
+        <section id="introduction">
+          <h2>Your Dynamic Video Screensaver/Lockscreen 🎬</h2>
+          <p>
+            Transform your dull desktop into a lively and dynamic space!
+            MotionSaver brings your screen to life with video wallpapers when
+            you're away, combining the elegance of macOS live wallpapers with
+            powerful customization for Windows.
+          </p>
+          <div class="badges">
+            <img
+              src="https://github.com/chinmay-sawant/MotionSaver/blob/master/.github/badges/clones_badge.svg?raw=true"
+              alt="Total Clones"
+            />
+            <img
+              src="https://github.com/chinmay-sawant/MotionSaver/blob/master/.github/badges/release_V2_badge.svg?raw=true"
+              alt="Release V2"
+            />
+            <img
+              src="https://github.com/chinmay-sawant/MotionSaver/blob/master/.github/badges/total_downloads_badge.svg?raw=true"
+              alt="Total Downloads"
+            />
+            <img
+              src="https://github.com/chinmay-sawant/MotionSaver/blob/master/.github/badges/views_badge.svg?raw=true"
+              alt="Total Views"
+            />
+          </div>
+        </section>
+
+        <section id="installation">
+          <h2>Installation & Usage 🛠️</h2>
+
+          <h3>1. Download & Extract 📥</h3>
+          <p>
+            Download the latest release from the
+            <a
+              href="https://github.com/chinmay-sawant/MotionSaver/releases"
+              target="_blank"
+              >Releases page</a
+            >. Extract the contents of the zip file directly into your
+            <code>D:/</code> drive, creating a
+            <code>D:/MotionSaver</code> folder.
+          </p>
+          <img
+            src="https://github.com/chinmay-sawant/MotionSaver/raw/master/Installation/step3.png"
+            alt="Folder Structure"
+          />
+
+          <h3>2. Run the Background Service ⚙️</h3>
+          <p>
+            Navigate to the <code>D:/MotionSaver</code> folder. Right-click
+            <code>MotionSaver.bat</code> and select
+            <strong>Run as administrator</strong>. This starts the background
+            service, and you'll see its icon in the system tray.
+          </p>
+          <img
+            src="https://github.com/chinmay-sawant/MotionSaver/raw/master/Installation/step4.png"
+            alt="Run as administrator"
+          />
+
+          <h3>3. Activate and Customize 🎨</h3>
+          <p>
+            Press <code>Win + S</code> to activate the screensaver. To change
+            settings like the video, password, or widgets, run
+            <code>Gui.bat</code> as an administrator from the
+            <code>D:/MotionSaver</code> folder.
+          </p>
+          <img
+            src="https://github.com/chinmay-sawant/MotionSaver/raw/master/Installation/step5.png"
+            alt="Settings GUI"
+          />
+        </section>
+
+        <section id="faq">
+          <h2>Frequently Asked Questions (FAQ) ❓</h2>
+          <details>
+            <summary>
+              The screensaver doesn't start with Win + S. What do I do?
+            </summary>
+            <div class="details-content">
+              <p>
+                Ensure the background service is running. You should see the
+                MotionSaver icon in your system tray. If not, please re-run
+                <code>MotionSaver.bat</code> as an administrator.
+              </p>
+              <img
+                src="https://github.com/chinmay-sawant/MotionSaver/raw/master/Installation/system_tray.png"
+                alt="System Tray Icon"
+              />
+            </div>
+          </details>
+          <details>
+            <summary>How do I change the default password?</summary>
+            <div class="details-content">
+              <p>
+                Run <code>Gui.bat</code> as an administrator to open the
+                settings GUI. You can update the password there. The default
+                password is <code>test</code>. You should change it to something
+                more secure.
+              </p>
+            </div>
+          </details>
+          <details>
+            <summary>What should I do if I get a black screen?</summary>
+            <div class="details-content">
+              <p>
+                1. Ensure that the extracted folder structure is correct and all
+                files are present. You should launch
+                <code>MotionSaver.bat</code> from the
+                <code>D:/MotionSaver</code> folder.<br />
+                2. Press <strong>Esc</strong> to exit the screensaver.<br />
+                3. Type <code>test</code> (the default password) to unlock.<br />
+                4. If <code>test</code> does not work, press
+                <strong>Ctrl + Alt + Del</strong> to bring up the Windows
+                security screen and unlock your PC.
+              </p>
+            </div>
+          </details>
+          <details>
+            <summary>How do I change the video?</summary>
+            <div class="details-content">
+              <p>
+                You can download a 1080p 30fps video and save it anywhere. Then,
+                run <code>Gui.bat</code> as an administrator, use the option to
+                change the video file, select your new video, and click
+                <strong>Save</strong>. Make sure to restart the MotionSaver
+                application for the changes to take effect.
+              </p>
+              <img
+                src="https://github.com/chinmay-sawant/MotionSaver/raw/master/Installation/change_video.png"
+                alt="Change Video in GUI"
+              />
+            </div>
+          </details>
+          <details>
+            <summary>My antivirus flagged MotionSaver. Is it safe? 🛡️</summary>
+            <div class="details-content">
+              <p>
+                Yes, MotionSaver is safe. Some antivirus programs may flag it
+                due to the use of batch files and system-level hooks. You can
+                add the <code>D:/MotionSaver</code> folder to your antivirus
+                exclusion list to resolve this.
+              </p>
+            </div>
+          </details>
+          <details>
+            <summary>
+              Some Windows shortcuts (like Alt+Tab) don't work. Why? ⚠️
+            </summary>
+            <div class="details-content">
+              <p>
+                MotionSaver uses low-level keyboard hooks to secure the screen,
+                which can block some system shortcuts. If you need to restore
+                them, you can run <code>StopMotionSaver.bat</code> as an
+                administrator. This is a known limitation that we are working to
+                improve.
+              </p>
+            </div>
+          </details>
+          <details>
+            <summary>How do I send logs to the developers? 🐛</summary>
+            <div class="details-content">
+              <p>
+                You can find the <code>logs</code> folder inside
+                <code>D:/MotionSaver</code>. Please open an issue on the
+                <a
+                  href="https://github.com/chinmay-sawant/MotionSaver/issues"
+                  target="_blank"
+                  >GitHub Issues page</a
+                >, describe the problem, and attach the relevant log files.
+              </p>
+            </div>
+          </details>
+          <details>
+            <summary>
+              My FPS feels glitchy, like it's running below 30 FPS. What should
+              I do?
+            </summary>
+            <div class="details-content">
+              <ol>
+                <li>
+                  Try changing the video using the GUI as shown above in the "I
+                  want to change the video" section.
+                </li>
+                <li>
+                  Download another short 1080p video (about 10 seconds) from
+                  YouTube or any online source and test if the issue persists.
+                </li>
+                <li>
+                  If you still experience problems, please upload your log files
+                  under a new issue on
+                  <a
+                    href="https://github.com/chinmay-sawant/MotionSaver/issues"
+                    target="_blank"
+                    >GitHub Issues</a
+                  >, including your Instagram handle (if applicable) and your
+                  Windows version. This will help the developers diagnose the
+                  problem more effectively.
+                </li>
+              </ol>
+            </div>
+          </details>
+        </section>
+
+        <section id="releases">
+          <h2>Releases 📦</h2>
+          <div id="releases-container">
+            <p>Loading releases...</p>
+          </div>
+        </section>
+      </main>
+
+      <footer>
+        <p
+          style="
+            text-align: center;
+            margin-top: 3rem;
+            border-top: 1px solid var(--border-color);
+            padding-top: 1rem;
+          "
+        >
+          Made with 🖤 in India. Maintained by
+          <a href="https://github.com/chinmay-sawant" target="_blank"
+            >Chinmay Sawant</a
+          >. Visit the
+          <a
+            href="https://github.com/chinmay-sawant/MotionSaver"
+            target="_blank"
+            >GitHub Repository</a
+          >.
+        </p>
+      </footer>
+    </div>
+
+    <script>
+      // Theme switcher logic
+      const themeToggle = document.getElementById("theme-toggle");
+      const body = document.body;
+
+      function applyTheme(theme) {
+        body.setAttribute("data-theme", theme);
+        themeToggle.textContent = theme === "dark" ? "🌙" : "☀️";
+        localStorage.setItem("theme", theme);
+      }
+
+      themeToggle.addEventListener("click", () => {
+        const newTheme =
+          body.getAttribute("data-theme") === "dark" ? "light" : "dark";
+        applyTheme(newTheme);
+      });
+
+      // Apply saved theme on load
+      const savedTheme = localStorage.getItem("theme") || "dark"; // Default to dark
+      applyTheme(savedTheme);
+
+      // Fetch and display GitHub releases
+      document.addEventListener("DOMContentLoaded", () => {
+        const releasesContainer = document.getElementById("releases-container");
+        const repo = "chinmay-sawant/MotionSaver";
+
+        fetch(`https://api.github.com/repos/${repo}/releases`)
+          .then((response) => {
+            if (!response.ok) {
+              throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+          })
+          .then((releases) => {
+            releasesContainer.innerHTML = ""; // Clear loading message
+            if (releases.length === 0) {
+              releasesContainer.innerHTML = "<p>No releases found.</p>";
+              return;
+            }
+            releases.forEach((release) => {
+              const releaseElement = document.createElement("details");
+
+              // Sanitize release body: basic markdown to HTML
+              let bodyHtml = release.body
+                ? release.body
+                    .trim()
+                    .replace(/</g, "&lt;")
+                    .replace(/>/g, "&gt;")
+                : ""; // Basic sanitization
+              bodyHtml = bodyHtml
+                .replace(/(\r\n|\n|\r){2,}/g, "<br><br>") // Paragraphs
+                .replace(/(\r\n|\n|\r)/g, "<br>") // Line breaks
+                .replace(/### (.*)/g, "<h5>$1</h5>")
+                .replace(/## (.*)/g, "<h4>$1</h4>")
+                .replace(/# (.*)/g, "<h3>$1</h3>")
+                .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>") // Bold
+                .replace(
+                  /\* \[(.*)\]\((.*)\)/g,
+                  '<li><a href="$2" target="_blank">$1</a></li>'
+                ) // List items with links
+                .replace(/\* (.*)/g, "<li>$1</li>"); // List items
+
+              releaseElement.innerHTML = `
+                            <summary>
+                                ${release.name}
+                                <span class="release-tag">${
+                                  release.tag_name
+                                }</span>
+                                <small> - Published on ${new Date(
+                                  release.published_at
+                                ).toLocaleDateString()}</small>
+                            </summary>
+                            <div class="details-content">
+                                ${
+                                  bodyHtml ||
+                                  "<p>No description provided for this release.</p>"
+                                }
+                                <p><strong>Assets:</strong></p>
+                                <ul>
+                                    ${release.assets
+                                      .map(
+                                        (asset) => `
+                                        <li><a href="${
+                                          asset.browser_download_url
+                                        }" target="_blank">${
+                                          asset.name
+                                        }</a> (${(
+                                          asset.size /
+                                          1024 /
+                                          1024
+                                        ).toFixed(2)} MB)</li>
+                                    `
+                                      )
+                                      .join("")}
+                                </ul>
+                            </div>
+                        `;
+              releasesContainer.appendChild(releaseElement);
+            });
+          })
+          .catch((error) => {
+            console.error("Error fetching releases:", error);
+            releasesContainer.innerHTML =
+              "<p>Could not load releases. Please check the console for errors or try again later.</p>";
+          });
+      });
+    </script>
+  </body>
+</html>
