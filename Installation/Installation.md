@@ -139,6 +139,17 @@ Make sure your extracted folder matches this structure before proceeding.
 2. If `Gui.bat` does not open, manually edit the `config.json` file in the `config` folder and change all paths to use the `C:/` drive.
 3. After updating the paths, launch `MotionSaver.bat` from the new location on your C drive.
 
+
+**Q: I am not able to close the lockscreen or the password prompt is not working. What should I do?**
+
+1. Press **Esc** or try clicking anywhere on the lockscreen. This should display the password field. The default password is `test`.
+2. If the password prompt does not appear or is unresponsive, press **Ctrl + Alt + Del**. This will bring up the original Windows lockscreen. Enter your Windows password to unlock.
+    - After unlocking, try entering the password (`test`) again in the MotionSaver prompt if it reappears.
+    - **Note:** This issue can occur if the keyboard hooks are released unexpectedly.
+3. If neither of the above works, press **Ctrl + Alt + Del** and select the **Sign out** option. Then log in again to your Windows account.
+
+If you continue to experience issues, please open an issue on the [GitHub Issues page](https://github.com/chinmay-sawant/MotionSaver/issues).
+
 **Q: Where do I report bugs or get help?**
 - Please open an issue on the [GitHub Issues page](https://github.com/chinmay-sawant/MotionSaver/issues).
 
