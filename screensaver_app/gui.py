@@ -196,9 +196,48 @@ class ScreenSaverApp:
                 self.copilot_icon = ImageTk.PhotoImage(Image.open(copilot_icon_path).resize((20, 20), Image.Resampling.LANCZOS))        
         except Exception as e:
             logger.error(f"Error loading icons: {e}")
-         # --- Main Frame ---
-        main_frame = ttk.Frame(master, padding="10")
+        
+        # --- Create scrollable main container ---
+        # Create a canvas and scrollbar for scrolling
+        self.canvas = tk.Canvas(master, highlightthickness=0)
+        self.scrollbar = ttk.Scrollbar(master, orient="vertical", command=self.canvas.yview)
+        self.scrollable_frame = ttk.Frame(self.canvas)
+
+        # Make the scrollable_frame expand to fill the canvas
+        self.scrollable_frame.bind(
+            "<Configure>",
+            lambda e: self.canvas.configure(
+            scrollregion=self.canvas.bbox("all")
+            )
+        )
+
+        # Create window in canvas and keep reference
+        self.canvas_window = self.canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
+
+        # Configure canvas scrolling
+        self.canvas.configure(yscrollcommand=self.scrollbar.set)
+
+        # Pack canvas and scrollbar to fill the window
+        self.canvas.pack(side="left", fill="both", expand=True)
+        self.scrollbar.pack(side="right", fill="y")
+
+        # Make the scrollable_frame expand horizontally with the window
+        def _resize_canvas(event):
+            # Set the canvas item width to match the canvas width
+            self.canvas.itemconfig(self.canvas_window, width=event.width)
+        self.canvas.bind("<Configure>", _resize_canvas)
+
+        # Bind mouse wheel to canvas
+        self.canvas.bind("<MouseWheel>", self._on_mousewheel)
+        self.canvas.bind("<Button-4>", self._on_mousewheel)
+        self.canvas.bind("<Button-5>", self._on_mousewheel)
+
+        # --- Main Frame (now inside scrollable_frame) ---
+        main_frame = ttk.Frame(self.scrollable_frame, padding="10")
         main_frame.pack(fill=tk.BOTH, expand=True)
+        main_frame.pack_propagate(False)
+        # Make main_frame always fill horizontally
+        main_frame.bind("<Configure>", lambda e: main_frame.config(width=self.scrollable_frame.winfo_width()))
         
         # Configure grid columns for main_frame to have 2 expanding columns
         main_frame.columnconfigure(0, weight=1)
@@ -420,8 +459,7 @@ class ScreenSaverApp:
         # system_settings_frame.grid(row=current_row, column=0, columnspan=2, padx=5, pady=5, sticky="nsew")
 
         # Let's assume it's placed after widget_frame in the grid flow
-        # If widget_frame was at (current_row, 0) and was the only item in that column for that row:
-        current_col +=1 # Move to next column if previous was single column
+        current_col +=1 # Move to next column if the previous was single column
         if current_col >= 2: # Max 2 columns, so start new row
             current_col = 0
             current_row +=1
@@ -1090,6 +1128,16 @@ class ScreenSaverApp:
             state['last_selected_idx_for_buffer'] = new_selection_idx
         
         return "break"
+    
+    def _on_mousewheel(self, event):
+        # Windows and MacOS: event.delta, Linux: event.num
+        if event.delta:
+            self.canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+        elif hasattr(event, 'num'):
+            if event.num == 4:
+                self.canvas.yview_scroll(-3, "units")
+            elif event.num == 5:
+                self.canvas.yview_scroll(3, "units")
 
 class AddUserDialog(tk.Toplevel):
     def __init__(self, parent):
