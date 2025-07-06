@@ -134,6 +134,11 @@ Make sure your extracted folder matches this structure before proceeding.
 - Attach the relevant log files from the `logs` folder to your issue by dragging and dropping them or using the attachment option on GitHub.
 - This helps the developers diagnose and resolve your issue more efficiently.
 
+**Q: I only have a C drive (no D drive). What should I do?**
+1. Try opening `Gui.bat` and update all folder paths from `D:/` to `C:/`.
+2. If `Gui.bat` does not open, manually edit the `config.json` file in the `config` folder and change all paths to use the `C:/` drive.
+3. After updating the paths, launch `MotionSaver.bat` from the new location on your C drive.
+
 **Q: Where do I report bugs or get help?**
 - Please open an issue on the [GitHub Issues page](https://github.com/chinmay-sawant/MotionSaver/issues).
 
