@@ -20,3 +20,6 @@ keyboard>=0.13.0  # For keyboard shortcuts
 requests>=2.25.0  # For network requests
 openmeteo_requests>=1.0.0  # For weather data requests
 pandas>=1.2.0  # For data manipulation
+
+# GPU acceleration dependencies
+psutil>=5.8.0  # For system information and GPU detection

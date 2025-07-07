@@ -19,6 +19,7 @@ from screensaver_app.central_logger import get_logger, log_startup, log_shutdown
 logger = get_logger('VideoPlayer')
 
 from .PasswordConfig import load_config
+from utils.gpu_utils import get_gpu_manager, get_preferred_opencv_backend, setup_gpu_environment
 
 def get_username_from_config():
     config = load_config()
@@ -111,36 +112,52 @@ class FrameProcessorThread(threading.Thread):
             pass
 
 class FrameReaderThread(threading.Thread):
-    def __init__(self, video_path, frame_queue, target_fps): # target_fps is the display target
+    def __init__(self, video_path, frame_queue, target_fps):
         super().__init__(daemon=True)
         self.video_path = video_path
         self.frame_queue = frame_queue
-        # self.target_fps = target_fps # Not directly used for reader's sleep timing
         self.cap = None
         self.running = False
-        # self.frame_interval = 1.0 / self.target_fps # Not used for sleeping
         self.last_frame_time = 0
         self.frame_skip_threshold = 1 
-        self.video_fps = None  # Store actual video FPS
-        self.actual_frame_interval = 1.0 / 30.0 # Default if video_fps is not found, ensure float
+        self.video_fps = None
+        self.actual_frame_interval = 1.0 / 30.0
+        
+        # GPU optimization setup
+        self.gpu_manager = get_gpu_manager()
+        self.opencv_backend = get_preferred_opencv_backend()
 
     def run(self):
         self.running = True
-        self.cap = cv2.VideoCapture(self.video_path, cv2.CAP_ANY)        
+        
+        # Setup GPU environment before opening video
+        setup_gpu_environment()
+        
+        # Use preferred backend if available
+        if self.opencv_backend:
+            logger.info(f"Using OpenCV backend: {self.opencv_backend}")
+            self.cap = cv2.VideoCapture(self.video_path, self.opencv_backend)
+        else:
+            logger.info("Using default OpenCV backend")
+            self.cap = cv2.VideoCapture(self.video_path, cv2.CAP_ANY)
+        
         if not self.cap.isOpened():
             logger.error(f"Could not open video {self.video_path} in thread")
             self.running = False
             return
 
+        # GPU-specific optimizations
+        self._apply_gpu_optimizations()
+
         self.video_fps = self.cap.get(cv2.CAP_PROP_FPS)
-        if self.video_fps <= 0 or self.video_fps > 120:  # Fallback for invalid FPS
-            self.video_fps = 30.0 # Ensure float for division
+        if self.video_fps <= 0 or self.video_fps > 120:
+            self.video_fps = 30.0
         
-        logger.info(f"Video FPS: {self.video_fps:.2f}")  # Display actual video FPS
+        preferred_gpu = self.gpu_manager.preferred_gpu
+        gpu_name = preferred_gpu['name'] if preferred_gpu else 'Unknown'
+        logger.info(f"Video FPS: {self.video_fps:.2f}, Using GPU: {gpu_name}")
         
         self.actual_frame_interval = 1.0 / self.video_fps
-        
-        self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
         
         try:
             self.cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'H264'))
@@ -201,6 +218,51 @@ class FrameReaderThread(threading.Thread):
 
     def stop(self):
         self.running = False
+
+    def _apply_gpu_optimizations(self):
+        """Apply GPU-specific optimizations to video capture"""
+        try:
+            if not self.gpu_manager.preferred_gpu:
+                return
+            
+            gpu_name = self.gpu_manager.preferred_gpu['name'].lower()
+            
+            # Set buffer size for better performance
+            self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+            
+            # NVIDIA GPU optimizations
+            if 'nvidia' in gpu_name:
+                # Enable hardware acceleration if available
+                try:
+                    self.cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'H264'))
+                    logger.debug("Enabled H264 hardware decoding for NVIDIA GPU")
+                except:
+                    pass
+            
+            # AMD GPU optimizations  
+            elif 'amd' in gpu_name or 'radeon' in gpu_name:
+                try:
+                    # Use DirectShow backend optimizations on Windows
+                    if platform.system() == "Windows":
+                        self.cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'H264'))
+                        logger.debug("Enabled H264 decoding for AMD GPU")
+                except:
+                    pass
+            
+            # Intel GPU optimizations
+            elif 'intel' in gpu_name:
+                try:
+                    # Intel Quick Sync optimizations
+                    self.cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'H264'))
+                    logger.debug("Enabled H264 decoding for Intel GPU")
+                except:
+                    pass
+            
+            # Reduce thread count for GPU processing
+            cv2.setNumThreads(2)  # Increased from 1 for GPU processing
+            
+        except Exception as e:
+            logger.warning(f"Failed to apply GPU optimizations: {e}")
 
 def find_font_path(font_family):
     """Try to find the font file path for a given font family name."""
@@ -275,7 +337,7 @@ except ImportError as e:
     WeatherWidget = None
 
 class VideoClockScreenSaver:
-    def __init__(self, master, video_path_arg=None): # video_path_arg is for CLI override
+    def __init__(self, master, video_path_arg=None):
         self.master = master
         self.root = master  # Add this line to fix the AttributeError
         master.attributes('-fullscreen', True)
@@ -405,6 +467,14 @@ class VideoClockScreenSaver:
         # Initialize widgets based on config
         self.widgets = []
         self.master.after(1000, self.init_widgets)  # Use self.master instead of self.root
+        
+        # Initialize GPU manager and log GPU information
+        self.gpu_manager = get_gpu_manager()
+        gpu_info = self.gpu_manager.get_gpu_info()
+        logger.info(f"GPU Detection: Found {gpu_info['total_count']} GPUs")
+        if gpu_info['preferred_gpu']:
+            preferred = gpu_info['preferred_gpu']
+            logger.info(f"Using GPU: {preferred['name']} (Type: {preferred['type']})")
         
     def init_widgets(self):
         """Initialize widgets based on configuration - now fully async with priorities"""

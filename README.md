@@ -1,4 +1,3 @@
-
 ### Repository Badges
 
 ![Total Clones](https://github.com/chinmay-sawant/MotionSaver/blob/master/.github/badges/clones_badge.svg)
@@ -52,15 +51,17 @@ Due to the complexity of blocking all Windows system shortcuts, **it is possible
 ## Features ✨
 
 ### 🎥 Core Video Engine
-- **Dynamic Video Backgrounds**: High-performance video playback using OpenCV.
+- **Dynamic Video Backgrounds**: High-performance video playback using OpenCV with GPU acceleration.
 - **Multi-format Support**: Plays MP4, AVI, MOV, and more.
-- **Performance Optimized**: Minimal CPU usage for efficient operation.
+- **Performance Optimized**: Minimal CPU usage with automatic GPU detection and dedicated graphics card preference.
+- **Smart GPU Selection**: Automatically detects and prefers dedicated graphics cards over integrated ones for optimal performance.
 
 ### 🖥️ Display & UI
 - **Multi-monitor Support**: Main content on your primary monitor while others black out.
 - **Customizable Clock**: Adjust font, size, color, and position.
 - **User Profile Display**: Show your profile picture and username.
 - **Transparent Overlays**: Clean, non-intrusive UI.
+- **GPU-Accelerated Rendering**: Leverages hardware acceleration for smooth video playback.
 
 ### 🔒 Security & Access Control
 - **Password Protection**: Elegant, macOS-style login prompt.
@@ -75,6 +76,7 @@ Due to the complexity of blocking all Windows system shortcuts, **it is possible
 - **Easy-to-use GUI**: A simple interface to manage all your settings.
 - **Widget Management**: Toggle any widget on or off.
 - **Video & Profile Management**: Easily select videos and manage user profiles.
+- **GPU Selection**: Choose preferred graphics card for video rendering in the settings.
 
 ## Usage 👨‍💻
 
