@@ -15,6 +15,10 @@ parent_dir = os.path.dirname(current_dir)
 if parent_dir not in sys.path:
     sys.path.insert(0, parent_dir)
 
+# Add GPU utilities import
+sys.path.insert(0, parent_dir)
+from utils.gpu_utils import get_gpu_manager
+
 # Initialize central logging
 from screensaver_app.central_logger import get_logger, log_startup, log_shutdown, log_exception
 logger = get_logger('GUI')
@@ -171,7 +175,10 @@ class ScreenSaverApp:
         self.weather_pincode_var = tk.StringVar(value=self.config.get("weather_pincode", "400068"))
         self.weather_country_var = tk.StringVar(value=self.config.get("weather_country", "IN"))
         self.admin_mode_var = tk.BooleanVar(value=self.config.get("run_as_admin", False))
-
+        # --- GPU Selection ---
+        gpu_manager = get_gpu_manager()
+        self.gpu_list = gpu_manager.get_available_gpus() if gpu_manager else []
+        self.selected_gpu_var = tk.StringVar(value=self.config.get("preferred_gpu", self.gpu_list[0] if self.gpu_list else "Default"))
 
         # For combobox typeahead
         self.combo_typeahead_state = {} 
@@ -386,7 +393,6 @@ class ScreenSaverApp:
         ttk.Button(service_frame, text="Stop Service", command=self.stop_service).grid(row=1, column=2, padx=5, pady=5)
         ttk.Button(service_frame, text="Uninstall Service", command=self.uninstall_service).grid(row=1, column=3, padx=5, pady=5) # Moved to col 3
 
-
         # --- Widget Configuration ---
         widget_frame = ttk.LabelFrame(main_frame, text="Widgets", padding="10")
         widget_frame.grid(row=current_row, column=current_col, padx=5, pady=5, sticky="nsew")
@@ -445,6 +451,47 @@ class ScreenSaverApp:
         country_entry = ttk.Entry(weather_settings_frame, textvariable=self.weather_country_var, width=5)
         country_entry.pack(side=tk.LEFT)
 
+        # --- GPU Selection ---
+        gpu_frame = ttk.LabelFrame(main_frame, text="GPU Selection", padding="10")
+        gpu_frame.grid(row=current_row, column=0, padx=5, pady=5, sticky="nsew")
+
+        # Prepare display labels for GPUs (show name and index if available)
+        self.gpu_display_map = {}
+        gpu_display_values = []
+        if self.gpu_list:
+            for idx, gpu in enumerate(self.gpu_list):
+                if isinstance(gpu, dict):
+                    label = f"{gpu.get('name', 'GPU')} (Index {gpu.get('index', idx)})"
+                    self.gpu_display_map[label] = gpu
+                else:
+                    label = str(gpu)
+                    self.gpu_display_map[label] = gpu
+                gpu_display_values.append(label)
+        else:
+            gpu_display_values = ["Default"]
+            self.gpu_display_map["Default"] = "Default"
+
+        # Determine initial selection label
+        preferred_gpu = self.config.get("preferred_gpu", "Default")
+        initial_label = "Default"
+        for label, gpu in self.gpu_display_map.items():
+            if str(gpu) == str(preferred_gpu):
+                initial_label = label
+                break
+
+        self.selected_gpu_display_var = tk.StringVar(value=initial_label)
+
+        ttk.Label(gpu_frame, text="Preferred GPU:").grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)
+        self.gpu_combo = ttk.Combobox(
+            gpu_frame,
+            textvariable=self.selected_gpu_display_var,
+            values=gpu_display_values,
+            state="readonly",
+            width=35
+        )
+        self.gpu_combo.grid(row=0, column=1, padx=5, pady=5, sticky=tk.EW)
+        gpu_frame.columnconfigure(1, weight=1)
+
         # --- System Settings (Admin Toggle) ---
         system_settings_frame = ttk.LabelFrame(main_frame, text="System Settings", padding="10")
         system_settings_frame.grid(row=current_row, column=current_col, padx=5, pady=5, sticky="nsew")
@@ -452,9 +499,9 @@ class ScreenSaverApp:
         # depending on how you want the layout. Let's assume it takes the next available slot.
         # If widget_frame took current_row, col 0, then this could be current_row, col 1
         # Or if widget_frame spanned, this is next_row, col 0.
-        # Based on previous grid, widget_frame was (current_row, col 0). So this is (current_row, col 1)
+        # Based on previous grid, widget_frame was (current_row, 0). So this is (current_row, 1)
         # Or if widget_frame was the last in its row, this starts a new row:
-        # current_col = 0 # Reset column for new conceptual row if needed
+        # current_col = 0 # Reset column for new row if needed
         # current_row +=1 # Increment row
         # system_settings_frame.grid(row=current_row, column=0, columnspan=2, padx=5, pady=5, sticky="nsew")
 
@@ -1007,6 +1054,13 @@ class ScreenSaverApp:
         self.config["weather_pincode"] = self.weather_pincode_var.get()
         self.config["weather_country"] = self.weather_country_var.get()
         self.config["run_as_admin"] = self.admin_mode_var.get()
+        # Save the selected GPU as a stringified dict for config compatibility
+        selected_label = self.selected_gpu_display_var.get()
+        selected_gpu = self.gpu_display_map.get(selected_label)
+        if selected_gpu:
+            self.config["preferred_gpu"] = str(selected_gpu)
+        else:
+            self.config["preferred_gpu"] = "Default"
         
         if save_config(self.config):
             messagebox.showinfo("Success", "Settings saved successfully.")

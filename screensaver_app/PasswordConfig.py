@@ -16,33 +16,38 @@ DEFAULT_PASSWORD = "1234"
 DEFAULT_USERNAME = "User" # Default for creating a new config if none exists
 
 def load_config():
-    """Load entire user configuration from userconfig.json (using unified search logic)"""
+    """Load configuration from userconfig.json"""
     config_path = find_user_config_path()
+    
+    # Enhanced default configuration with GPU settings
+    default_config = {
+        "users": [
+            {"username": DEFAULT_USERNAME, "password_hash": hashlib.sha256(DEFAULT_PASSWORD.encode()).hexdigest()}
+        ],
+        "default_user_for_display": DEFAULT_USERNAME,
+        "profile_pic_path": "",
+        "profile_pic_path_crop": "",  # Add crop path with empty default
+        "video_path": "video.mp4",
+        "theme": "light",
+        "clock_font_family": "Segoe UI Emoji",
+        "clock_font_size": 64,
+        "ui_font_family": "Arial",
+        "ui_font_size": 18,
+        "preferred_gpu": "auto",
+        "gpu_acceleration": True,
+        "video_backend": "auto"
+    }
+    
     if not os.path.exists(config_path):
-        default_hash = hashlib.sha256(DEFAULT_PASSWORD.encode()).hexdigest()
-        default_config = {
-            "users": [
-                {"username": DEFAULT_USERNAME, "password_hash": default_hash}
-            ],
-            "default_user_for_display": DEFAULT_USERNAME,
-            "profile_pic_path": "",
-            "profile_pic_path_crop": "",  # Add crop path with empty default
-            "video_path": "video.mp4",
-            "theme": "light",
-            "clock_font_family": "Segoe UI Emoji",
-            "clock_font_size": 64,
-            "ui_font_family": "Arial",
-            "ui_font_size": 18
-        }
         save_config(default_config)
         return default_config
+    
     try:
         with open(config_path, 'r') as f:
             config = json.load(f)
             # Ensure essential keys exist with defaults
             if "users" not in config or not isinstance(config["users"], list) or not config["users"]:
-                default_hash = hashlib.sha256(DEFAULT_PASSWORD.encode()).hexdigest()
-                config["users"] = [{"username": DEFAULT_USERNAME, "password_hash": default_hash}]
+                config["users"] = [{"username": DEFAULT_USERNAME, "password_hash": hashlib.sha256(DEFAULT_PASSWORD.encode()).hexdigest()}]
             if "default_user_for_display" not in config:
                 config["default_user_for_display"] = config["users"][0].get("username", DEFAULT_USERNAME)
             if "profile_pic_path" not in config: config["profile_pic_path"] = ""
@@ -53,18 +58,14 @@ def load_config():
             if "clock_font_size" not in config: config["clock_font_size"] = 64
             if "ui_font_family" not in config: config["ui_font_family"] = "Arial"
             if "ui_font_size" not in config: config["ui_font_size"] = 18
+            # New GPU-related keys
+            if "preferred_gpu" not in config: config["preferred_gpu"] = "auto"
+            if "gpu_acceleration" not in config: config["gpu_acceleration"] = True
+            if "video_backend" not in config: config["video_backend"] = "auto"
             return config    
     except Exception as e:
         logger.error(f"Error loading user config: {e}, returning hardcoded defaults.")
-        default_hash = hashlib.sha256(DEFAULT_PASSWORD.encode()).hexdigest()
-        return { # Hardcoded fallback
-            "users": [{"username": DEFAULT_USERNAME, "password_hash": default_hash}],
-            "default_user_for_display": DEFAULT_USERNAME,
-            "profile_pic_path": "", "profile_pic_path_crop": "",
-            "video_path": "video.mp4", "theme": "light",
-            "clock_font_family": "Segoe UI Emoji", "clock_font_size": 64,
-            "ui_font_family": "Arial", "ui_font_size": 18
-        }
+        return default_config # Hardcoded fallback
 
 def save_config(config_data):
     """Save entire configuration data to userconfig.json (using unified search logic)"""

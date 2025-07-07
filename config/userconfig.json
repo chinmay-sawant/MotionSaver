@@ -8,7 +8,7 @@
   "default_user_for_display": "test",
   "profile_pic_path": "D:\\Chinmay_Personal_Projects\\ScreenSaver\\a35_crop.jpg",
   "profile_pic_path_crop": "ScreenSaver\\a35_crop.jpg",
-  "video_path": "D:\\Chinmay_Personal_Projects\\ScreenSaver\\Demo_Videos\\AMG.mp4",
+  "video_path": "D:\\Chinmay_Personal_Projects\\ScreenSaver\\Demo_Videos\\kden_f1.mp4",
   "theme": "dark",
   "clock_font_family": "MINECRAFT PE",
   "clock_font_size": 64,
@@ -22,5 +22,8 @@
   "enable_weather_widget": false,
   "weather_pincode": "400068",
   "weather_country": "IN",
-  "logs_path": "D:/Chinmay_Personal_Projects/ScreenSaver/logs"
+  "logs_path": "D:/Chinmay_Personal_Projects/ScreenSaver/logs",
+  "preferred_gpu": "{'name': '31.0.15.5176', 'memory': '4293918720', 'type': 'unknown', 'platform': 'windows'}",
+  "gpu_acceleration": true,
+  "video_backend": "auto"
 }
