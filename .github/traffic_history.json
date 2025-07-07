@@ -53,7 +53,7 @@
       "uniques": 34
     },
     "2025-07-07": {
-      "count": 13,
+      "count": 15,
       "uniques": 7
     }
   },
@@ -75,8 +75,8 @@
       "uniques": 4
     },
     "2025-06-23": {
-      "count": 23,
-      "uniques": 6
+      "count": 21,
+      "uniques": 5
     },
     "2025-06-24": {
       "count": 6,
@@ -131,8 +131,8 @@
       "uniques": 187
     },
     "2025-07-07": {
-      "count": 128,
-      "uniques": 33
+      "count": 153,
+      "uniques": 37
     }
   },
   "releases": {
