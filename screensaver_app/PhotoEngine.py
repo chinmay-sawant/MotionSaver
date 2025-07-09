@@ -35,6 +35,7 @@ from utils.config_utils import find_user_config_path
 # Custom UAC elevation functions to replace pyUAC
 def is_admin():
     """Check if the current process is running with admin privileges."""
+    logger.info("is_admin")
     if platform.system() != "Windows":
         return False
     try:
@@ -45,6 +46,7 @@ def is_admin():
 
 def run_as_admin():
     """Restart the current script with admin privileges without showing console window."""
+    logger.info("run_as_admin")
     if platform.system() != "Windows":
         return False
     
@@ -70,6 +72,7 @@ def run_as_admin():
 
 def hide_console_window():
     """Hide the console window for the current process."""
+    logger.info("hide_console_window")
     if platform.system() == "Windows":
         try:
             import ctypes
@@ -158,6 +161,7 @@ def update_secondary_monitor_blackouts(main_tk_window):
     This function is designed to be called initially and whenever display settings change.
     Ensures only secondary monitors are blocked, not the primary (main) display.
     """
+    logger.info("update_secondary_monitor_blackouts")
     global secondary_screen_windows
     if not main_tk_window.winfo_exists() or not WINDOWS_MULTI_MONITOR_SUPPORT:
         logger.debug("Skipping monitor blackout update - main window not exists or no multi-monitor support")
@@ -272,6 +276,7 @@ callback_ref = None
 
 def WinEventProcCallback(hWinEventHook, event, hwnd, idObject, idChild, dwEventThread, dwmsEventTime):
     """Callback for Windows display change events."""
+    logger.info("WinEventProcCallback")
     global root_ref_for_hook
     if event == EVENT_SYSTEM_DISPLAYSETTINGSCHANGED:  # Using our defined constant instead of win32con
         if root_ref_for_hook and root_ref_for_hook.winfo_exists():
@@ -281,6 +286,7 @@ def WinEventProcCallback(hWinEventHook, event, hwnd, idObject, idChild, dwEventT
 
 def start_screensaver(video_path_override=None): 
     """Launch the full-screen screen saver directly"""
+    logger.info("start_screensaver")
     global secondary_screen_windows, hWinEventHook, root_ref_for_hook, callback_ref
     secondary_screen_windows = [] 
     hWinEventHook = None
@@ -341,6 +347,7 @@ def start_screensaver(video_path_override=None):
     app = VideoClockScreenSaver(root, video_path_override)
 
     def on_escape(event):
+        logger.info("on_escape")
         global secondary_screen_windows, hWinEventHook, root_ref_for_hook
         if event:
             logger.info(f"Password dialog triggered by: {event.keysym if hasattr(event, 'keysym') else 'mouse click'}")
@@ -472,6 +479,7 @@ def start_screensaver(video_path_override=None):
     
     # Ensure hook is unhooked if window is closed by other means (though less likely for fullscreen)
     def on_closing_main_window():
+        logger.info("on_closing_main_window")
         global secondary_screen_windows, hWinEventHook, root_ref_for_hook # Ensure all globals used are listed
         
         # Attempt to verify password before closing
@@ -531,6 +539,7 @@ def start_screensaver(video_path_override=None):
 
 def load_config():
     """Load configuration from userconfig.json (using unified search logic)"""
+    logger.info("load_config")
     config_path = find_user_config_path()
     default_config = {
         "run_as_admin": False,
@@ -554,6 +563,7 @@ def load_config():
         return default_config
 
 def create_image(width, height, color1, color2):
+    logger.info("create_image")
     # Create a simple icon for the system tray
     image = Image.new('RGB', (width, height), color1)
     dc = ImageDraw.Draw(image)
@@ -566,6 +576,7 @@ def create_image(width, height, color1, color2):
     return image
 
 def run_in_system_tray():
+    logger.info("run_in_system_tray")
     logger.info("Running in system tray mode...")
     icon_image = create_image(64, 64, 'black', 'blue') # Example icon
     
@@ -575,6 +586,7 @@ def run_in_system_tray():
     win_s_blocker = None    
     
     def on_open_screensaver(icon, item):
+        logger.info("on_open_screensaver")
         logger.info("Starting screensaver from tray...")
         # Run start_screensaver_with_return in a new thread to avoid blocking the tray icon
         import threading
@@ -583,6 +595,7 @@ def run_in_system_tray():
         thread.start()
     
     def on_open_gui(icon, item):
+        logger.info("on_open_gui")
         logger.info("Opening GUI from tray...")
         try:
             # Launch GUI in a separate process instead of thread
@@ -612,11 +625,13 @@ def run_in_system_tray():
                 logger.error(f"Fallback GUI launch also failed: {fallback_error}")
     
     def on_exit_app(icon, item):
+        logger.info("on_exit_app")
         logger.info("Exiting application from tray...")
         shutdown_system_tray() # Call the centralized shutdown
     
     def start_screensaver_with_return():
         """Start screensaver and return to tray mode after authentication."""
+        logger.info("start_screensaver_with_return")
         logger.info("Win + S detected or manual start. Starting screensaver...")
         
         # Temporarily disable Win+S detection
@@ -641,6 +656,7 @@ def run_in_system_tray():
 
     def start_win_s_detection():
         """Start Win+S key detection and blocking using the same logic as key blocking."""
+        logger.info("start_win_s_detection")
         global win_s_blocker
         
         try:
@@ -653,24 +669,28 @@ def run_in_system_tray():
                 is_enhanced = False
             
             win_s_blocker = CurrentKeyBlocker(debug_print=True)
-            
+            logger.info("Initializing Win+S key blocker for tray mode")
             if is_enhanced:
+                logger.debug("Using EnhancedKeyBlocker for Win+S detection")
                 # For EnhancedKeyBlocker, we need to work with the internal python_blocker
                 if hasattr(win_s_blocker, 'python_blocker') and win_s_blocker.python_blocker is None:
-                    # Initialize the internal blocker
+                    logger.debug("Initializing internal python_blocker for EnhancedKeyBlocker")
                     from utils.key_blocker import KeyBlocker
                     win_s_blocker.python_blocker = KeyBlocker(debug_print=True)
                 
                 # Get the actual blocker to customize
                 actual_blocker = win_s_blocker.python_blocker
             else:
+                logger.debug("Using basic KeyBlocker for Win+S detection")
                 # For basic KeyBlocker
                 actual_blocker = win_s_blocker
-            
             if actual_blocker:
+                logger.debug("Customizing _on_block_action for Win+S detection")
                 # Override the _on_block_action method to trigger screensaver AND block the key
                 original_on_block_action = getattr(actual_blocker, '_on_block_action', None)
                 def custom_on_block_action(combo_name):
+                    logger.info("custom_on_block_action called")
+                    logger.debug(f"Combo detected: {combo_name}")
                     if "win+s" in combo_name.lower():
                         logger.info(f"Win+S detected and blocked: {combo_name}")
                         # Start screensaver in a new thread
@@ -678,44 +698,57 @@ def run_in_system_tray():
                         thread = threading.Thread(target=start_screensaver_with_return)
                         thread.daemon = True
                         thread.start()
+                        logger.debug("Started screensaver thread from Win+S block")
                         return True  # This blocks the key combination from reaching Windows
                     else:
+                        logger.debug("Non Win+S combo detected, delegating to original_on_block_action if exists")
                         # For other combinations, use original behavior if it exists
                         if original_on_block_action:
                             return original_on_block_action(combo_name)
                         return False
-                
+
                 actual_blocker._on_block_action = custom_on_block_action
-                        
-                    # Enable full blocking mode for Win+S only
+                logger.info("Custom _on_block_action set for Win+S detection")
+                # Enable full blocking mode for Win+S only // here issue 
+                logger.debug("Attempting to enable Win+S blocking in tray mode")
                 if hasattr(actual_blocker, 'enable_all_blocking'):
+                    logger.debug("actual_blocker has enable_all_blocking method")
                     # Temporarily modify blocked_combinations to only include Win+S
                     original_combinations = actual_blocker.blocked_combinations.copy()
+                    logger.debug(f"Original blocked_combinations: {original_combinations}")
                     actual_blocker.blocked_combinations = {'win+s': "Win+S (Search)"}
+                    logger.debug("Set blocked_combinations to only Win+S")
                     
-                    success = actual_blocker.enable_all_blocking(use_registry=False, use_hooks=True)
-                    
+                    success = actual_blocker.enable_win_s_blocking(use_registry=False, use_hooks=True)
+                    logger.debug(f"enable_win_s_blocking returned: {success}")
+
                     # Restore original combinations for reference
                     actual_blocker.blocked_combinations = original_combinations
+                    logger.debug("Restored original blocked_combinations after enabling blocking")
                     if success:
                         logger.info("Win+S detection and blocking active in tray mode")
                     else:
                         logger.warning("Failed to start Win+S detection and blocking")
                 elif hasattr(actual_blocker, 'start_hook_blocking'):
+                    logger.debug("actual_blocker has start_hook_blocking method")
                     # Fallback to hook-only blocking
                     original_combinations = actual_blocker.blocked_combinations.copy()
+                    logger.debug(f"Original blocked_combinations: {original_combinations}")
                     actual_blocker.blocked_combinations = {'win+s': "Win+S (Search)"}
+                    logger.debug("Set blocked_combinations to only Win+S for hook blocking")
                     
                     success = actual_blocker.start_hook_blocking()
+                    logger.debug(f"start_hook_blocking returned: {success}")
                     
                     # Restore original combinations for reference
                     actual_blocker.blocked_combinations = original_combinations
+                    logger.debug("Restored original blocked_combinations after hook blocking")
                     if success:
                         logger.info("Win+S hook detection active in tray mode")
                     else:
                         logger.warning("Failed to start Win+S hook detection")                
                 else:
-                        logger.warning("Hook blocking not available")
+                    logger.warning("Hook blocking not available")
             else:
                 logger.error("Could not initialize key blocker for Win+S detection")
                     
@@ -738,6 +771,7 @@ def run_in_system_tray():
 
 def shutdown_system_tray():
     """Handles the clean shutdown of the system tray icon and related resources."""
+    logger.info("shutdown_system_tray")
     logger.info("shutdown_system_tray called.")
     global tray_running, win_s_blocker, tray_icon_instance
     
@@ -781,6 +815,7 @@ def shutdown_system_tray():
 
 def admin_main():
     """Main function that will check for admin rights and restart if needed"""
+    logger.info("admin_main")
     parser = argparse.ArgumentParser(description='Video Clock Screen Saver')
     parser.add_argument('--mode', choices=['saver', 'gui'], default='saver', help='Run mode: saver or gui')
     parser.add_argument('--video', default=None, help='Path to video file (overrides config)')
@@ -836,6 +871,7 @@ def admin_main():
         gui.main() # Call the main function from the gui module
 
 def register_service():
+    logger.info("register_service")
     print("Attempting to register application as a Windows service...")    
     if platform.system() != "Windows":
         logger.warning("Service registration is only supported on Windows.")

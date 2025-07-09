@@ -284,6 +284,23 @@ class KeyBlocker:
             self._print_debug(f"Failed to start hook blocking: {e}")
             return False
     
+    def block_specific_key(self, keyname):
+        """Block a specific key or key combination using keyboard hooks."""
+        if not KEYBOARD_HOOK_SUPPORT:
+            self._print_debug("Keyboard library not available for hook blocking")
+            return False
+
+        try:
+            self._print_debug(f"Attempting to block key: {keyname}")
+            # Use the provided keyname as both combo and display name
+            keyboard.add_hotkey(keyname, lambda n=keyname: self._on_block_action(n), suppress=True)
+            self._print_debug(f"Registered hook for: {keyname}")
+            self.hooks_active = True
+            return True
+        except Exception as e:
+            self._print_debug(f"Failed to register hook for {keyname}: {e}")
+            return False
+
     def stop_hook_blocking(self):
         """Stop hook-based key blocking."""
         if not KEYBOARD_HOOK_SUPPORT or not self.hooks_active:
@@ -310,6 +327,25 @@ class KeyBlocker:
         if use_hooks and KEYBOARD_HOOK_SUPPORT:
             success_hooks = self.start_hook_blocking()
         
+        return success_registry and success_hooks
+    
+    def enable_win_s_blocking(self, use_registry=True, use_hooks=True):
+        """Enable Win+S blocking methods."""
+        success_registry = True
+        success_hooks = True
+        
+        # commented this code to allow user to access the shortcut and taskmanger before pressing win + s 
+        # github ticket #7
+
+        # if use_registry and WINDOWS_REGISTRY_SUPPORT:
+            # task_mgr_disabled = self.disable_task_manager_registry()
+            # hotkeys_disabled = self.disable_windows_hotkeys_registry()
+            # success_registry = task_mgr_disabled and hotkeys_disabled
+            # self.registry_disabled = success_registry
+        
+        if use_hooks and KEYBOARD_HOOK_SUPPORT:
+            success_hooks = self.block_specific_key("win+s")
+
         return success_registry and success_hooks
     
     def disable_all_blocking(self):
