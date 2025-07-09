@@ -162,5 +162,18 @@ If you continue to experience issues, please open an issue on the [GitHub Issues
 **Q: Where do I report bugs or get help?**
 - Please open an issue on the [GitHub Issues page](https://github.com/chinmay-sawant/MotionSaver/issues).
 
+**Q: Sometimes my Win + <key> shortcuts don't work. What should I do?**  
+- MotionSaver uses low-level keyboard hooks, which may affect shortcut responsiveness.
+- To use Win + <key> shortcuts (like Win + X for Quick Access or Win + R for Run), press and hold the **Win** key for at least 1 second before pressing the other key.
+- Example: Hold **Win** for 1 second, then press **X** or **R** to trigger the shortcut.
+
+**Q: The clock is not visible, or I want to change the clock font. How can I do this?**  
+- If the clock is not visible, try downloading and installing the **Minecraft PE** font or any other preferred font from the web.
+- You can customize the clock, weather, and music fonts:
+    1. Open `Gui.bat` as administrator.
+    2. In the GUI, navigate to the font settings for clock, weather, or music.
+    3. Download and install any external fonts you like; they will appear in the dropdown selection.
+    4. Select your desired font and save the settings.
+- This allows you to personalize the appearance of the screensaver's text elements.
 
 ---
