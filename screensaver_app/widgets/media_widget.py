@@ -32,7 +32,7 @@ if platform.system() == "Windows":
         WINSDK_AVAILABLE = False
 
 class MediaWidget:    
-    def __init__(self, parent_root, transparent_key='#123456', screen_width=0, screen_height=0):
+    def __init__(self, parent_root, transparent_key='#010203', screen_width=0, screen_height=0):  # Updated default
         logger.info("Initializing MediaWidget")
         self.parent_root = parent_root
         self.transparent_key = transparent_key
@@ -61,6 +61,9 @@ class MediaWidget:
             self.window.attributes('-transparentcolor', self.transparent_key)
             self.window.configure(bg=self.transparent_key)
             self.window.attributes('-topmost', True)
+            
+            # Remove any focus-related attributes that might interfere
+            self.window.attributes('-disabled', False)  # Ensure it's interactive
 
             widget_width = 350  # Increased width to accommodate thumbnail
             widget_height = 120  # Increased height for better visibility
@@ -74,9 +77,10 @@ class MediaWidget:
             logger.info(f"MediaWidget positioning: {widget_width}x{widget_height}+{x_pos}+{y_pos}")
             self.window.geometry(f"{widget_width}x{widget_height}+{x_pos}+{y_pos}")
             
-            # Ensure window is visible
+            # Ensure window is visible and properly stacked
             self.window.deiconify()
             self.window.lift()
+            self.window.focus_set()  # Allow focus for interactions
             
             logger.info("MediaWidget window created successfully")
             
@@ -84,15 +88,15 @@ class MediaWidget:
             logger.error(f"Error creating MediaWidget window: {e}")
             return
         
-        # Initialize in separate thread with proper error handling
+        # Reduced initialization delay for faster startup
         self.init_thread = threading.Thread(target=self._initialize_widget_async, daemon=True)
         self.init_thread.start()
     
     def _initialize_widget_async(self):
         """Initialize widget content in separate thread"""
         try:
-            # Longer delay to ensure video is fully stable
-            time.sleep(1.5)  # Increased delay to ensure proper initialization
+            # Reduced delay for faster startup
+            time.sleep(0.3)  # Reduced from 1.5
             
             # Schedule UI creation on main thread
             if hasattr(self, 'window') and self.window.winfo_exists():
@@ -126,20 +130,18 @@ class MediaWidget:
     def create_widget_content(self):
         """Create the media widget UI content within its Toplevel window"""
         try:
-            # Add a visible border for debugging
-            debug_frame = tk.Frame(self.window, bg='darkblue', relief='solid', bd=2)
-            debug_frame.pack(fill=tk.BOTH, expand=True, padx=2, pady=2)
-            
+            # Remove debug frame and use proper transparent background
             # Create main frame to hold thumbnail and text
-            main_frame = tk.Frame(debug_frame, bg=self.transparent_key)
+            main_frame = tk.Frame(self.window, bg=self.transparent_key)
             main_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
             
-            # Thumbnail label (left side)
+            # Thumbnail label (left side) - make it clickable
             self.thumbnail_label = tk.Label(
                 main_frame,
                 bg=self.transparent_key,
                 width=6,  # Roughly thumbnail_size in characters
-                height=3
+                height=3,
+                cursor='hand2'  # Add hand cursor for clickability
             )
             self.thumbnail_label.pack(side=tk.LEFT, padx=(0, 10))
             
@@ -147,7 +149,7 @@ class MediaWidget:
             text_frame = tk.Frame(main_frame, bg=self.transparent_key)
             text_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
             
-            # Media info label with better visibility
+            # Media info label with better visibility and clickability
             self.media_info_label = tk.Label(
                 text_frame,
                 text="🎵 Media Widget Active",  # Changed initial text for visibility
@@ -156,11 +158,12 @@ class MediaWidget:
                 font=('Segoe UI', 12, 'bold'),  # Slightly larger font
                 wraplength=220,  # Reduced to account for thumbnail
                 anchor='w',
-                justify=tk.LEFT
+                justify=tk.LEFT,
+                cursor='hand2'  # Add hand cursor for clickability
             )
             self.media_info_label.pack(fill=tk.X, pady=2)
             
-            # Control buttons - simplified layout with transparent background
+            # Control buttons - make them more interactive
             self.control_frame = tk.Frame(text_frame, bg=self.transparent_key)
             self.control_frame.pack(pady=(5, 0))
             
@@ -174,7 +177,8 @@ class MediaWidget:
                 'activeforeground': 'white',
                 'relief': 'flat',
                 'bd': 0,
-                'highlightthickness': 0
+                'highlightthickness': 0,
+                'cursor': 'hand2'  # Add hand cursor for all buttons
             }
             
             self.prev_btn = tk.Button(
