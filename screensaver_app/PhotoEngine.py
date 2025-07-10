@@ -31,6 +31,7 @@ import json
 from PIL import Image, ImageDraw # Added for system tray icon
 import pystray # Added for system tray functionality
 from utils.config_utils import find_user_config_path
+from screensaver_app.ServiceReg import ServiceRegistrar
 
 # Custom UAC elevation functions to replace pyUAC
 def is_admin():
@@ -756,9 +757,20 @@ def run_in_system_tray():
             logger.error(f"Error starting Win+S detection: {e}")
     
     # Create system tray menu with GUI option
-    menu = (pystray.MenuItem('Open Screensaver', on_open_screensaver),
+    if getattr(sys, 'frozen', False):
+        # If running as a PyInstaller binary, launch GUI as a new process using the executable
+        menu = (
+            pystray.MenuItem('Open Screensaver', on_open_screensaver),
+            pystray.MenuItem('Open GUI', lambda icon, item: subprocess.Popen([sys.executable, "--mode", "gui"], creationflags=subprocess.CREATE_NO_WINDOW if platform.system() == "Windows" else 0)),
+            pystray.MenuItem('Exit', on_exit_app)
+        )
+    else:
+        # If running as a script, use the normal handler
+        menu = (
+            pystray.MenuItem('Open Screensaver', on_open_screensaver),
             pystray.MenuItem('Open GUI', on_open_gui),
-            pystray.MenuItem('Exit', on_exit_app))
+            pystray.MenuItem('Exit', on_exit_app)
+        )
 
     icon = pystray.Icon("PhotoEngine", icon_image, "PhotoEngine Screensaver", menu)
     tray_icon_instance = icon # Store the icon instance
@@ -850,11 +862,7 @@ def admin_main():
         except Exception as e:
             logger.error(f"Service context check failed: {e}")
         sys.exit(0)
-
-    if args.register_service:
-        register_service()
-        sys.exit(0) # Exit after service registration attempt
-
+        
     if args.min:
         try:
             run_in_system_tray()        
@@ -870,55 +878,11 @@ def admin_main():
     elif args.mode == 'gui':
         gui.main() # Call the main function from the gui module
 
-def register_service():
-    logger.info("register_service")
-    print("Attempting to register application as a Windows service...")    
-    if platform.system() != "Windows":
-        logger.warning("Service registration is only supported on Windows.")
-        return
-
-    try:
-        service_name = "PhotoEngineService"
-        script_path = os.path.abspath(__file__)
-        python_exe = sys.executable 
-        # Command to run the service: it will call --start-service, which launches the tray in the user session
-        command = f'"{python_exe}" "{script_path}" --start-service'
-
-        # Check if service exists
-        check_service_cmd = f'sc query "{service_name}"'
-        try:
-            service_query_output = subprocess.check_output(check_service_cmd, shell=True, text=True, stderr=subprocess.STDOUT)
-            if "STATE" in service_query_output: # A simple check to see if query returned service info
-                 print(f"Service '{service_name}' already exists.")
-                 print(f"To manage it, use 'sc start {service_name}', 'sc stop {service_name}', or 'sc delete {service_name}'.")
-                 return
-        except subprocess.CalledProcessError as e:
-            # Error 1060: The specified service does not exist as an installed service.
-            # This is expected if the service is not yet created.
-            if "1060" not in e.output: 
-                print(f"Error checking service status: {e.output}")
-                # return # Decide if other errors during check should halt registration
-
-        create_cmd = f'sc create "{service_name}" binPath= "{command}" start= auto DisplayName= "PhotoEngine Screensaver Service"'
-        print(f"Executing: {create_cmd}")
-        subprocess.run(create_cmd, check=True, shell=True, text=True)
-        print(f"Service '{service_name}' created successfully.")
-        print(f"  To start it: sc start {service_name}")
-        print(f"  To stop it:  sc stop {service_name}")
-        print(f"  To delete it: sc delete {service_name}")
-
-    except subprocess.CalledProcessError as e:
-        print(f"Failed to register service: {e}")
-        if e.stderr:
-            print(f"Error details: {e.stderr}")
-        print("Make sure you are running this script as an administrator.")
-    except FileNotFoundError: # For 'sc' command not found, though unlikely on Windows
-        print("Error: 'sc' command not found. Is your Windows environment correctly set up?")
-    except Exception as e:
-        print(f"An unexpected error occurred during service registration: {e}")
-
-
 if __name__ == "__main__":
+    # Handle service registration commands first
+    if ServiceRegistrar.handle_service_args():
+        sys.exit(0)
+
     logger.info("Starting PhotoEngine...")
     
     # Parse arguments early to check for --no-elevate flag
