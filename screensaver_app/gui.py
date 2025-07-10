@@ -408,7 +408,7 @@ class ScreenSaverApp:
         self.stock_market_combo = ttk.Combobox(
             widget_frame, 
             textvariable=self.stock_market,
-            values=["NASDAQ", "NYSE", "CRYPTO", "NSE"], 
+            values=["NASDAQ", "NYSE", "CRYPTO", "NSE", "BSE"], 
             state="readonly",
             width=15,
             style="StockMarketCombo.TCombobox" # Assign a specific style

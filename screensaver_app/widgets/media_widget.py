@@ -49,25 +49,42 @@ class MediaWidget:
         self.current_thumbnail = None
         self.thumbnail_size = 50  # Size for the thumbnail
         
-        pygame.mixer.init()
+        try:
+            pygame.mixer.init()
+        except Exception as e:
+            logger.warning(f"Pygame mixer init failed: {e}")
 
-        self.window = tk.Toplevel(self.parent_root)
-        self.window.overrideredirect(True)
-        self.window.attributes('-transparentcolor', self.transparent_key)
-        self.window.configure(bg=self.transparent_key)
-        self.window.attributes('-topmost', True)
+        # Create window with proper error handling
+        try:
+            self.window = tk.Toplevel(self.parent_root)
+            self.window.overrideredirect(True)
+            self.window.attributes('-transparentcolor', self.transparent_key)
+            self.window.configure(bg=self.transparent_key)
+            self.window.attributes('-topmost', True)
 
-        widget_width = 350  # Increased width to accommodate thumbnail
-        widget_height = 80
+            widget_width = 350  # Increased width to accommodate thumbnail
+            widget_height = 120  # Increased height for better visibility
+            
+            if screen_width == 0: screen_width = self.parent_root.winfo_screenwidth()
+            if screen_height == 0: screen_height = self.parent_root.winfo_screenheight()
+
+            x_pos = 20
+            y_pos = screen_height - widget_height - 120  # Higher position to avoid overlap
+            
+            logger.info(f"MediaWidget positioning: {widget_width}x{widget_height}+{x_pos}+{y_pos}")
+            self.window.geometry(f"{widget_width}x{widget_height}+{x_pos}+{y_pos}")
+            
+            # Ensure window is visible
+            self.window.deiconify()
+            self.window.lift()
+            
+            logger.info("MediaWidget window created successfully")
+            
+        except Exception as e:
+            logger.error(f"Error creating MediaWidget window: {e}")
+            return
         
-        if screen_width == 0: screen_width = self.parent_root.winfo_screenwidth()
-        if screen_height == 0: screen_height = self.parent_root.winfo_screenheight()
-
-        x_pos = 20
-        y_pos = screen_height - widget_height - 20
-        self.window.geometry(f"{widget_width}x{widget_height}+{x_pos}+{y_pos}")
-        
-        # Initialize in separate thread with longer delay
+        # Initialize in separate thread with proper error handling
         self.init_thread = threading.Thread(target=self._initialize_widget_async, daemon=True)
         self.init_thread.start()
     
@@ -75,10 +92,13 @@ class MediaWidget:
         """Initialize widget content in separate thread"""
         try:
             # Longer delay to ensure video is fully stable
-            time.sleep(0.1) # Reduced delay
+            time.sleep(1.5)  # Increased delay to ensure proper initialization
             
             # Schedule UI creation on main thread
-            self.parent_root.after(0, self._create_widget_ui)
+            if hasattr(self, 'window') and self.window.winfo_exists():
+                self.parent_root.after(0, self._create_widget_ui)
+            else:
+                logger.error("MediaWidget window no longer exists during async init")
             
         except Exception as e:
             logger.error(f"Error in media widget async initialization: {e}")
@@ -86,9 +106,11 @@ class MediaWidget:
     def _create_widget_ui(self):
         """Create widget UI on main thread"""
         try:
-            if not self.window.winfo_exists():
+            if not hasattr(self, 'window') or not self.window.winfo_exists():
+                logger.error("MediaWidget window does not exist when creating UI")
                 return
                 
+            logger.info("Creating MediaWidget UI content")
             self.create_widget_content()
             self.initialized = True
             
@@ -96,90 +118,114 @@ class MediaWidget:
             self.detection_thread = threading.Thread(target=self._start_detection_async, daemon=True)            
             self.detection_thread.start()
             
+            logger.info("MediaWidget UI created successfully")
+            
         except Exception as e:
             logger.error(f"Error creating media widget UI: {e}")
-    
-    def _start_detection_async(self):
-        """Start media detection in completely separate thread""" # Renamed
-        try:
-            time.sleep(0.2) # Reduced delay, slightly more than UI init
-            self.start_media_detection() # Renamed
-        except Exception as e:
-            logger.error(f"Error starting media detection: {e}")
 
     def create_widget_content(self):
         """Create the media widget UI content within its Toplevel window"""
-        
-        # Create main frame to hold thumbnail and text
-        main_frame = tk.Frame(self.window, bg=self.transparent_key)
-        main_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
-        
-        # Thumbnail label (left side)
-        self.thumbnail_label = tk.Label(
-            main_frame,
-            bg=self.transparent_key,
-            width=6,  # Roughly thumbnail_size in characters
-            height=3
-        )
-        self.thumbnail_label.pack(side=tk.LEFT, padx=(0, 10))
-        
-        # Text frame (right side)
-        text_frame = tk.Frame(main_frame, bg=self.transparent_key)
-        text_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        
-        # Media info label
-        self.media_info_label = tk.Label(
-            text_frame,
-            text="🎵 No media detected",
-            bg=self.transparent_key, 
-            fg='white',
-            font=('Arial', 11, 'bold'),
-            wraplength=220,  # Reduced to account for thumbnail
-            anchor='w',
-            justify=tk.LEFT
-        )
-        self.media_info_label.pack(fill=tk.X)
-        
-        # Control buttons - simplified layout with transparent background
-        self.control_frame = tk.Frame(text_frame, bg=self.transparent_key)
-        self.control_frame.pack(pady=(5, 0))
-        
-        btn_config = {
-            'bg': self.transparent_key,
-            'fg': 'white',
-            'font': ('Arial', 16),
-            'width': 2,
-            'height': 1,
-            'activebackground': '#333333',
-            'activeforeground': 'white',
-            'relief': 'flat',
-            'bd': 0,
-            'highlightthickness': 0
-        }
-        
-        self.prev_btn = tk.Button(
-            self.control_frame,
-            text="⏮",
-            command=self.previous_track,
-            **btn_config
-        )
-        self.prev_btn.pack(side=tk.LEFT, padx=5)
-        
-        self.play_pause_btn = tk.Button(
-            self.control_frame,
-            text="⏸", 
-            command=self.toggle_play_pause,
-            **btn_config
-        )
-        self.play_pause_btn.pack(side=tk.LEFT, padx=5)
-        
-        self.next_btn = tk.Button(
-            self.control_frame,
-            text="⏭",
-            command=self.next_track,
-            **btn_config
-        )
-        self.next_btn.pack(side=tk.LEFT, padx=5)
+        try:
+            # Add a visible border for debugging
+            debug_frame = tk.Frame(self.window, bg='darkblue', relief='solid', bd=2)
+            debug_frame.pack(fill=tk.BOTH, expand=True, padx=2, pady=2)
+            
+            # Create main frame to hold thumbnail and text
+            main_frame = tk.Frame(debug_frame, bg=self.transparent_key)
+            main_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+            
+            # Thumbnail label (left side)
+            self.thumbnail_label = tk.Label(
+                main_frame,
+                bg=self.transparent_key,
+                width=6,  # Roughly thumbnail_size in characters
+                height=3
+            )
+            self.thumbnail_label.pack(side=tk.LEFT, padx=(0, 10))
+            
+            # Text frame (right side)
+            text_frame = tk.Frame(main_frame, bg=self.transparent_key)
+            text_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+            
+            # Media info label with better visibility
+            self.media_info_label = tk.Label(
+                text_frame,
+                text="🎵 Media Widget Active",  # Changed initial text for visibility
+                bg=self.transparent_key, 
+                fg='white',
+                font=('Segoe UI', 12, 'bold'),  # Slightly larger font
+                wraplength=220,  # Reduced to account for thumbnail
+                anchor='w',
+                justify=tk.LEFT
+            )
+            self.media_info_label.pack(fill=tk.X, pady=2)
+            
+            # Control buttons - simplified layout with transparent background
+            self.control_frame = tk.Frame(text_frame, bg=self.transparent_key)
+            self.control_frame.pack(pady=(5, 0))
+            
+            btn_config = {
+                'bg': self.transparent_key,
+                'fg': 'white',
+                'font': ('Segoe UI', 16),
+                'width': 2,
+                'height': 1,
+                'activebackground': '#333333',
+                'activeforeground': 'white',
+                'relief': 'flat',
+                'bd': 0,
+                'highlightthickness': 0
+            }
+            
+            self.prev_btn = tk.Button(
+                self.control_frame,
+                text="⏮",
+                command=self.previous_track,
+                **btn_config
+            )
+            self.prev_btn.pack(side=tk.LEFT, padx=5)
+            
+            self.play_pause_btn = tk.Button(
+                self.control_frame,
+                text="⏸", 
+                command=self.toggle_play_pause,
+                **btn_config
+            )
+            self.play_pause_btn.pack(side=tk.LEFT, padx=5)
+            
+            self.next_btn = tk.Button(
+                self.control_frame,
+                text="⏭",
+                command=self.next_track,
+                **btn_config
+            )
+            self.next_btn.pack(side=tk.LEFT, padx=5)
+
+            logger.info("MediaWidget content created successfully")
+            
+        except Exception as e:
+            logger.error(f"Error creating MediaWidget content: {e}")
+            # Create minimal fallback UI
+            try:
+                fallback_label = tk.Label(
+                    self.window,
+                    text="🎵 Media Widget (Fallback)",
+                    bg='red',  # Visible background for debugging
+                    fg='white',
+                    font=('Arial', 10)
+                )
+                fallback_label.pack(fill=tk.BOTH, expand=True)
+            except Exception as fallback_error:
+                logger.error(f"Even fallback UI creation failed: {fallback_error}")
+
+    def _start_detection_async(self):
+        """Start media detection in completely separate thread""" 
+        try:
+            time.sleep(2.0)  # Increased delay
+            logger.info("Starting media detection")
+            self.start_media_detection()
+        except Exception as e:
+            logger.error(f"Error starting media detection: {e}")
 
     def send_media_key(self, key):
         """Send media key commands to control browser playback"""
@@ -604,14 +650,14 @@ class MediaWidget:
             elif hasattr(self, 'thumbnail_label'):
                 # Clear thumbnail if no image available
                 self.thumbnail_label.config(image='', text='🎵', fg='white', bg=self.transparent_key, 
-                                          font=('Arial', 20))
+                                          font=('Segoe UI', 20))
                 self.current_thumbnail = None
         except Exception as e:
             logger.error(f"Error updating thumbnail: {e}")
             # Fallback to music note emoji
             if hasattr(self, 'thumbnail_label'):
                 self.thumbnail_label.config(image='', text='🎵', fg='white', bg=self.transparent_key,
-                                          font=('Arial', 20))
+                                          font=('Segoe UI', 20))
                 self.current_thumbnail = None
 
     def clear_media_track_info(self):
@@ -622,7 +668,7 @@ class MediaWidget:
         # Clear thumbnail
         if hasattr(self, 'thumbnail_label') and self.thumbnail_label.winfo_exists():
             self.thumbnail_label.config(image='', text='♪', fg='#888888', bg=self.transparent_key,
-                                      font=('Arial', 16))
+                                      font=('Segoe UI', 16))
             self.current_thumbnail = None
 
     def toggle_play_pause(self):
