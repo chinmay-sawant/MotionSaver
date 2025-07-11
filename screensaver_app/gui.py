@@ -1,6 +1,6 @@
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, colorchooser, font as tkfont
-from PIL import Image, ImageTk, ImageDraw 
+from PIL import Image, ImageTk, ImageDraw
 import os
 import json
 import sys # Import sys
@@ -944,18 +944,29 @@ class ScreenSaverApp:
                     self.gif_path = gif_path
                     self.save_path = save_path
                     self.frames = []
-                    self.cropped_frames = []
+                    self.frame_durations = []
                     self.crop_coords = None
                     self.radius = None
                     self.center = None
                     self.cancelled = False
+                    self.crop_saved = False # Initialize crop_saved flag
+                    self.image_path = None # Initialize image_path
 
-                    # Load GIF frames (keep original size and color)
+                    # Load GIF frames (preserve original format and colors)
                     gif = Image.open(gif_path)
                     try:
                         while True:
-                            frame = gif.copy().convert("RGBA")
+                            # Keep original mode and palette if possible
+                            frame = gif.copy()
+                            if frame.mode != 'RGBA':
+                                # Convert to RGBA only for processing, but keep original info
+                                frame = frame.convert('RGBA')
                             self.frames.append(frame)
+                            
+                            # Store frame duration
+                            duration = gif.info.get('duration', 100)
+                            self.frame_durations.append(duration)
+                            
                             gif.seek(len(self.frames))
                     except EOFError:
                         pass
@@ -1080,14 +1091,26 @@ class ScreenSaverApp:
                         try:
                             cx, cy, r = self.center[0], self.center[1], int(self.radius)
                             bbox = (cx - r, cy - r, cx + r, cy + r)
-                            self.cropped_frames = []
+                            
+                            # Create a list of processed RGBA frames
+                            processed_frames = []
                             for frame in self.frames:
-                                cropped = frame.crop(bbox)
-                                mask = Image.new("L", cropped.size, 0)
+                                # Ensure frame is RGBA for masking
+                                rgba_frame = frame.convert('RGBA')
+
+                                # Crop the RGBA frame
+                                cropped_rgba = rgba_frame.crop(bbox)
+
+                                # Create a circular mask
+                                mask = Image.new('L', cropped_rgba.size, 0)
                                 draw = ImageDraw.Draw(mask)
-                                draw.ellipse((0, 0, cropped.size[0], cropped.size[1]), fill=255)
-                                cropped.putalpha(mask)
-                                self.cropped_frames.append(cropped)
+                                draw.ellipse((0, 0, cropped_rgba.size[0], cropped_rgba.size[1]), fill=255)
+                                
+                                # Apply the mask to the alpha channel
+                                cropped_rgba.putalpha(mask)
+                                
+                                processed_frames.append(cropped_rgba)
+
                             save_path = self.save_path
                             if not save_path:
                                 save_path = filedialog.asksaveasfilename(
@@ -1095,23 +1118,36 @@ class ScreenSaverApp:
                                     defaultextension=".gif",
                                     filetypes=[("GIF files", "*.gif"), ("All files", "*.*")]
                                 )
+                                
                             if save_path:
-                                self.cropped_frames[0].save(
-                                    save_path,
-                                    save_all=True,
-                                    append_images=self.cropped_frames[1:],
-                                    loop=0,
-                                    duration=80,
-                                    disposal=2,
-                                    transparency=0
-                                )
-                                self.image_path = save_path
-                                self.crop_saved = True
-                                messagebox.showinfo("Success", f"Cropped GIF saved to {save_path}")
-                                self.destroy()
-                            else:
+                                if processed_frames:
+                                    # Get frame durations
+                                    durations = self.frame_durations if self.frame_durations else [100] * len(processed_frames)
+                                    # Ensure durations list is long enough
+                                    while len(durations) < len(processed_frames):
+                                        durations.append(durations[-1] if durations else 100)
+                                    
+                                    # Save the sequence of RGBA frames. Pillow will handle quantization and transparency.
+                                    processed_frames[0].save(
+                                        save_path,
+                                        save_all=True,
+                                        append_images=processed_frames[1:],
+                                        loop=0,
+                                        duration=durations,
+                                        disposal=2  # Crucial for transparent GIFs
+                                    )
+                                    
+                                    self.image_path = save_path
+                                    self.crop_saved = True
+                                    messagebox.showinfo("Success", f"Cropped GIF saved to {save_path}")
+                                    self.destroy()
+                                else:
+                                    # This case should ideally not be reached if frames exist
+                                    self.crop_saved = False
+                            else: # User cancelled save dialog
                                 self.crop_saved = False
                         except Exception as e:
+                            logger.exception("Error during GIF cropping")
                             messagebox.showerror("Error", f"Failed to crop or save GIF: {e}")
                     else:
                         messagebox.showwarning("No Selection", "Please select a circular area to crop.")
