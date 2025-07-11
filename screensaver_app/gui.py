@@ -518,21 +518,6 @@ class ScreenSaverApp:
         # then system_settings_frame can go to (current_row, 1).
         # If widget_frame spanned 2 columns, then system_settings_frame must go to (current_row + 1, 0).
 
-        # Given the previous structure, widget_frame was at (current_row, 0).
-        # Let's put System Settings next to it if there's space, or on a new row.
-        # If current_col was 0 after widget_frame, this means widget_frame was the start of a row.
-        # So, system_settings_frame can go to (current_row, 1)
-        # system_settings_frame.grid(row=current_row, column=1, padx=5, pady=5, sticky="nsew")
-        # current_col = 0 # Reset for next row
-        # current_row += 1 # Next section will be on a new row
-
-        # Simpler: Assume each major section gets its own row or pair.
-        # If widget_frame was the last item on its row:
-        # current_row += 1
-        # current_col = 0
-        # system_settings_frame.grid(row=current_row, column=0, columnspan=2, padx=5, pady=5, sticky="nsew")
-
-
         admin_check = ttk.Checkbutton(system_settings_frame, text="Run as Administrator (requires app restart)",
                                       variable=self.admin_mode_var)
         admin_check.pack(anchor=tk.W, padx=5, pady=5)
@@ -965,23 +950,29 @@ class ScreenSaverApp:
                     self.center = None
                     self.cancelled = False
 
-                    # Load GIF frames
+                    # Load GIF frames (keep original size and color)
                     gif = Image.open(gif_path)
                     try:
                         while True:
                             frame = gif.copy().convert("RGBA")
                             self.frames.append(frame)
-                            gif.seek(len(self.frames))  # Move to next frame
+                            gif.seek(len(self.frames))
                     except EOFError:
                         pass
 
                     self.current_frame_idx = 0
+                    self.zoom = 1.0
                     self.display_image = self.frames[0].copy()
-                    max_display_size = (400, 400)
-                    self.display_image.thumbnail(max_display_size, Image.Resampling.LANCZOS)
-                    self.img_tk = ImageTk.PhotoImage(self.display_image)
+                    self.display_width = self.display_image.width
+                    self.display_height = self.display_image.height
 
-                    self.canvas = tk.Canvas(self, width=self.display_image.width, height=self.display_image.height, cursor="cross")
+                    # Default crop circle: 400x400 centered
+                    default_r = min(400, self.display_width, self.display_height) // 2
+                    self.center = (self.display_width // 2, self.display_height // 2)
+                    self.radius = default_r
+
+                    self.img_tk = ImageTk.PhotoImage(self.display_image)
+                    self.canvas = tk.Canvas(self, width=self.display_width, height=self.display_height, cursor="cross")
                     self.canvas.create_image(0, 0, anchor=tk.NW, image=self.img_tk)
                     self.canvas.pack(pady=10, padx=10)
 
@@ -992,6 +983,9 @@ class ScreenSaverApp:
                     self.canvas.bind("<ButtonPress-1>", self.on_button_press)
                     self.canvas.bind("<B1-Motion>", self.on_mouse_drag)
                     self.canvas.bind("<ButtonRelease-1>", self.on_button_release)
+                    self.canvas.bind("<MouseWheel>", self.on_mousewheel)
+                    self.canvas.bind("<Button-4>", self.on_mousewheel)
+                    self.canvas.bind("<Button-5>", self.on_mousewheel)
 
                     btn_frame = ttk.Frame(self)
                     btn_frame.pack(pady=10)
@@ -1003,54 +997,88 @@ class ScreenSaverApp:
                     self.protocol("WM_DELETE_WINDOW", self.on_cancel)
                     self.grab_set()
 
-                    # Play GIF animation
                     self.after(0, self.play_gif)
 
                 def play_gif(self):
                     if self.cancelled:
                         return
-                    self.display_image = self.frames[self.current_frame_idx].copy()
-                    max_display_size = (400, 400)
-                    self.display_image.thumbnail(max_display_size, Image.Resampling.LANCZOS)
-                    self.img_tk = ImageTk.PhotoImage(self.display_image)
+                    frame = self.frames[self.current_frame_idx]
+                    # Apply zoom for display
+                    if self.zoom != 1.0:
+                        w = int(frame.width * self.zoom)
+                        h = int(frame.height * self.zoom)
+                        display_frame = frame.resize((w, h), Image.Resampling.LANCZOS)
+                    else:
+                        display_frame = frame
+                    self.img_tk = ImageTk.PhotoImage(display_frame)
+                    # Do NOT resize the canvas, keep it fixed to original image size
                     self.canvas.delete("all")
-                    self.canvas.create_image(0, 0, anchor=tk.NW, image=self.img_tk)
-                    if self.circle and self.center and self.radius:
+                    # Center the image in the canvas if zoomed out
+                    offset_x = max(0, (self.display_width - display_frame.width) // 2)
+                    offset_y = max(0, (self.display_height - display_frame.height) // 2)
+                    self.canvas.create_image(offset_x, offset_y, anchor=tk.NW, image=self.img_tk)
+                    # Draw crop circle
+                    if self.center and self.radius:
                         x, y = self.center
                         r = self.radius
-                        self.canvas.create_oval(x - r, y - r, x + r, y + r, outline='blue', width=2)
+                        # Adjust for zoom and offset
+                        xz = x * self.zoom + offset_x
+                        yz = y * self.zoom + offset_y
+                        rz = r * self.zoom
+                        self.canvas.create_oval(xz - rz, yz - rz, xz + rz, yz + rz, outline='blue', width=2)
                     self.current_frame_idx = (self.current_frame_idx + 1) % len(self.frames)
-                    self.after(80, self.play_gif)  # ~12 fps
+                    self.after(80, self.play_gif)
 
                 def on_button_press(self, event):
+                    # Start drag to move center
                     self.start_x = self.canvas.canvasx(event.x)
                     self.start_y = self.canvas.canvasy(event.y)
                     self.circle = None
 
                 def on_mouse_drag(self, event):
+                    # Move crop center
                     cur_x, cur_y = (self.canvas.canvasx(event.x), self.canvas.canvasy(event.y))
-                    r = ((cur_x - self.start_x) ** 2 + (cur_y - self.start_y) ** 2) ** 0.5
-                    self.center = (self.start_x, self.start_y)
-                    self.radius = r
+                    # Remove offset if zoomed out
+                    offset_x = max(0, (self.display_width - int(self.display_width * self.zoom)) // 2)
+                    offset_y = max(0, (self.display_height - int(self.display_height * self.zoom)) // 2)
+                    self.center = (int((cur_x - offset_x) / self.zoom), int((cur_y - offset_y) / self.zoom))
                     self.canvas.delete("all")
-                    self.canvas.create_image(0, 0, anchor=tk.NW, image=self.img_tk)
-                    self.canvas.create_oval(self.start_x - r, self.start_y - r, self.start_x + r, self.start_y + r, outline='blue', width=2)
+                    frame = self.frames[self.current_frame_idx]
+                    if self.zoom != 1.0:
+                        w = int(frame.width * self.zoom)
+                        h = int(frame.height * self.zoom)
+                        display_frame = frame.resize((w, h), Image.Resampling.LANCZOS)
+                    else:
+                        display_frame = frame
+                    self.img_tk = ImageTk.PhotoImage(display_frame)
+                    self.canvas.create_image(offset_x, offset_y, anchor=tk.NW, image=self.img_tk)
+                    xz = self.center[0] * self.zoom + offset_x
+                    yz = self.center[1] * self.zoom + offset_y
+                    rz = self.radius * self.zoom
+                    self.canvas.create_oval(xz - rz, yz - rz, xz + rz, yz + rz, outline='blue', width=2)
 
                 def on_button_release(self, event):
-                    cur_x, cur_y = (self.canvas.canvasx(event.x), self.canvas.canvasy(event.y))
-                    r = ((cur_x - self.start_x) ** 2 + (cur_y - self.start_y) ** 2) ** 0.5
-                    self.center = (self.start_x, self.start_y)
-                    self.radius = r
+                    # No-op, keep center as set
+                    pass
+
+                def on_mousewheel(self, event):
+                    # Zoom in/out only the image, not the window/canvas
+                    if hasattr(event, 'delta'):
+                        delta = event.delta
+                    elif hasattr(event, 'num'):
+                        delta = 120 if event.num == 4 else -120
+                    else:
+                        delta = 0
+                    if delta > 0:
+                        self.zoom = min(self.zoom + 0.1, 3.0)
+                    else:
+                        self.zoom = max(self.zoom - 0.1, 0.2)
+                    self.play_gif()
 
                 def crop_and_save(self):
                     if self.center and self.radius:
                         try:
-                            # Scale circle from display to original frame
-                            scale_x = self.frames[0].width / self.display_image.width
-                            scale_y = self.frames[0].height / self.display_image.height
-                            cx = int(self.center[0] * scale_x)
-                            cy = int(self.center[1] * scale_y)
-                            r = int(self.radius * (scale_x + scale_y) / 2)
+                            cx, cy, r = self.center[0], self.center[1], int(self.radius)
                             bbox = (cx - r, cy - r, cx + r, cy + r)
                             self.cropped_frames = []
                             for frame in self.frames:
