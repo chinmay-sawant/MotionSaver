@@ -47,7 +47,7 @@ class MediaWidget:
         
         # Add thumbnail support
         self.current_thumbnail = None
-        self.thumbnail_size = 50  # Size for the thumbnail
+        self.thumbnail_size = 100  # Size for the thumbnail
         
         try:
             pygame.mixer.init()
@@ -140,15 +140,15 @@ class MediaWidget:
             self.thumbnail_label = tk.Label(
                 main_frame,
                 bg=self.transparent_key,
-                width=250,  # Roughly thumbnail_size in characters
-                height=250,
+                width=150,  # Fixed width in characters to match 100px thumbnail
+                height=150,  # Fixed height to match 100px thumbnail
                 cursor='hand2'  # Add hand cursor for clickability
             )
-            self.thumbnail_label.pack(side=tk.LEFT, padx=(0, 1))
+            self.thumbnail_label.pack(side=tk.LEFT, anchor='nw')  # Added anchor
             
             # Text frame (right side)
             text_frame = tk.Frame(main_frame, bg=self.transparent_key)
-            text_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+            text_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, anchor='nw')  # Added anchor
             
             # Media info label with better visibility and clickability
             self.media_info_label = tk.Label(
@@ -157,12 +157,12 @@ class MediaWidget:
                 bg=self.transparent_key, 
                 fg='white',
                 font=('Segoe UI', 12, 'bold'),  # Slightly larger font
-                wraplength=500,  # Reduced to account for thumbnail
-                anchor='w',
+                wraplength=200,  # Adjusted for proper thumbnail space
+                anchor='nw',  # Changed to northwest alignment
                 justify=tk.LEFT,
                 cursor='hand2'  # Add hand cursor for clickability
             )
-            self.media_info_label.pack(fill=tk.X, pady=2)
+            self.media_info_label.pack(fill=tk.X, pady=2, anchor='nw')  # Added anchor
             
             # Control buttons - make them more interactive
             self.control_frame = tk.Frame(text_frame, bg=self.transparent_key)
