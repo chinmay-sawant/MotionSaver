@@ -433,6 +433,12 @@ class VideoClockScreenSaver:
         self.pre_rendered_username_label = None
         self.profile_pic_pos = (0,0)
         self.username_label_pos = (0,0)
+        # Add GIF support variables
+        self.profile_pic_is_gif = False
+        self.profile_pic_gif_frames = []
+        self.profile_pic_gif_frame_index = 0
+        self.profile_pic_gif_last_update = 0
+        self.profile_pic_gif_duration = 100  # Default duration in ms
 
         self.imgtk = None
         self.after_id = None
@@ -588,6 +594,10 @@ class VideoClockScreenSaver:
 
         self.pre_rendered_profile_pic = self._create_pre_rendered_profile_pic()
         self.pre_rendered_username_label = self._create_pre_rendered_username_label()
+        # GIF setup: if GIF frames exist, initialize timing
+        if self.profile_pic_is_gif and self.profile_pic_gif_frames:
+            self.profile_pic_gif_frame_index = 0
+            self.profile_pic_gif_last_update = int(time.time() * 1000)
         
         self.profile_pic_pos = (self.profile_center_x - self.profile_pic_size // 2, self.profile_pic_y_base)
         label_width = self.pre_rendered_username_label.width
@@ -608,44 +618,77 @@ class VideoClockScreenSaver:
 
     def _create_pre_rendered_profile_pic(self):
         size = self.profile_pic_size
-        # Use cropped profile pic path if available, otherwise fall back to original path
-        custom_pic_path_from_config = self.user_config.get("profile_pic_path_crop", "")
-        if not custom_pic_path_from_config:
-            custom_pic_path_from_config = self.user_config.get("profile_pic_path", "")
-            
+        # Use profile_pic_path for GIF, otherwise fallback to profile_pic_path_crop or profile_pic_path
+        config_pic_path = self.user_config.get("profile_pic_path", "")
+        config_pic_crop_path = self.user_config.get("profile_pic_path_crop", "")
         custom_pic_path = ""
-        if custom_pic_path_from_config:
-            if not os.path.isabs(custom_pic_path_from_config):
+
+        if config_pic_crop_path:
+            if not os.path.isabs(config_pic_crop_path):
                 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-                custom_pic_path = os.path.join(project_root, custom_pic_path_from_config)
+                custom_pic_path = os.path.join(project_root, config_pic_crop_path)
             else:
-                custom_pic_path = custom_pic_path_from_config
-        
+                custom_pic_path = config_pic_crop_path
+        elif config_pic_path:
+            if not os.path.isabs(config_pic_path):
+                project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+                custom_pic_path = os.path.join(project_root, config_pic_path)
+            else:
+                custom_pic_path = config_pic_path
+
         loaded_custom_image = None
+        # GIF support
+        self.profile_pic_is_gif = False
+        self.profile_pic_gif_frames = []
+        self.profile_pic_gif_duration = 100
         if custom_pic_path and os.path.exists(custom_pic_path):
             try:
-                img = Image.open(custom_pic_path).convert("RGBA")
-                
-                # Create a perfect square image with transparent background
-                square_img = Image.new('RGBA', (max(img.width, img.height), max(img.width, img.height)), (0,0,0,0))
-                paste_x = (square_img.width - img.width) // 2
-                paste_y = (square_img.height - img.height) // 2
-                square_img.paste(img, (paste_x, paste_y))
-                
-                # Resize the square to fit our target size
-                square_img = square_img.resize((size, size), Image.Resampling.LANCZOS)
-                
-                # Create circular mask
-                mask = Image.new('L', (size, size), 0)
-                draw_mask = ImageDraw.Draw(mask)
-                draw_mask.ellipse((0, 0, size, size), fill=255)
-                
-                # Apply mask to get circular image
-                circular_img = Image.new('RGBA', (size, size), (0,0,0,0))
-                circular_img.paste(square_img, (0, 0))
-                circular_img.putalpha(mask)                
-                loaded_custom_image = circular_img
-                
+                if custom_pic_path.lower().endswith('.gif'):
+                    gif = Image.open(custom_pic_path)
+                    self.profile_pic_is_gif = True
+                    self.profile_pic_gif_frames = []
+                    durations = []
+                    try:
+                        while True:
+                            frame = gif.convert("RGBA")
+                            # Make square, but use transparent background (no black border)
+                            square_img = Image.new('RGBA', (max(frame.width, frame.height), max(frame.width, frame.height)), (0,0,0,0))
+                            paste_x = (square_img.width - frame.width) // 2
+                            paste_y = (square_img.height - frame.height) // 2
+                            square_img.paste(frame, (paste_x, paste_y))
+                            square_img = square_img.resize((size, size), Image.Resampling.LANCZOS)
+                            # Circular mask
+                            mask = Image.new('L', (size, size), 0)
+                            draw_mask = ImageDraw.Draw(mask)
+                            draw_mask.ellipse((0, 0, size, size), fill=255)
+                            circular_img = Image.new('RGBA', (size, size), (0,0,0,0))
+                            circular_img.paste(square_img, (0, 0))
+                            circular_img.putalpha(mask)
+                            self.profile_pic_gif_frames.append(circular_img)
+                            # Collect duration for each frame
+                            durations.append(gif.info.get('duration', 100))
+                            gif.seek(gif.tell() + 1)
+                    except EOFError:
+                        pass
+                    # Use the minimum duration for smoothest animation, but not less than 20ms
+                    if durations:
+                        self.profile_pic_gif_duration = max(min(durations), 20)
+                    if self.profile_pic_gif_frames:
+                        loaded_custom_image = self.profile_pic_gif_frames[0]
+                else:
+                    img = Image.open(custom_pic_path).convert("RGBA")
+                    square_img = Image.new('RGBA', (max(img.width, img.height), max(img.width, img.height)), (0,0,0,0))
+                    paste_x = (square_img.width - img.width) // 2
+                    paste_y = (square_img.height - img.height) // 2
+                    square_img.paste(img, (paste_x, paste_y))
+                    square_img = square_img.resize((size, size), Image.Resampling.LANCZOS)
+                    mask = Image.new('L', (size, size), 0)
+                    draw_mask = ImageDraw.Draw(mask)
+                    draw_mask.ellipse((0, 0, size, size), fill=255)
+                    circular_img = Image.new('RGBA', (size, size), (0,0,0,0))
+                    circular_img.paste(square_img, (0, 0))
+                    circular_img.putalpha(mask)
+                    loaded_custom_image = circular_img
             except Exception as e:
                 logger.error(f"Error loading or processing custom profile picture '{custom_pic_path}': {e}")
                 loaded_custom_image = None
@@ -653,6 +696,7 @@ class VideoClockScreenSaver:
         if loaded_custom_image:
             return loaded_custom_image
 
+        # Default profile picture (circular gradient)
         image = Image.new('RGBA', (size, size), (0,0,0,0))
         draw = ImageDraw.Draw(image)
         
@@ -720,14 +764,21 @@ class VideoClockScreenSaver:
             # self.clock_x and self.clock_y are not used yet for drawing here.
             return pil_img
             
-        # Work directly on the image for better performance
         frame = pil_img
-        
-        # Add profile elements with minimal processing
-        if self.pre_rendered_profile_pic and self.pre_rendered_username_label:
+
+        # Profile pic rendering (GIF support)
+        profile_pic_img = self.pre_rendered_profile_pic
+        if self.profile_pic_is_gif and self.profile_pic_gif_frames:
+            now_ms = int(time.time() * 1000)
+            if now_ms - self.profile_pic_gif_last_update >= self.profile_pic_gif_duration:
+                self.profile_pic_gif_frame_index = (self.profile_pic_gif_frame_index + 1) % len(self.profile_pic_gif_frames)
+                self.profile_pic_gif_last_update = now_ms
+            profile_pic_img = self.profile_pic_gif_frames[self.profile_pic_gif_frame_index]
+
+        if profile_pic_img and self.pre_rendered_username_label:
             profile_pic_pos_int = (int(self.profile_pic_pos[0]), int(self.profile_pic_pos[1]))
             username_label_pos_int = (int(self.username_label_pos[0]), int(self.username_label_pos[1]))
-            frame.paste(self.pre_rendered_profile_pic, profile_pic_pos_int, self.pre_rendered_profile_pic)
+            frame.paste(profile_pic_img, profile_pic_pos_int, profile_pic_img)
             frame.paste(self.pre_rendered_username_label, username_label_pos_int, self.pre_rendered_username_label)
 
         # Highly optimized clock rendering - update less frequently

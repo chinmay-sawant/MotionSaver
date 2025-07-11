@@ -267,7 +267,7 @@ class ScreenSaverApp:
         current_col = 0  # Reset to first column
     
         # --- Profile Picture ---
-        pic_frame = ttk.LabelFrame(main_frame, text="Profile Picture", padding="10")
+        pic_frame = ttk.LabelFrame(main_frame, text="Profile Picture/Gif", padding="10")
         pic_frame.grid(row=current_row, column=current_col, padx=5, pady=5, sticky="nsew")
 
         self.profile_pic_path_var = tk.StringVar(value=self.config.get("profile_pic_path", ""))
@@ -940,7 +940,7 @@ class ScreenSaverApp:
         if not current_path:
             messagebox.showwarning("No Image", "Please select a profile picture first.")
             return
-        
+
         abs_path = current_path
         if not os.path.isabs(abs_path):
             abs_path = os.path.join(PROJECT_ROOT, abs_path)
@@ -948,15 +948,167 @@ class ScreenSaverApp:
         if not os.path.exists(abs_path):
             messagebox.showerror("Error", f"Image not found: {abs_path}")
             return
-        
-        # Create a cropped filename by adding _crop before the extension
+
+        # If GIF, play it and allow circular crop
+        if abs_path.lower().endswith('.gif'):
+            # Play GIF in a new window and allow circular crop
+            class GifCircleCropWindow(tk.Toplevel):
+                def __init__(self, parent, gif_path, save_path=None):
+                    super().__init__(parent)
+                    self.title("Circle Crop GIF")
+                    self.gif_path = gif_path
+                    self.save_path = save_path
+                    self.frames = []
+                    self.cropped_frames = []
+                    self.crop_coords = None
+                    self.radius = None
+                    self.center = None
+                    self.cancelled = False
+
+                    # Load GIF frames
+                    gif = Image.open(gif_path)
+                    try:
+                        while True:
+                            frame = gif.copy().convert("RGBA")
+                            self.frames.append(frame)
+                            gif.seek(len(self.frames))  # Move to next frame
+                    except EOFError:
+                        pass
+
+                    self.current_frame_idx = 0
+                    self.display_image = self.frames[0].copy()
+                    max_display_size = (400, 400)
+                    self.display_image.thumbnail(max_display_size, Image.Resampling.LANCZOS)
+                    self.img_tk = ImageTk.PhotoImage(self.display_image)
+
+                    self.canvas = tk.Canvas(self, width=self.display_image.width, height=self.display_image.height, cursor="cross")
+                    self.canvas.create_image(0, 0, anchor=tk.NW, image=self.img_tk)
+                    self.canvas.pack(pady=10, padx=10)
+
+                    self.circle = None
+                    self.start_x = None
+                    self.start_y = None
+
+                    self.canvas.bind("<ButtonPress-1>", self.on_button_press)
+                    self.canvas.bind("<B1-Motion>", self.on_mouse_drag)
+                    self.canvas.bind("<ButtonRelease-1>", self.on_button_release)
+
+                    btn_frame = ttk.Frame(self)
+                    btn_frame.pack(pady=10)
+                    self.crop_btn = ttk.Button(btn_frame, text="Circle Crop and Save", command=self.crop_and_save)
+                    self.crop_btn.pack(side=tk.LEFT, padx=10)
+                    self.cancel_btn = ttk.Button(btn_frame, text="Cancel", command=self.on_cancel)
+                    self.cancel_btn.pack(side=tk.LEFT, padx=10)
+
+                    self.protocol("WM_DELETE_WINDOW", self.on_cancel)
+                    self.grab_set()
+
+                    # Play GIF animation
+                    self.after(0, self.play_gif)
+
+                def play_gif(self):
+                    if self.cancelled:
+                        return
+                    self.display_image = self.frames[self.current_frame_idx].copy()
+                    max_display_size = (400, 400)
+                    self.display_image.thumbnail(max_display_size, Image.Resampling.LANCZOS)
+                    self.img_tk = ImageTk.PhotoImage(self.display_image)
+                    self.canvas.delete("all")
+                    self.canvas.create_image(0, 0, anchor=tk.NW, image=self.img_tk)
+                    if self.circle and self.center and self.radius:
+                        x, y = self.center
+                        r = self.radius
+                        self.canvas.create_oval(x - r, y - r, x + r, y + r, outline='blue', width=2)
+                    self.current_frame_idx = (self.current_frame_idx + 1) % len(self.frames)
+                    self.after(80, self.play_gif)  # ~12 fps
+
+                def on_button_press(self, event):
+                    self.start_x = self.canvas.canvasx(event.x)
+                    self.start_y = self.canvas.canvasy(event.y)
+                    self.circle = None
+
+                def on_mouse_drag(self, event):
+                    cur_x, cur_y = (self.canvas.canvasx(event.x), self.canvas.canvasy(event.y))
+                    r = ((cur_x - self.start_x) ** 2 + (cur_y - self.start_y) ** 2) ** 0.5
+                    self.center = (self.start_x, self.start_y)
+                    self.radius = r
+                    self.canvas.delete("all")
+                    self.canvas.create_image(0, 0, anchor=tk.NW, image=self.img_tk)
+                    self.canvas.create_oval(self.start_x - r, self.start_y - r, self.start_x + r, self.start_y + r, outline='blue', width=2)
+
+                def on_button_release(self, event):
+                    cur_x, cur_y = (self.canvas.canvasx(event.x), self.canvas.canvasy(event.y))
+                    r = ((cur_x - self.start_x) ** 2 + (cur_y - self.start_y) ** 2) ** 0.5
+                    self.center = (self.start_x, self.start_y)
+                    self.radius = r
+
+                def crop_and_save(self):
+                    if self.center and self.radius:
+                        try:
+                            # Scale circle from display to original frame
+                            scale_x = self.frames[0].width / self.display_image.width
+                            scale_y = self.frames[0].height / self.display_image.height
+                            cx = int(self.center[0] * scale_x)
+                            cy = int(self.center[1] * scale_y)
+                            r = int(self.radius * (scale_x + scale_y) / 2)
+                            bbox = (cx - r, cy - r, cx + r, cy + r)
+                            self.cropped_frames = []
+                            for frame in self.frames:
+                                cropped = frame.crop(bbox)
+                                mask = Image.new("L", cropped.size, 0)
+                                draw = ImageDraw.Draw(mask)
+                                draw.ellipse((0, 0, cropped.size[0], cropped.size[1]), fill=255)
+                                cropped.putalpha(mask)
+                                self.cropped_frames.append(cropped)
+                            save_path = self.save_path
+                            if not save_path:
+                                save_path = filedialog.asksaveasfilename(
+                                    initialfile=os.path.basename(self.gif_path).replace('.gif', '_cropped.gif'),
+                                    defaultextension=".gif",
+                                    filetypes=[("GIF files", "*.gif"), ("All files", "*.*")]
+                                )
+                            if save_path:
+                                self.cropped_frames[0].save(
+                                    save_path,
+                                    save_all=True,
+                                    append_images=self.cropped_frames[1:],
+                                    loop=0,
+                                    duration=80,
+                                    disposal=2,
+                                    transparency=0
+                                )
+                                self.image_path = save_path
+                                self.crop_saved = True
+                                messagebox.showinfo("Success", f"Cropped GIF saved to {save_path}")
+                                self.destroy()
+                            else:
+                                self.crop_saved = False
+                        except Exception as e:
+                            messagebox.showerror("Error", f"Failed to crop or save GIF: {e}")
+                    else:
+                        messagebox.showwarning("No Selection", "Please select a circular area to crop.")
+
+                def on_cancel(self):
+                    self.cancelled = True
+                    self.destroy()
+
+            # Create a cropped filename by adding _cropped before the extension
+            filename, ext = os.path.splitext(abs_path)
+            crop_filename = f"{filename}_cropped.gif"
+            cropper = GifCircleCropWindow(self.master, abs_path, crop_filename)
+            self.master.wait_window(cropper)
+            if hasattr(cropper, 'crop_saved') and cropper.crop_saved and hasattr(cropper, 'image_path') and os.path.exists(cropper.image_path):
+                rel_path = os.path.abspath(cropper.image_path)
+                self.profile_pic_path_crop_var.set(rel_path)
+                self.config["profile_pic_path_crop"] = self.profile_pic_path_crop_var.get()
+                save_config(self.config)
+                messagebox.showinfo("Success", "Cropped GIF saved and will be used for the screensaver.")
+            return
+
+        # Non-GIF: original logic (square crop)
         filename, ext = os.path.splitext(abs_path)
-        crop_filename = f"{filename}_crop{ext}"
-        
-        # Create a temporary cropper window that will let the user crop the image
+        crop_filename = f"{filename}_cropped.png"
         cropper = CroppingWindow(self.master, abs_path, crop_filename)
-        
-        # Only process if the crop was actually saved (not cancelled)
         if hasattr(cropper, 'crop_saved') and cropper.crop_saved and hasattr(cropper, 'image_path') and os.path.exists(cropper.image_path):
             try:
                 rel_path = os.path.abspath(cropper.image_path)
@@ -964,12 +1116,9 @@ class ScreenSaverApp:
                     self.profile_pic_path_crop_var.set(rel_path)
                 else:
                     self.profile_pic_path_crop_var.set(cropper.image_path)
-                    
-                # Update config immediately so the cropped image is used
                 self.config["profile_pic_path_crop"] = self.profile_pic_path_crop_var.get()
                 save_config(self.config)
                 messagebox.showinfo("Success", "Cropped image saved and will be used for the screensaver.")
-                
             except ValueError:
                 self.profile_pic_path_crop_var.set(cropper.image_path)
                 self.config["profile_pic_path_crop"] = self.profile_pic_path_crop_var.get()
