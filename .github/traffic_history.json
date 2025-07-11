@@ -65,8 +65,8 @@
       "uniques": 18
     },
     "2025-07-10": {
-      "count": 13,
-      "uniques": 7
+      "count": 25,
+      "uniques": 12
     }
   },
   "views": {
@@ -155,8 +155,8 @@
       "uniques": 86
     },
     "2025-07-10": {
-      "count": 97,
-      "uniques": 27
+      "count": 143,
+      "uniques": 28
     }
   },
   "releases": {
