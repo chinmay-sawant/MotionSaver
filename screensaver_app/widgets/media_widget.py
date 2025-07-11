@@ -32,7 +32,7 @@ if platform.system() == "Windows":
         WINSDK_AVAILABLE = False
 
 class MediaWidget:    
-    def __init__(self, parent_root, transparent_key='#123456', screen_width=0, screen_height=0):
+    def __init__(self, parent_root, transparent_key='#010203', screen_width=0, screen_height=0):  # Updated default
         logger.info("Initializing MediaWidget")
         self.parent_root = parent_root
         self.transparent_key = transparent_key
@@ -47,38 +47,63 @@ class MediaWidget:
         
         # Add thumbnail support
         self.current_thumbnail = None
-        self.thumbnail_size = 50  # Size for the thumbnail
+        self.thumbnail_size = 100  # Size for the thumbnail
         
-        pygame.mixer.init()
+        try:
+            pygame.mixer.init()
+        except Exception as e:
+            logger.warning(f"Pygame mixer init failed: {e}")
 
-        self.window = tk.Toplevel(self.parent_root)
-        self.window.overrideredirect(True)
-        self.window.attributes('-transparentcolor', self.transparent_key)
-        self.window.configure(bg=self.transparent_key)
-        self.window.attributes('-topmost', True)
+        # Create window with proper error handling
+        try:
+            self.window = tk.Toplevel(self.parent_root)
+            self.window.overrideredirect(True)
+            self.window.attributes('-transparentcolor', self.transparent_key)
+            self.window.configure(bg=self.transparent_key)
+            self.window.attributes('-topmost', True)
+            
+            # Remove any focus-related attributes that might interfere
+            self.window.attributes('-disabled', False)  # Ensure it's interactive
 
-        widget_width = 350  # Increased width to accommodate thumbnail
-        widget_height = 80
+            widget_width = 350  # Increased width to accommodate thumbnail
+            widget_height = 120  # Increased height for better visibility
+            
+            if screen_width == 0: screen_width = self.parent_root.winfo_screenwidth()
+            if screen_height == 0: screen_height = self.parent_root.winfo_screenheight()
+
+            # Position at bottom left instead of bottom right
+            x_pos = 20
+            y_pos = screen_height - widget_height - 20  # Bottom left positioning
+            
+            logger.info(f"MediaWidget positioning: {widget_width}x{widget_height}+{x_pos}+{y_pos}")
+            self.window.geometry(f"{widget_width}x{widget_height}+{x_pos}+{y_pos}")
+            
+            # Ensure window is visible and properly stacked
+            self.window.deiconify()
+            self.window.lift()
+            self.window.focus_set()  # Allow focus for interactions
+            
+            logger.info("MediaWidget window created successfully")
+            
+        except Exception as e:
+            logger.error(f"Error creating MediaWidget window: {e}")
+            return
         
-        if screen_width == 0: screen_width = self.parent_root.winfo_screenwidth()
-        if screen_height == 0: screen_height = self.parent_root.winfo_screenheight()
-
-        x_pos = 20
-        y_pos = screen_height - widget_height - 20
-        self.window.geometry(f"{widget_width}x{widget_height}+{x_pos}+{y_pos}")
-        
-        # Initialize in separate thread with longer delay
+        # Reduced initialization delay for faster startup
         self.init_thread = threading.Thread(target=self._initialize_widget_async, daemon=True)
         self.init_thread.start()
     
     def _initialize_widget_async(self):
         """Initialize widget content in separate thread"""
         try:
-            # Longer delay to ensure video is fully stable
-            time.sleep(0.1) # Reduced delay
+            # Reduced delay for faster startup
+            time.sleep(0.3)  # Reduced from 1.5
             
             # Schedule UI creation on main thread
-            self.parent_root.after(0, self._create_widget_ui)
+            if hasattr(self, 'window') and self.window.winfo_exists():
+                self.parent_root.after(0, self._create_widget_ui)
+            else:
+                logger.error("MediaWidget window no longer exists during async init")
             
         except Exception as e:
             logger.error(f"Error in media widget async initialization: {e}")
@@ -86,9 +111,11 @@ class MediaWidget:
     def _create_widget_ui(self):
         """Create widget UI on main thread"""
         try:
-            if not self.window.winfo_exists():
+            if not hasattr(self, 'window') or not self.window.winfo_exists():
+                logger.error("MediaWidget window does not exist when creating UI")
                 return
                 
+            logger.info("Creating MediaWidget UI content")
             self.create_widget_content()
             self.initialized = True
             
@@ -96,90 +123,114 @@ class MediaWidget:
             self.detection_thread = threading.Thread(target=self._start_detection_async, daemon=True)            
             self.detection_thread.start()
             
+            logger.info("MediaWidget UI created successfully")
+            
         except Exception as e:
             logger.error(f"Error creating media widget UI: {e}")
-    
-    def _start_detection_async(self):
-        """Start media detection in completely separate thread""" # Renamed
-        try:
-            time.sleep(0.2) # Reduced delay, slightly more than UI init
-            self.start_media_detection() # Renamed
-        except Exception as e:
-            logger.error(f"Error starting media detection: {e}")
 
     def create_widget_content(self):
         """Create the media widget UI content within its Toplevel window"""
-        
-        # Create main frame to hold thumbnail and text
-        main_frame = tk.Frame(self.window, bg=self.transparent_key)
-        main_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
-        
-        # Thumbnail label (left side)
-        self.thumbnail_label = tk.Label(
-            main_frame,
-            bg=self.transparent_key,
-            width=6,  # Roughly thumbnail_size in characters
-            height=3
-        )
-        self.thumbnail_label.pack(side=tk.LEFT, padx=(0, 10))
-        
-        # Text frame (right side)
-        text_frame = tk.Frame(main_frame, bg=self.transparent_key)
-        text_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        
-        # Media info label
-        self.media_info_label = tk.Label(
-            text_frame,
-            text="🎵 No media detected",
-            bg=self.transparent_key, 
-            fg='white',
-            font=('Arial', 11, 'bold'),
-            wraplength=220,  # Reduced to account for thumbnail
-            anchor='w',
-            justify=tk.LEFT
-        )
-        self.media_info_label.pack(fill=tk.X)
-        
-        # Control buttons - simplified layout with transparent background
-        self.control_frame = tk.Frame(text_frame, bg=self.transparent_key)
-        self.control_frame.pack(pady=(5, 0))
-        
-        btn_config = {
-            'bg': self.transparent_key,
-            'fg': 'white',
-            'font': ('Arial', 16),
-            'width': 2,
-            'height': 1,
-            'activebackground': '#333333',
-            'activeforeground': 'white',
-            'relief': 'flat',
-            'bd': 0,
-            'highlightthickness': 0
-        }
-        
-        self.prev_btn = tk.Button(
-            self.control_frame,
-            text="⏮",
-            command=self.previous_track,
-            **btn_config
-        )
-        self.prev_btn.pack(side=tk.LEFT, padx=5)
-        
-        self.play_pause_btn = tk.Button(
-            self.control_frame,
-            text="⏸", 
-            command=self.toggle_play_pause,
-            **btn_config
-        )
-        self.play_pause_btn.pack(side=tk.LEFT, padx=5)
-        
-        self.next_btn = tk.Button(
-            self.control_frame,
-            text="⏭",
-            command=self.next_track,
-            **btn_config
-        )
-        self.next_btn.pack(side=tk.LEFT, padx=5)
+        try:
+            # Remove debug frame and use proper transparent background
+            # Create main frame to hold thumbnail and text
+            main_frame = tk.Frame(self.window, bg=self.transparent_key)
+            main_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+            
+            # Thumbnail label (left side) - make it clickable
+            self.thumbnail_label = tk.Label(
+                main_frame,
+                bg=self.transparent_key,
+                width=150,  # Fixed width in characters to match 100px thumbnail
+                height=150,  # Fixed height to match 100px thumbnail
+                cursor='hand2'  # Add hand cursor for clickability
+            )
+            self.thumbnail_label.pack(side=tk.LEFT, anchor='nw')  # Added anchor
+            
+            # Text frame (right side)
+            text_frame = tk.Frame(main_frame, bg=self.transparent_key)
+            text_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, anchor='nw')  # Added anchor
+            
+            # Media info label with better visibility and clickability
+            self.media_info_label = tk.Label(
+                text_frame,
+                text="🎵 Media Widget Active",  # Changed initial text for visibility
+                bg=self.transparent_key, 
+                fg='white',
+                font=('Segoe UI', 12, 'bold'),  # Slightly larger font
+                wraplength=200,  # Adjusted for proper thumbnail space
+                anchor='nw',  # Changed to northwest alignment
+                justify=tk.LEFT,
+                cursor='hand2'  # Add hand cursor for clickability
+            )
+            self.media_info_label.pack(fill=tk.X, pady=2, anchor='nw')  # Added anchor
+            
+            # Control buttons - make them more interactive
+            self.control_frame = tk.Frame(text_frame, bg=self.transparent_key)
+            self.control_frame.pack(pady=(5, 0))
+            
+            btn_config = {
+                'bg': self.transparent_key,
+                'fg': 'white',
+                'font': ('Segoe UI', 16),
+                'width': 2,
+                'height': 1,
+                'activebackground': '#333333',
+                'activeforeground': 'white',
+                'relief': 'flat',
+                'bd': 0,
+                'highlightthickness': 0,
+                'cursor': 'hand2'  # Add hand cursor for all buttons
+            }
+            
+            self.prev_btn = tk.Button(
+                self.control_frame,
+                text="⏮",
+                command=self.previous_track,
+                **btn_config
+            )
+            self.prev_btn.pack(side=tk.LEFT, padx=5)
+            
+            self.play_pause_btn = tk.Button(
+                self.control_frame,
+                text="⏸", 
+                command=self.toggle_play_pause,
+                **btn_config
+            )
+            self.play_pause_btn.pack(side=tk.LEFT, padx=5)
+            
+            self.next_btn = tk.Button(
+                self.control_frame,
+                text="⏭",
+                command=self.next_track,
+                **btn_config
+            )
+            self.next_btn.pack(side=tk.LEFT, padx=5)
+
+            logger.info("MediaWidget content created successfully")
+            
+        except Exception as e:
+            logger.error(f"Error creating MediaWidget content: {e}")
+            # Create minimal fallback UI
+            try:
+                fallback_label = tk.Label(
+                    self.window,
+                    text="🎵 Media Widget (Fallback)",
+                    bg='red',  # Visible background for debugging
+                    fg='white',
+                    font=('Arial', 10)
+                )
+                fallback_label.pack(fill=tk.BOTH, expand=True)
+            except Exception as fallback_error:
+                logger.error(f"Even fallback UI creation failed: {fallback_error}")
+
+    def _start_detection_async(self):
+        """Start media detection in completely separate thread""" 
+        try:
+            time.sleep(2.0)  # Increased delay
+            logger.info("Starting media detection")
+            self.media_detection_loop()
+        except Exception as e:
+            logger.error(f"Error starting media detection: {e}")
 
     def send_media_key(self, key):
         """Send media key commands to control browser playback"""
@@ -188,21 +239,40 @@ class MediaWidget:
             
             if system == "Windows":
                 # Use Windows API to send media keys
-                import win32api
-                import win32con
-                
-                # Media key codes for Windows
-                media_keys = {
-                    'play_pause': 0xB3,  # VK_MEDIA_PLAY_PAUSE
-                    'next': 0xB0,        # VK_MEDIA_NEXT_TRACK  
-                    'previous': 0xB1     # VK_MEDIA_PREV_TRACK
-                }
-                
-                if key in media_keys:
-                    # Send key down and key up events                    win32api.keybd_event(media_keys[key], 0, 0, 0)  # Key down
-                    win32api.keybd_event(media_keys[key], 0, win32con.KEYEVENTF_KEYUP, 0)  # Key up
-                    logger.debug(f"Sent media key: {key}")
-                    return True
+                try:
+                    import win32api
+                    import win32con
+                    
+                    # Media key codes for Windows
+                    media_keys = {
+                        'play_pause': 0xB3,  # VK_MEDIA_PLAY_PAUSE
+                        'next': 0xB0,        # VK_MEDIA_NEXT_TRACK  
+                        'previous': 0xB1     # VK_MEDIA_PREV_TRACK
+                    }
+                    
+                    if key in media_keys:
+                        # Send key down and key up events
+                        win32api.keybd_event(media_keys[key], 0, 0, 0)  # Key down
+                        time.sleep(0.05)  # Small delay
+                        win32api.keybd_event(media_keys[key], 0, win32con.KEYEVENTF_KEYUP, 0)  # Key up
+                        logger.debug(f"Sent media key: {key}")
+                        return True
+                except ImportError:
+                    logger.warning("win32api not available, trying alternative method")
+                    # Fallback to keyboard module if available
+                    try:
+                        import keyboard
+                        key_map = {
+                            'play_pause': 'play/pause media',
+                            'next': 'next track',
+                            'previous': 'previous track'
+                        }
+                        if key in key_map:
+                            keyboard.press_and_release(key_map[key])
+                            return True
+                    except ImportError:
+                        logger.warning("keyboard module not available")
+                        return False
                     
             elif system == "Darwin":  # macOS
                 # Use AppleScript to send media keys
@@ -283,7 +353,7 @@ class MediaWidget:
             return self._check_browser_window_titles()
     
     async def _get_media_info_async(self):
-        """Async function to get media info via Windows SDK"""
+        """Async function to get media info via Windows SDK with enhanced video detection"""
         try:
             # Request the session manager
             manager = await MediaManager.request_async()
@@ -341,13 +411,15 @@ class MediaWidget:
                 artist = props.artist.strip() if props.artist else ""
                 album = props.album_title.strip() if props.album_title else ""
                 
-                # Get thumbnail if available
+                # Enhanced thumbnail handling for video content
                 thumbnail_base64 = ""
                 if props.thumbnail:
                     try:
                         # Open the thumbnail stream
                         stream_ref = await props.thumbnail.open_read_async()
-                        if stream_ref and stream_ref.size > 0 and stream_ref.size < 500000:  # 500KB limit
+                        
+                        # Check if the stream is valid and has a reasonable size
+                        if stream_ref and stream_ref.size > 0 and stream_ref.size < 1000000:
                             # Create a buffer to hold the thumbnail data
                             buffer_size = int(stream_ref.size)
                             readable_buffer = Buffer(buffer_size)
@@ -358,34 +430,41 @@ class MediaWidget:
                             # Use DataReader to extract bytes
                             data_reader = DataReader.from_buffer(readable_buffer)
                             bytes_available = data_reader.unconsumed_buffer_length
+                            
                             if bytes_available > 0:
-                                # Read the bytes and convert to base64
-                                image_bytes = data_reader.read_bytes(bytes_available)
+                                # --- FIX STARTS HERE ---
+                                
+                                # 1. Create a mutable bytearray to serve as the destination buffer.
+                                image_bytes = bytearray(bytes_available)
+                                
+                                # 2. Call read_bytes() to fill the bytearray you just created.
+                                #    This method does not return anything; it modifies image_bytes in-place.
+                                data_reader.read_bytes(image_bytes)
+                                
+                                # --- FIX ENDS HERE ---
+                                
+                                # Now, `image_bytes` is a bytearray containing the data.
+                                # You can encode it directly to base64.
                                 import base64
-                                thumbnail_base64 = base64.b64encode(bytes(image_bytes)).decode('utf-8')
+                                thumbnail_base64 = base64.b64encode(image_bytes).decode('utf-8')
                             
                             # Clean up
                             data_reader.close()
-                        stream_ref.close()
-                    except Exception as e:
-                        pass
-                        # print(f"Error getting thumbnail: {e}")
-                        # TODO: Handle thumbnail errors more gracefully
-                        # Error getting thumbnail: a bytes-like object is required, not 'int'
-                        # Error getting thumbnail: a bytes-like object is required, not 'int'
-                        # - Log the error to a file or error reporting service
-                        # - Display a default thumbnail or placeholder image
-                        # - Implement retry logic with exponential backoff
-                        # - Consider using a different thumbnail extraction method
-                        #   (e.g., try different image formats or libraries)
 
-                
+                        # Always close the stream reference
+                        if stream_ref:
+                            stream_ref.close()
+
+                    except Exception as e:
+                        # Use logger.exception to get the full stack trace for debugging.
+                        # This is more informative than logger.debug.
+                        logger.exception(f"Thumbnail extraction failed (normal for some media): {e}")
                 # Format the display title
                 display_title = title
                 if artist:
                     display_title = f"{artist} - {title}"
                 
-                # Get friendly app name
+                # Get friendly app name and detect video content
                 source = self._get_app_friendly_name(app_id)
                 
                 # Create and return the media info dictionary
@@ -396,7 +475,8 @@ class MediaWidget:
                     "app_id": app_id,
                     "raw_title": title,
                     "artist": artist,
-                    "album": album
+                    "album": album,
+                    "is_video": self._is_video_content(title, artist, source)
                 }
                 
                 if thumbnail_base64:
@@ -407,6 +487,17 @@ class MediaWidget:
             logger.error(f"Error in _get_media_info_async: {e}")
             
         return None
+
+    def _is_video_content(self, title, artist, source):
+        """Detect if the content is likely video based on title, artist, and source"""
+        video_indicators = [
+            "youtube", "video", "movie", "film", "episode", "season",
+            "trailer", "clip", "vlog", "documentary", "netflix", "prime",
+            "disney", "hbo", "twitch", "stream"
+        ]
+        
+        text_to_check = f"{title} {artist} {source}".lower()
+        return any(indicator in text_to_check for indicator in video_indicators)
 
     def _get_app_friendly_name(self, app_id):
         """Convert Windows app ID to friendly name"""
@@ -452,56 +543,69 @@ class MediaWidget:
         else:
             return "Media Player"
 
-    # Remove the old _check_windows_media_session_fast method
-    # Keep _check_browser_window_titles as fallback for older systems
-    
-    def _check_browser_window_titles(self):
-        """Check browser window titles directly - fallback method"""
-        try:
-            import win32gui
+    def toggle_play_pause(self):
+        """Toggle play/pause for browser media"""
+        logger.info("Play/pause button clicked")
+        success = self.send_media_key('play_pause')
+        if success:
+            logger.info("Play/pause command sent successfully")
+            # Force update detection after a short delay
+            threading.Timer(0.5, self._force_update_detection).start()
+        else:
+            logger.warning("Failed to send play/pause command")
             
-            def enum_windows_callback(hwnd, results):
-                if win32gui.IsWindowVisible(hwnd):
-                    window_title = win32gui.GetWindowText(hwnd)
-                    
-                    # Check for various streaming services
-                    patterns = [
-                        (" - YouTube", "YouTube"),
-                        (" - JioCinema", "JioCinema"),
-                        (" | Disney+ Hotstar", "Disney+ Hotstar"),
-                        (" | Netflix", "Netflix"),
-                        (" - Prime Video", "Prime Video"),
-                        (" - Spotify", "Spotify"),
-                        (" - SoundCloud", "SoundCloud")
-                    ]
-                    
-                    for pattern, source in patterns:
-                        if pattern in window_title:
-                            title = window_title.split(pattern)[0].strip()
-                            if title and title != source:
-                                results.append({
-                                    "title": title, 
-                                    "source": f"{source} (Window)",
-                                    "status": "Playing"
-                                })
-                                break
-                return True
-                
-            results = []
-            win32gui.EnumWindows(enum_windows_callback, results)
-            if results:
-                logger.debug(f"Window title detection found: {results[0]}")
-                return results[0]
-        except ImportError:
-            logger.warning("win32gui not available for window title detection")
-        except Exception as e:
-            logger.error(f"Browser window detection error: {e}")
+    def previous_track(self):
+        """Previous track for browser media"""
+        logger.info("Previous button clicked")
+        success = self.send_media_key('previous')
+        if success:
+            logger.info("Previous track command sent successfully")
+            # Force update detection after a short delay
+            threading.Timer(0.5, self._force_update_detection).start()
+        else:
+            logger.warning("Failed to send previous track command")
         
-        return None
+    def next_track(self):
+        """Next track for browser media"""
+        logger.info("Next button clicked")
+        success = self.send_media_key('next')
+        if success:
+            logger.info("Next track command sent successfully")
+            # Force update detection after a short delay
+            threading.Timer(0.5, self._force_update_detection).start()
+        else:
+            logger.warning("Failed to send next track command")
 
-    def start_media_detection(self):
-        """Optimized media detection with reduced frequency"""
-        def media_detection_loop():
+    def _force_update_detection(self):
+        """Force an immediate media detection update"""
+        try:
+            self.detection_cache = None  # Clear cache to force fresh detection
+            self.last_detection_time = 0
+            # Run detection in separate thread
+            detection_thread = threading.Thread(target=self._perform_detection_async, daemon=True)
+            detection_thread.start()
+        except Exception as e:
+            logger.error(f"Error in forced detection update: {e}")
+
+    def show(self):
+        """Show the media widget"""
+        if hasattr(self, 'window') and self.window.winfo_exists():
+            self.window.deiconify()
+            self.window.lift()
+            logger.info("MediaWidget shown")
+
+    def hide(self):
+        """Hide the media widget"""
+        if hasattr(self, 'window') and self.window.winfo_exists():
+            self.window.withdraw()
+            logger.info("MediaWidget hidden")
+
+    def destroy(self):
+        """Clean up widget"""
+        self.detection_running = False
+        self.detection_cache = None  # Clear cache
+        if hasattr(self, 'window') and self.window.winfo_exists():
+            self.window.destroy()
             self.detection_running = True
             detection_count = 0
             
@@ -546,9 +650,53 @@ class MediaWidget:
             logger.debug("MediaWidget: Media detection loop stopped.")
 
         # Run detection in completely separate thread with lower priority
-        main_detection_thread = threading.Thread(target=media_detection_loop, daemon=True) # Renamed
+        main_detection_thread = threading.Thread(target=self.media_detection_loop, daemon=True) # Renamed
         main_detection_thread.start() # Renamed
-    
+
+    def media_detection_loop(self):
+        """Continuously detect media playback in a background thread."""
+        self.detection_running = True
+        detection_count = 0
+
+        # Run one detection immediately at start
+        try:
+            detection_thread_job = threading.Thread(
+                target=self._perform_detection_async,
+                daemon=True
+            )
+            detection_thread_job.start()
+            detection_count += 1
+        except Exception as e:
+            logger.error(f"Initial media detection error: {e}")
+
+        # Then continue with normal detection loop
+        while self.detection_running and hasattr(self, 'window'):
+            try:
+                if not self.window.winfo_exists():
+                    break
+
+                if detection_count < 5:
+                    current_interval = self.media_check_interval
+                elif detection_count < 10:
+                    current_interval = self.media_check_interval * 1.5
+                else:
+                    current_interval = self.media_check_interval * 2
+
+                detection_thread_job = threading.Thread(
+                    target=self._perform_detection_async,
+                    daemon=True
+                )
+                detection_thread_job.start()
+
+                detection_count += 1
+                time.sleep(current_interval)
+            except Exception as e:
+                if hasattr(self, 'window') and self.window.winfo_exists():
+                    logger.error(f"Error in media detection loop: {e}")
+                else:
+                    break
+
+        logger.debug("MediaWidget: Media detection loop stopped.")
     def _perform_detection_async(self):
         """Perform detection in separate thread"""
         try:
@@ -604,14 +752,14 @@ class MediaWidget:
             elif hasattr(self, 'thumbnail_label'):
                 # Clear thumbnail if no image available
                 self.thumbnail_label.config(image='', text='🎵', fg='white', bg=self.transparent_key, 
-                                          font=('Arial', 20))
+                                          font=('Segoe UI', 20))
                 self.current_thumbnail = None
         except Exception as e:
             logger.error(f"Error updating thumbnail: {e}")
             # Fallback to music note emoji
             if hasattr(self, 'thumbnail_label'):
                 self.thumbnail_label.config(image='', text='🎵', fg='white', bg=self.transparent_key,
-                                          font=('Arial', 20))
+                                          font=('Segoe UI', 20))
                 self.current_thumbnail = None
 
     def clear_media_track_info(self):
@@ -622,39 +770,66 @@ class MediaWidget:
         # Clear thumbnail
         if hasattr(self, 'thumbnail_label') and self.thumbnail_label.winfo_exists():
             self.thumbnail_label.config(image='', text='♪', fg='#888888', bg=self.transparent_key,
-                                      font=('Arial', 16))
+                                      font=('Segoe UI', 16))
             self.current_thumbnail = None
 
     def toggle_play_pause(self):
         """Toggle play/pause for browser media"""
+        logger.info("Play/pause button clicked")
         success = self.send_media_key('play_pause')
         if success:
-            # Update button state based on current state
-            if self.play_pause_btn.cget('text') == "▶":
-                self.play_pause_btn.config(text="⏸")
-                self.is_playing = True
-            else:
-                self.play_pause_btn.config(text="▶")
-                self.is_playing = False        
+            logger.info("Play/pause command sent successfully")
+            # Force update detection after a short delay
+            threading.Timer(0.5, self._force_update_detection).start()
         else:
-            logger.debug("Failed to send play/pause command")
+            logger.warning("Failed to send play/pause command")
             
     def previous_track(self):
         """Previous track for browser media"""
+        logger.info("Previous button clicked")
         success = self.send_media_key('previous')
         if success:
-            print("Previous track command sent")
+            logger.info("Previous track command sent successfully")
+            # Force update detection after a short delay
+            threading.Timer(0.5, self._force_update_detection).start()
         else:
-            print("Failed to send previous track command")
+            logger.warning("Failed to send previous track command")
         
     def next_track(self):
         """Next track for browser media"""
+        logger.info("Next button clicked")
         success = self.send_media_key('next')
         if success:
-            print("Next track command sent")
+            logger.info("Next track command sent successfully")
+            # Force update detection after a short delay
+            threading.Timer(0.5, self._force_update_detection).start()
         else:
-            print("Failed to send next track command")
-        
+            logger.warning("Failed to send next track command")
+
+    def _force_update_detection(self):
+        """Force an immediate media detection update"""
+        try:
+            self.detection_cache = None  # Clear cache to force fresh detection
+            self.last_detection_time = 0
+            # Run detection in separate thread
+            detection_thread = threading.Thread(target=self._perform_detection_async, daemon=True)
+            detection_thread.start()
+        except Exception as e:
+            logger.error(f"Error in forced detection update: {e}")
+
+    def show(self):
+        """Show the media widget"""
+        if hasattr(self, 'window') and self.window.winfo_exists():
+            self.window.deiconify()
+            self.window.lift()
+            logger.info("MediaWidget shown")
+
+    def hide(self):
+        """Hide the media widget"""
+        if hasattr(self, 'window') and self.window.winfo_exists():
+            self.window.withdraw()
+            logger.info("MediaWidget hidden")
+
     def destroy(self):
         """Clean up widget"""
         self.detection_running = False

@@ -1,3 +1,4 @@
+import logging
 import tkinter as tk
 import argparse
 import os
@@ -15,6 +16,7 @@ if parent_dir not in sys.path:
 
 from screensaver_app.central_logger import get_logger, log_startup, log_shutdown, log_exception
 logger = get_logger('PhotoEngine')
+logging.getLogger("PIL.Image").setLevel(logging.WARNING)
 
 from screensaver_app.video_player import VideoClockScreenSaver 
 from screensaver_app.PasswordConfig import verify_password_dialog_macos

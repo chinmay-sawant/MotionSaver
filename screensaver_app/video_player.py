@@ -343,8 +343,8 @@ class VideoClockScreenSaver:
         master.attributes('-fullscreen', True)
         master.configure(bg='black')
         
-        # Define transparent key for widgets
-        self.TRANSPARENT_KEY = '#123456'
+        # Define transparent key for widgets - use a more unique color
+        self.TRANSPARENT_KEY = '#010203'  # Changed from '#123456' to avoid conflicts
         
         # Store screen dimensions for widget positioning
         self.screen_width = master.winfo_screenwidth()
@@ -376,11 +376,11 @@ class VideoClockScreenSaver:
         self.target_fps = 30
         self.frame_interval = int(1000 / self.target_fps) # For UI update scheduling if queue empty
         
-        # Slightly larger queues for a bit more buffering
-        self.raw_frame_queue = queue.Queue(maxsize=2)
-        self.processed_frame_queue = queue.Queue(maxsize=2)
+        # Increase buffer sizes for smoother playback
+        self.raw_frame_queue = queue.Queue(maxsize=5)  # Increased from 2
+        self.processed_frame_queue = queue.Queue(maxsize=5)  # Increased from 2
         
-        self.label = tk.Label(master, bg='black')
+        self.label = tk.Label(master, bg='black', borderwidth=0, highlightthickness=0)
         self.label.pack(fill=tk.BOTH, expand=True)
         
         # Load clock font settings from config
@@ -458,15 +458,17 @@ class VideoClockScreenSaver:
             self._process_frame_with_ui
         )
         
+        # Start threads immediately for faster startup
         self.frame_reader_thread.start()
         self.frame_processor_thread.start()
         
         self.first_frame_received = False
-        self.update_frame()
+        # Start frame updates immediately instead of waiting
+        self.master.after(10, self.update_frame)  # Reduced delay from default
 
-        # Initialize widgets based on config
+        # Initialize widgets with reduced delay for faster startup
         self.widgets = []
-        self.master.after(1000, self.init_widgets)  # Use self.master instead of self.root
+        self.master.after(200, self.init_widgets)  # Reduced from 1000ms
         
         # Initialize GPU manager and log GPU information
         self.gpu_manager = get_gpu_manager()
@@ -477,17 +479,17 @@ class VideoClockScreenSaver:
             logger.info(f"Using GPU: {preferred['name']} (Type: {preferred['type']})")
         
     def init_widgets(self):
-        """Initialize widgets based on configuration - now fully async with priorities"""
+        """Initialize widgets based on configuration - optimized for faster startup"""
         config = load_config()
         
         screen_w = self.master.winfo_screenwidth()
         screen_h = self.master.winfo_screenheight()
         
         def create_widgets_async():
-            """Create widgets in separate thread with proper prioritization"""
+            """Create widgets in separate thread with optimized timing"""
             try:
-                # Longer delay to ensure video pipeline is fully stable
-                time.sleep(0.5)
+                # Reduced delay for faster startup
+                time.sleep(0.1)  # Reduced from 0.5
                 
                 widgets_to_create = []
                 
@@ -505,10 +507,10 @@ class VideoClockScreenSaver:
                 if config.get("enable_media_widget", False) and MediaWidget:
                     widgets_to_create.append(("media", None))
                 
-                # Create widgets with staggered timing
+                # Create widgets with minimal staggering for faster startup
                 for i, (widget_type, param) in enumerate(widgets_to_create):
                     if i > 0:
-                        time.sleep(0.8)  # Stagger widget creation
+                        time.sleep(0.2)  # Reduced from 0.8
                     
                     # Schedule widget creation on main thread
                     if widget_type == "weather":
@@ -517,7 +519,8 @@ class VideoClockScreenSaver:
                     elif widget_type == "stock":
                         self.master.after(0, lambda market=param: self._create_stock_widget(market, screen_w, screen_h))
                     elif widget_type == "media":
-                        time.sleep(0.5)  # Extra delay for media widget                        self.master.after(0, lambda: self._create_media_widget(screen_w, screen_h))
+                        time.sleep(0.1)  # Reduced delay for media widget
+                        self.master.after(0, lambda: self._create_media_widget(screen_w, screen_h))
                         
             except Exception as e:
                 logger.error(f"Error in async widget creation: {e}")
@@ -765,28 +768,30 @@ class VideoClockScreenSaver:
         return frame
 
     def update_frame(self):
-        """Optimized UI thread for better performance with widgets"""
+        """Optimized UI thread for smoother performance"""
         frame_start_time = time.perf_counter()
         
         processed_frame = None
         try:
             processed_frame = self.processed_frame_queue.get_nowait()
         except queue.Empty:
-            # No frame ready, schedule next attempt.
-            # Use a slightly more relaxed delay if the queue is consistently empty.
-            delay = max(1, self.frame_interval // 4) 
+            # Reduced delay for more responsive updates
+            delay = max(8, self.frame_interval // 6)  # Increased responsiveness
             self.after_id = self.master.after(delay, self.update_frame)
             return
 
         # Initialize UI elements on first frame if a frame was successfully dequeued
         if not self.first_frame_received and processed_frame:
             self._initialize_ui_elements_after_first_frame(processed_frame.width, processed_frame.height)        
+        
         if processed_frame:
             try:
                 self.imgtk = ImageTk.PhotoImage(processed_frame)
                 # Only update if label and master still exist
                 if self.label.winfo_exists() and self.master.winfo_exists():
                     self.label.config(image=self.imgtk)
+                    # Force immediate update for smoother playback
+                    self.label.update_idletasks()
             except Exception as e:
                 logger.error(f"Error updating label image: {e}") 
         
@@ -807,14 +812,15 @@ class VideoClockScreenSaver:
         self.start_time = current_time
         self.last_fps_print = current_time
         
-        # Optimized scheduling for the next frame
+        # Optimized scheduling for smoother playback
         ui_update_duration_ms = (time.perf_counter() - frame_start_time) * 1000
         target_cycle_time_ms = 1000.0 / self.target_fps # e.g., 33.3ms for 30fps
         
         delay = int(target_cycle_time_ms - ui_update_duration_ms)
         
-        if delay < 1: # Ensure delay is at least 1ms
-            delay = 1 
+        # Ensure minimum delay for smooth updates
+        if delay < 5:  # Increased minimum delay
+            delay = 5 
         
         self.after_id = self.master.after(delay, self.update_frame)
 
