@@ -140,11 +140,11 @@ class MediaWidget:
             self.thumbnail_label = tk.Label(
                 main_frame,
                 bg=self.transparent_key,
-                width=6,  # Roughly thumbnail_size in characters
-                height=3,
+                width=250,  # Roughly thumbnail_size in characters
+                height=250,
                 cursor='hand2'  # Add hand cursor for clickability
             )
-            self.thumbnail_label.pack(side=tk.LEFT, padx=(0, 10))
+            self.thumbnail_label.pack(side=tk.LEFT, padx=(0, 1))
             
             # Text frame (right side)
             text_frame = tk.Frame(main_frame, bg=self.transparent_key)
@@ -157,7 +157,7 @@ class MediaWidget:
                 bg=self.transparent_key, 
                 fg='white',
                 font=('Segoe UI', 12, 'bold'),  # Slightly larger font
-                wraplength=220,  # Reduced to account for thumbnail
+                wraplength=500,  # Reduced to account for thumbnail
                 anchor='w',
                 justify=tk.LEFT,
                 cursor='hand2'  # Add hand cursor for clickability
