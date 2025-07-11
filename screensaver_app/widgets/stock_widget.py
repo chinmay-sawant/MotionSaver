@@ -9,6 +9,11 @@ import os
 import sys
 import matplotlib
 matplotlib.use('Agg')
+# Suppress matplotlib debug logs
+import logging
+logging.getLogger('matplotlib').setLevel(logging.WARNING)
+logging.getLogger('matplotlib.pyplot').setLevel(logging.WARNING)
+logging.getLogger('matplotlib.font_manager').setLevel(logging.WARNING)
 import matplotlib.pyplot as plt
 from io import BytesIO
 from PIL import Image, ImageTk
