@@ -347,34 +347,26 @@ def verify_password_dialog_macos(root, video_clock_screensaver=None):
     # Pause video and save timestamp if screensaver instance is provided
     if video_clock_screensaver:
         try:
-            # Pause video thread
+            # 1. Pause video thread
             if hasattr(video_clock_screensaver, 'frame_reader_thread'):
-                video_clock_screensaver.frame_reader_thread.running = False
+                video_clock_screensaver.frame_reader_thread.paused = True
             
-            # Get current timestamp from the frame reader thread
+            # 2. Get current timestamp from the frame reader thread
             timestamp = getattr(video_clock_screensaver.frame_reader_thread, 'last_frame_time', 0)
 
-            # Save timestamp to config
+            # 3. Save timestamp to config
             config = load_config()
             config['last_video_timestamp'] = timestamp if timestamp else 0
             save_config(config)
 
-            # Take screenshot of current frame, apply blur, and set as lock screen
-            frame_pil = getattr(video_clock_screensaver, 'last_processed_frame', None)
-            if frame_pil:
+            # 4. Take screenshot of the RAW frame (no UI) and set as lock screen
+            raw_frame_pil = getattr(video_clock_screensaver, 'last_raw_frame', None)
+            if raw_frame_pil:
                 from PIL import Image, ImageFilter, ImageTk
                 import tempfile
                 
-                # Apply a glassy blur effect
-                blurred_frame = frame_pil.filter(ImageFilter.GaussianBlur(radius=15))
-                
-                # Update the screensaver display with the blurred frame
-                if video_clock_screensaver.label.winfo_exists():
-                    imgtk_blurred = ImageTk.PhotoImage(blurred_frame)
-                    video_clock_screensaver.imgtk = imgtk_blurred # Keep reference
-                    video_clock_screensaver.label.config(image=imgtk_blurred)
-                    video_clock_screensaver.label.update_idletasks()
-
+                # Save the clean raw frame to a temp file for the lock screen
+                temp_path = os.path.join(tempfile.gettempdir(), "screensaver_lock_screen.png")
                 # Save screenshot to temp file
                 # Determine the directory of PhotoEngine.py or PhotoEngine.exe
                 if getattr(sys, 'frozen', False):
@@ -384,11 +376,26 @@ def verify_password_dialog_macos(root, video_clock_screensaver=None):
                     # Running as script
                     engine_dir = os.path.dirname(os.path.abspath(__file__))
                 temp_path = os.path.join(engine_dir, "screensaver_lock_screen.png")
-                # Save the blurred image
-                blurred_frame.save(temp_path, format="PNG")
+                raw_frame_pil.save(temp_path, format="PNG")
                 set_windows_wallpaper(temp_path)
+
+            # 5. Take screenshot of the PROCESSED frame (with UI), apply blur, and update display
+            processed_frame_pil = getattr(video_clock_screensaver, 'last_processed_frame', None)
+            if processed_frame_pil:
+                from PIL import Image, ImageFilter, ImageTk
+                
+                # Apply a glassy blur effect
+                blurred_frame = processed_frame_pil.filter(ImageFilter.GaussianBlur(radius=15))
+                
+                # Update the screensaver display with the blurred frame
+                if video_clock_screensaver.label.winfo_exists():
+                    imgtk_blurred = ImageTk.PhotoImage(blurred_frame)
+                    video_clock_screensaver.imgtk = imgtk_blurred # Keep reference
+                    video_clock_screensaver.label.config(image=imgtk_blurred)
+                    video_clock_screensaver.label.update_idletasks()
+
         except Exception as e:
-            logger.error(f"Error during pause/screenshot/wallpaper: {e}")
+            logger.error(f"Error during pause/screenshot/lockscreen: {e}")
 
     dialog = MacOSStyleLogin(root)
     root.wait_window(dialog.password_window)

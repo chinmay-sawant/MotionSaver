@@ -439,8 +439,11 @@ def start_screensaver(video_path_override=None):
             except Exception as e:
                 logger.error(f"Failed to restart tray after login: {e}", exc_info=True)
         else:
+            # Resume video playback if login is cancelled
+            if app and hasattr(app, 'frame_reader_thread'):
+                app.frame_reader_thread.paused = False
             try:
-                logger.info("Login cancelled or failed. Attempting to refocus root window.")
+                logger.info("Login cancelled or failed. Resuming screensaver. Attempting to refocus root window.")
                 if root and root.winfo_exists():
                     root.focus_set()
             except tk.TclError:

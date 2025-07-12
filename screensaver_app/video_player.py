@@ -118,6 +118,7 @@ class FrameReaderThread(threading.Thread):
         self.frame_queue = frame_queue
         self.cap = None
         self.running = False
+        self.paused = False
         self.last_frame_time = 0
         self.frame_skip_threshold = 1 
         self.video_fps = None
@@ -178,6 +179,10 @@ class FrameReaderThread(threading.Thread):
         last_perf_time = time.perf_counter()
         
         while self.running:
+            if self.paused:
+                time.sleep(0.1)
+                continue
+
             current_time = time.perf_counter()
             
             time_since_last = current_time - self.last_frame_time
@@ -453,6 +458,7 @@ class VideoClockScreenSaver:
         self.profile_pic_gif_duration = 100  # Default duration in ms
 
         self.imgtk = None
+        self.last_raw_frame = None
         self.last_processed_frame = None
         self.after_id = None
         self.current_time_text = time.strftime('%I:%M:%S %p')
@@ -781,6 +787,9 @@ class VideoClockScreenSaver:
 
     def _process_frame_with_ui(self, pil_img):
         """Optimized frame processing with minimal overhead"""
+        # Store the raw frame before adding UI elements
+        self.last_raw_frame = pil_img.copy()
+
         if not self.first_frame_received:
             # This path is taken for the very first frame.
             # self.clock_x and self.clock_y are not used yet for drawing here.
@@ -921,7 +930,8 @@ class VideoClockScreenSaver:
         # Then stop reader thread
         if hasattr(self, 'frame_reader_thread') and self.frame_reader_thread.is_alive():
             logger.debug("Stopping frame reader thread...")
-            self.frame_reader_thread.stop()
+            self.frame_reader_thread.paused = False # Ensure it's not stuck in a paused state
+            self.frame_reader_thread.running = False # Set running to false to exit loop
             self.frame_reader_thread.join(timeout=2) 
             if self.frame_reader_thread.is_alive():
                 logger.warning("Frame reader thread did not stop in time.")
