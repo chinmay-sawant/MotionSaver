@@ -327,8 +327,69 @@ class MacOSStyleLogin:
     def close(self):
         self.password_window.destroy()
 
-def verify_password_dialog_macos(root):
-    """Shows a macOS-style password dialog, returns True if password was verified"""
+def set_windows_wallpaper(image_path):
+    """Set the Windows desktop wallpaper to the given image."""
+    import platform
+    if platform.system() == "Windows":
+        try:
+            import ctypes
+            SPI_SETDESKWALLPAPER = 20
+            result = ctypes.windll.user32.SystemParametersInfoW(SPI_SETDESKWALLPAPER, 0, image_path, 3)
+            if not result:
+                logger.error("Failed to set wallpaper using SystemParametersInfoW.")
+        except Exception as e:
+            logger.error(f"Failed to set wallpaper: {e}")
+            logger.error("Image Path was: " + image_path)
+
+def verify_password_dialog_macos(root, video_clock_screensaver=None):
+    """Shows a macOS-style password dialog, returns True if password was verified.
+    Pauses video, saves timestamp, and sets lock screen image if video_clock_screensaver is provided."""
+    # Pause video and save timestamp if screensaver instance is provided
+    if video_clock_screensaver:
+        try:
+            # Pause video thread
+            if hasattr(video_clock_screensaver, 'frame_reader_thread'):
+                video_clock_screensaver.frame_reader_thread.running = False
+            
+            # Get current timestamp from the frame reader thread
+            timestamp = getattr(video_clock_screensaver.frame_reader_thread, 'last_frame_time', 0)
+
+            # Save timestamp to config
+            config = load_config()
+            config['last_video_timestamp'] = timestamp if timestamp else 0
+            save_config(config)
+
+            # Take screenshot of current frame, apply blur, and set as lock screen
+            frame_pil = getattr(video_clock_screensaver, 'last_processed_frame', None)
+            if frame_pil:
+                from PIL import Image, ImageFilter, ImageTk
+                import tempfile
+                
+                # Apply a glassy blur effect
+                blurred_frame = frame_pil.filter(ImageFilter.GaussianBlur(radius=15))
+                
+                # Update the screensaver display with the blurred frame
+                if video_clock_screensaver.label.winfo_exists():
+                    imgtk_blurred = ImageTk.PhotoImage(blurred_frame)
+                    video_clock_screensaver.imgtk = imgtk_blurred # Keep reference
+                    video_clock_screensaver.label.config(image=imgtk_blurred)
+                    video_clock_screensaver.label.update_idletasks()
+
+                # Save screenshot to temp file
+                # Determine the directory of PhotoEngine.py or PhotoEngine.exe
+                if getattr(sys, 'frozen', False):
+                    # Running as PyInstaller EXE
+                    engine_dir = os.path.dirname(sys.executable)
+                else:
+                    # Running as script
+                    engine_dir = os.path.dirname(os.path.abspath(__file__))
+                temp_path = os.path.join(engine_dir, "screensaver_lock_screen.png")
+                # Save the blurred image
+                blurred_frame.save(temp_path, format="PNG")
+                set_windows_wallpaper(temp_path)
+        except Exception as e:
+            logger.error(f"Error during pause/screenshot/wallpaper: {e}")
+
     dialog = MacOSStyleLogin(root)
     root.wait_window(dialog.password_window)
     # Just return True/False for login success 

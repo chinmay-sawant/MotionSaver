@@ -112,7 +112,7 @@ class FrameProcessorThread(threading.Thread):
             pass
 
 class FrameReaderThread(threading.Thread):
-    def __init__(self, video_path, frame_queue, target_fps):
+    def __init__(self, video_path, frame_queue, target_fps, initial_seek_time=0):
         super().__init__(daemon=True)
         self.video_path = video_path
         self.frame_queue = frame_queue
@@ -126,6 +126,7 @@ class FrameReaderThread(threading.Thread):
         # GPU optimization setup
         self.gpu_manager = get_gpu_manager()
         self.opencv_backend = get_preferred_opencv_backend()
+        self.initial_seek_time = initial_seek_time
 
     def run(self):
         self.running = True
@@ -145,6 +146,14 @@ class FrameReaderThread(threading.Thread):
             logger.error(f"Could not open video {self.video_path} in thread")
             self.running = False
             return
+
+        # Seek to initial timestamp if provided
+        if self.initial_seek_time > 0:
+            # Convert timestamp (seconds) to milliseconds for OpenCV
+            seek_ms = self.initial_seek_time * 1000
+            self.cap.set(cv2.CAP_PROP_POS_MSEC, seek_ms)
+            self.last_frame_time = self.initial_seek_time
+            logger.info(f"Video seeked to {self.initial_seek_time:.2f} seconds.")
 
         # GPU-specific optimizations
         self._apply_gpu_optimizations()
@@ -181,6 +190,7 @@ class FrameReaderThread(threading.Thread):
             ret, frame = self.cap.read()
             if not ret:
                 self.cap.set(cv2.CAP_PROP_POS_FRAMES, 0)                
+                self.last_frame_time = 0 # Reset timestamp on loop
                 ret, frame = self.cap.read()
                 if not ret:
                     logger.error("Error reading frame in FrameReaderThread, stopping.")
@@ -199,14 +209,16 @@ class FrameReaderThread(threading.Thread):
                     except queue.Empty:
                         pass # Queue became empty in between
                 
-                self.last_frame_time = current_time
+                # Update last_frame_time with the video's internal timestamp
+                current_pos_ms = self.cap.get(cv2.CAP_PROP_POS_MSEC)
+                self.last_frame_time = current_pos_ms / 1000.0
                 frame_count += 1
                 
                 if frame_count % 120 == 0: # Approx every 2-4 seconds
-                    elapsed = current_time - last_perf_time
+                    elapsed = time.perf_counter() - last_perf_time
                     actual_read_fps = 120 / elapsed if elapsed > 0 else 0
                     if actual_read_fps < self.video_fps * 0.8:                    logger.debug(f"Frame reader read FPS: {actual_read_fps:.1f} (video native: {self.video_fps:.1f})")
-                    last_perf_time = current_time
+                    last_perf_time = time.perf_counter()
                 
             except Exception as e:
                 logger.error(f"Error processing frame in FrameReaderThread: {e}")
@@ -441,6 +453,7 @@ class VideoClockScreenSaver:
         self.profile_pic_gif_duration = 100  # Default duration in ms
 
         self.imgtk = None
+        self.last_processed_frame = None
         self.after_id = None
         self.current_time_text = time.strftime('%I:%M:%S %p')
         self.last_clock_update = 0
@@ -456,8 +469,15 @@ class VideoClockScreenSaver:
         self.last_fps_print = time.perf_counter()
         self.fps_history = collections.deque(maxlen=30)  # Track last 30 frame times
         
+        self.last_video_timestamp = self.user_config.get('last_video_timestamp', 0)
+        
         # Start threaded pipeline
-        self.frame_reader_thread = FrameReaderThread(actual_video_path, self.raw_frame_queue, self.target_fps)
+        self.frame_reader_thread = FrameReaderThread(
+            actual_video_path, 
+            self.raw_frame_queue, 
+            self.target_fps,
+            initial_seek_time=self.last_video_timestamp
+        )
         self.frame_processor_thread = FrameProcessorThread(
             self.raw_frame_queue, 
             self.processed_frame_queue, 
@@ -484,6 +504,8 @@ class VideoClockScreenSaver:
             preferred = gpu_info['preferred_gpu']
             logger.info(f"Using GPU: {preferred['name']} (Type: {preferred['type']})")
         
+        self.last_video_timestamp = self.user_config.get('last_video_timestamp', 0)
+
     def init_widgets(self):
         """Initialize widgets based on configuration - optimized for faster startup"""
         config = load_config()
@@ -836,6 +858,7 @@ class VideoClockScreenSaver:
             self._initialize_ui_elements_after_first_frame(processed_frame.width, processed_frame.height)        
         
         if processed_frame:
+            self.last_processed_frame = processed_frame
             try:
                 self.imgtk = ImageTk.PhotoImage(processed_frame)
                 # Only update if label and master still exist

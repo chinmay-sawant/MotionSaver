@@ -354,7 +354,8 @@ def start_screensaver(video_path_override=None):
         global secondary_screen_windows, hWinEventHook, root_ref_for_hook
         if event:
             logger.info(f"Password dialog triggered by: {event.keysym if hasattr(event, 'keysym') else 'mouse click'}")
-        success = verify_password_dialog_macos(root)
+        # Pass app to password dialog for pause/screenshot/lockscreen
+        success = verify_password_dialog_macos(root, video_clock_screensaver=app)
         if success: 
             app.close()
             if hWinEventHook: # Unhook before destroying windows

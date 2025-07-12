@@ -25,5 +25,6 @@
   "logs_path": "D:/Chinmay_Personal_Projects/ScreenSaver/logs",
   "preferred_gpu": "{'name': '31.0.15.5176', 'memory': '4293918720', 'type': 'unknown', 'platform': 'windows'}",
   "gpu_acceleration": true,
-  "video_backend": "auto"
+  "video_backend": "auto",
+  "last_video_timestamp": 38.44
 }
