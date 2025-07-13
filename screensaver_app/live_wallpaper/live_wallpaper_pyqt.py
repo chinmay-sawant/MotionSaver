@@ -21,6 +21,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..',
 # A fallback is provided for easy testing.
 try:
     from screensaver_app.PasswordConfig import load_config, save_config
+    from PyQt5.QtWidgets import QApplication
 except ImportError:
     print("Warning: Could not import 'load_config' or 'save_config'. Using default settings.")
     def load_config():
@@ -109,11 +110,23 @@ class WallpaperWindow(QWidget):
     def __init__(self, screen):
         super().__init__()
         self.screen_geometry = screen.geometry()
+        # # Check monitor count
+        # monitor_count = QApplication.screens().__len__()
+        # if monitor_count > 2:
+        #     print(f"Warning: More than 2 monitors detected ({monitor_count}). This app only uses the primary screen.")
+        #     self.screen_geometry.setX(1920)  # Force x to 1920 for consistency
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Tool)
         self.setGeometry(self.screen_geometry)
         self.label = QLabel(self)
         self.label.setGeometry(self.rect())
         self.label.setScaledContents(False) # Important: We do our own scaling.
+
+    def setScreenGeometry(self, geometry):
+        """Updates the screen geometry and resizes the label accordingly."""
+        self.screen_geometry = geometry
+        self.setGeometry(self.screen_geometry)
+        self.label.setGeometry(self.rect())
+        self.label.setScaledContents(False)
 
     def showEvent(self, event):
         """Triggered when the window is shown. Used for Win32 parenting and positioning."""
@@ -182,6 +195,7 @@ class WallpaperWindow(QWidget):
         # Set the pixmap. No further scaling is needed by Qt.
         self.label.setPixmap(QPixmap.fromImage(qt_img))
 
+
     def resizeEvent(self, event):
         """Ensures the label resizes with the window."""
         self.label.setGeometry(self.rect())
@@ -207,24 +221,37 @@ if __name__ == "__main__":
     if not video_fps or video_fps < 1: video_fps = 30
     cap.release()
 
-    screens = app.screens()
-    if not screens:
-        print("Error: No screens detected.")
-        sys.exit(1)
-
-    # Pass the config object to the FrameReader for timestamp handling
     frame_reader = FrameReader(video_path, video_fps, config)
     windows = []
 
-    print(f"Detected {len(screens)} screen(s). Creating wallpaper windows...")
-    for screen in screens:
-        geo = screen.geometry()
-        print(f"- Creating window for screen at: ({geo.x()}, {geo.y()}) with size {geo.width()}x{geo.height()}")
-        
-        win = WallpaperWindow(screen)
-        frame_reader.frame_ready.connect(win.display_frame)
-        win.show()
-        windows.append(win)
+    ### MODIFICATION START ###
+    # Instead of iterating through all screens, we get the primary screen directly.
+    primary_screen = app.primaryScreen()
+    
+    if not primary_screen:
+        print("Error: Could not determine the primary screen.")
+        sys.exit(1)
+
+    # The rest of the code now only acts on this single, primary screen.
+    print("Found primary screen. Creating wallpaper window...")
+    
+    geo = primary_screen.geometry()
+    print(f"- Creating window for primary screen at: ({geo.x()}, {geo.y()}) with size {geo.width()}x{geo.height()}")
+    win = WallpaperWindow(primary_screen)
+
+    # Create just one window for the primary screen
+    # Check monitor count
+    monitor_count = QApplication.screens().__len__()
+    print(f"Detected {monitor_count} monitors.")
+    if monitor_count > 1:
+        print(f"Warning: More than 1 monitor detected ({monitor_count}). This app only uses the primary screen.")
+        geo.setX(1920)  # Force x to 1920 for consistency
+        geo.setWidth(2560)  # Ensure width is consistent
+        win.setScreenGeometry(geo)  # Force x to 1920 for consistency
+    frame_reader.frame_ready.connect(win.display_frame)
+    win.show()
+    windows.append(win)
+    ### MODIFICATION END ###
 
     frame_reader.start_reading()
     app.aboutToQuit.connect(frame_reader.stop_reading)
