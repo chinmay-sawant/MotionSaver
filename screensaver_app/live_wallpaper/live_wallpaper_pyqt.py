@@ -105,7 +105,8 @@ class FrameReader(QObject):
 
     def _read_loop(self):
         """The main loop that reads frames and periodically saves the timestamp."""
-        interval = 1.0 / self.fps
+        # Cap FPS to reduce GPU usage
+        interval = 1.0 / min(self.fps, 24)  # Cap at 24 FPS
         while self.running:
             start_time = time.perf_counter()
 
@@ -126,7 +127,11 @@ class FrameReader(QObject):
 
             elapsed = time.perf_counter() - start_time
             sleep_time = max(0, interval - elapsed)
-            time.sleep(sleep_time)
+            if sleep_time > 0:
+                time.sleep(sleep_time)
+            else:
+                # If processing is too fast, yield to OS
+                time.sleep(0.005)
 
 
 class WallpaperWindow(QWidget):
@@ -141,7 +146,22 @@ class WallpaperWindow(QWidget):
         self.setGeometry(self.screen_geometry)
         self.label = QLabel(self)
         self.label.setGeometry(self.rect())
-        self.label.setScaledContents(False) # Important: We do our own scaling.
+        self.label.setScaledContents(False)
+        # Detect NVIDIA GPU
+        try:
+            # Check if cv2 has cuda module and device count
+            if hasattr(cv2, "cuda") and hasattr(cv2.cuda, "getCudaEnabledDeviceCount"):
+                self.has_cuda = cv2.cuda.getCudaEnabledDeviceCount() > 0
+                if self.has_cuda:
+                    logger.info("NVIDIA GPU detected. Using CUDA for frame processing.")
+                else:
+                    logger.info("No NVIDIA GPU detected. Using CPU for frame processing.")
+            else:
+                self.has_cuda = False
+                logger.info("OpenCV CUDA module not found. Using CPU for frame processing.")
+        except Exception as e:
+            self.has_cuda = False
+            logger.info(f"CUDA detection failed: {e}")
 
     def setScreenGeometry(self, geometry):
         """Updates the screen geometry and resizes the label accordingly."""
@@ -179,10 +199,6 @@ class WallpaperWindow(QWidget):
         Receives a raw frame and efficiently scales it to fill the monitor
         without distortion before displaying.
         """
-        # --- CRITICAL FIX: Use the reliable screen geometry, not the widget's size ---
-        # Using self.label.size() can be unreliable as it might not be fully
-        # updated when the first frame arrives, causing a size mismatch.
-        # self.screen_geometry is constant and always correct for this window.
         geo = self.screen_geometry
         target_w, target_h = geo.width(), geo.height()
 
@@ -198,23 +214,38 @@ class WallpaperWindow(QWidget):
         # New dimensions after scaling
         new_w, new_h = int(frame_w * scale), int(frame_h * scale)
         
-        # Resize using the calculated scale factor
-        resized_frame = cv2.resize(frame, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
-        
-        # Calculate coordinates for a center crop
-        crop_x = (new_w - target_w) // 2
-        crop_y = (new_h - target_h) // 2
-        
-        # Perform the crop to get the final frame, perfectly sized for the monitor.
-        final_frame = resized_frame[crop_y:crop_y + target_h, crop_x:crop_x + target_w]
+        interpolation = cv2.INTER_AREA if scale < 1 else cv2.INTER_LINEAR
 
-        # Convert the pre-scaled frame to a QPixmap.
-        rgb_frame = cv2.cvtColor(final_frame, cv2.COLOR_BGR2RGB)
-        h, w, ch = rgb_frame.shape
+        if self.has_cuda:
+            # Use CUDA for resizing and color conversion
+            try:
+                gpu_frame = cv2.cuda_GpuMat()
+                gpu_frame.upload(frame)
+                gpu_resized = cv2.cuda.resize(gpu_frame, (new_w, new_h), interpolation=interpolation)
+                crop_x = (new_w - target_w) // 2
+                crop_y = (new_h - target_h) // 2
+                gpu_cropped = gpu_resized.rowRange(crop_y, crop_y + target_h).colRange(crop_x, crop_x + target_w)
+                gpu_rgb = cv2.cuda.cvtColor(gpu_cropped, cv2.COLOR_BGR2RGB)
+                final_frame = gpu_rgb.download()
+            except Exception as e:
+                logger.info(f"CUDA frame processing failed: {e}")
+                # Fallback to CPU
+                resized_frame = cv2.resize(frame, (new_w, new_h), interpolation=interpolation)
+                crop_x = (new_w - target_w) // 2
+                crop_y = (new_h - target_h) // 2
+                final_frame = resized_frame[crop_y:crop_y + target_h, crop_x:crop_x + target_w]
+                final_frame = cv2.cvtColor(final_frame, cv2.COLOR_BGR2RGB)
+        else:
+            resized_frame = cv2.resize(frame, (new_w, new_h), interpolation=interpolation)
+            crop_x = (new_w - target_w) // 2
+            crop_y = (new_h - target_h) // 2
+            final_frame = resized_frame[crop_y:crop_y + target_h, crop_x:crop_x + target_w]
+            final_frame = cv2.cvtColor(final_frame, cv2.COLOR_BGR2RGB)
+
+        h, w, ch = final_frame.shape
         bytes_per_line = ch * w
-        qt_img = QImage(rgb_frame.data, w, h, bytes_per_line, QImage.Format_RGB888)
+        qt_img = QImage(final_frame.data, w, h, bytes_per_line, QImage.Format_RGB888)
         
-        # Set the pixmap. No further scaling is needed by Qt.
         self.label.setPixmap(QPixmap.fromImage(qt_img))
 
     def resizeEvent(self, event):
