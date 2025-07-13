@@ -60,28 +60,33 @@ class FrameProcessorThread(threading.Thread):
         self.ui_elements_callback = ui_elements_callback
         self.running = False
         self.frame_skip_counter = 0
-        self.processing_times = collections.deque(maxlen=10)  # Reduced for faster response
+        self.processing_times = collections.deque(maxlen=30)  # Increased for better smoothing
+        self.last_process_time = time.perf_counter()
         
     def run(self):
         self.running = True
         while self.running:
             try:
-                raw_frame = self.raw_frame_queue.get(timeout=0.01)  # Much shorter timeout
+                raw_frame = self.raw_frame_queue.get(timeout=0.005)  # Slightly longer timeout
                 if raw_frame is None:  # Shutdown signal
                     break
                     
                 process_start = time.perf_counter()
                 
-                # More aggressive frame skipping based on processing load
-                if self.processed_frame_queue.qsize() > 0:
-                    self.frame_skip_counter += 1
-                    # Dynamic skip ratio based on processing times
+                # Adaptive frame skipping based on processing load and timing
+                current_time = time.perf_counter()
+                time_since_last = current_time - self.last_process_time
+                
+                # Skip frames more intelligently based on actual timing
+                if self.processed_frame_queue.qsize() > 1:
                     avg_process_time = sum(self.processing_times) / len(self.processing_times) if self.processing_times else 0
-                    if avg_process_time > 0.012:  # If processing > 12ms (should be ~16ms for 60fps)
-                        if self.frame_skip_counter % 3 == 0:  # Skip 2 out of 3 frames
-                            continue
-                    elif avg_process_time > 0.008:  # If processing > 8ms
-                        if self.frame_skip_counter % 2 == 0:  # Skip every other frame
+                    target_frame_time = 1.0 / 30.0  # 30 FPS target
+                    
+                    # Only skip if we're significantly behind
+                    if avg_process_time > target_frame_time * 0.8:
+                        self.frame_skip_counter += 1
+                        if self.frame_skip_counter % 2 == 0:  # Skip every other frame when overloaded
+                            self.last_process_time = current_time
                             continue
                 
                 # Process frame with UI elements
@@ -89,17 +94,24 @@ class FrameProcessorThread(threading.Thread):
                 
                 process_time = time.perf_counter() - process_start
                 self.processing_times.append(process_time)
+                self.last_process_time = time.perf_counter()
+                
+                # Non-blocking put with smart queue management
+                if self.processed_frame_queue.qsize() >= 3:  # Keep max 3 frames
+                    try:
+                        # Remove oldest frames until we have space
+                        while self.processed_frame_queue.qsize() >= 3:
+                            self.processed_frame_queue.get_nowait()
+                    except queue.Empty:
+                        pass
                 
                 try:
                     self.processed_frame_queue.put_nowait(processed_frame)
                 except queue.Full:
-                    # Drop oldest frame and add new one
-                    try:
-                        self.processed_frame_queue.get_nowait()
-                        self.processed_frame_queue.put_nowait(processed_frame)
-                    except queue.Empty:
-                        pass
+                    pass  # Drop frame if queue is full
+                    
             except queue.Empty:
+                time.sleep(0.001)  # Micro sleep to prevent busy waiting
                 continue
             except Exception as e:
                 logger.error(f"Error in frame processor: {e}")
@@ -129,13 +141,18 @@ class FrameReaderThread(threading.Thread):
         self.opencv_backend = get_preferred_opencv_backend()
         self.initial_seek_time = initial_seek_time
 
+        # Enhanced timing variables
+        self.last_wallclock_frame_time = 0
+        self.frame_timing_buffer = collections.deque(maxlen=10)
+        self.adaptive_sleep_time = 0.001
+
     def run(self):
         self.running = True
         
         # Setup GPU environment before opening video
         setup_gpu_environment()
         
-        # Use preferred backend if available
+        # Use preferred backend if available with optimized settings
         if self.opencv_backend:
             logger.info(f"Using OpenCV backend: {self.opencv_backend}")
             self.cap = cv2.VideoCapture(self.video_path, self.opencv_backend)
@@ -150,14 +167,13 @@ class FrameReaderThread(threading.Thread):
 
         # Seek to initial timestamp if provided
         if self.initial_seek_time > 0:
-            # Convert timestamp (seconds) to milliseconds for OpenCV
             seek_ms = self.initial_seek_time * 1000
             self.cap.set(cv2.CAP_PROP_POS_MSEC, seek_ms)
             self.last_frame_time = self.initial_seek_time
             logger.info(f"Video seeked to {self.initial_seek_time:.2f} seconds.")
 
-        # GPU-specific optimizations
-        self._apply_gpu_optimizations()
+        # Enhanced GPU optimizations
+        self._apply_enhanced_gpu_optimizations()
 
         self.video_fps = self.cap.get(cv2.CAP_PROP_FPS)
         if self.video_fps <= 0 or self.video_fps > 120:
@@ -169,60 +185,135 @@ class FrameReaderThread(threading.Thread):
         
         self.actual_frame_interval = 1.0 / self.video_fps
         
+        # Enhanced OpenCV settings for smoother playback
         try:
+            self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # Minimize buffer for real-time
             self.cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'H264'))
-            cv2.setNumThreads(1)  # Reduced to 1 to minimize CPU contention
-        except:
-            pass
+            cv2.setNumThreads(2)  # Optimal for most systems
+            
+            # Additional optimizations
+            self.cap.set(cv2.CAP_PROP_CONVERT_RGB, 1)  # Direct RGB conversion
+            
+        except Exception as e:
+            logger.warning(f"Could not apply OpenCV optimizations: {e}")
 
         frame_count = 0
         last_perf_time = time.perf_counter()
+        self.last_wallclock_frame_time = time.perf_counter()
+        
+        # Precise timing variables
+        target_frame_time = 1.0 / self.video_fps
+        accumulated_error = 0.0
         
         while self.running:
             if self.paused:
                 time.sleep(0.1)
                 continue
 
-            current_time = time.perf_counter()
+            # Enhanced frame timing with error compensation
+            frame_start = time.perf_counter()
             
-            time_since_last = current_time - self.last_frame_time
-            if time_since_last < self.actual_frame_interval:
-                sleep_time = self.actual_frame_interval - time_since_last
-                if sleep_time > 0.001:
-                    time.sleep(sleep_time * 0.9) 
-                continue
+            # Calculate precise timing with accumulated error correction
+            elapsed = frame_start - self.last_wallclock_frame_time
+            time_until_next = target_frame_time - elapsed + accumulated_error
             
+            if time_until_next > 0.001:  # More precise threshold
+                # High precision sleep
+                if time_until_next > 0.010:  # If we need to wait more than 10ms
+                    time.sleep(time_until_next - 0.005)  # Sleep most of it
+                    # Busy wait for the remainder for precision
+                    while time.perf_counter() - frame_start < time_until_next:
+                        pass
+                else:
+                    # Just busy wait for very short intervals
+                    while time.perf_counter() - frame_start < time_until_next:
+                        pass
+            
+            actual_frame_start = time.perf_counter()
+            self.last_wallclock_frame_time = actual_frame_start
+            
+            # Update accumulated timing error
+            expected_time = self.last_wallclock_frame_time + target_frame_time
+            accumulated_error = expected_time - actual_frame_start
+            accumulated_error = max(min(accumulated_error, 0.005), -0.005)  # Clamp error
+
             ret, frame = self.cap.read()
             if not ret:
-                self.cap.set(cv2.CAP_PROP_POS_FRAMES, 0)                
-                self.last_frame_time = 0 # Reset timestamp on loop
+                self.cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                self.last_wallclock_frame_time = time.perf_counter()
+                accumulated_error = 0.0  # Reset error on loop
                 ret, frame = self.cap.read()
                 if not ret:
                     logger.error("Error reading frame in FrameReaderThread, stopping.")
-                    break 
-            
+                    break
+
             try:
+                # Optimized frame processing without downscaling
+                target_w, target_h = 0, 0
+                try:
+                    if hasattr(self.frame_queue, '_target_size'):
+                        target_w, target_h = self.frame_queue._target_size
+                except Exception:
+                    pass
+                
+                if target_w == 0 or target_h == 0:
+                    try:
+                        parent = getattr(self, 'parent', None)
+                        if parent and hasattr(parent, 'width') and hasattr(parent, 'height'):
+                            target_w, target_h = parent.width, parent.height
+                    except Exception:
+                        pass
+                
+                if target_w == 0 or target_h == 0:
+                    try:
+                        import tkinter as tk
+                        root = tk.Tk()
+                        target_w = root.winfo_screenwidth()
+                        target_h = root.winfo_screenheight()
+                        root.destroy()
+                    except Exception:
+                        target_w, target_h = 1920, 1080
+
+                # Only resize if dimensions don't match (avoid unnecessary processing)
+                if target_w > 0 and target_h > 0:
+                    current_h, current_w = frame.shape[:2]
+                    if current_w != target_w or current_h != target_h:
+                        # Use optimized interpolation
+                        frame = cv2.resize(frame, (target_w, target_h), interpolation=cv2.INTER_LINEAR)
+
+                # Optimized color conversion
                 frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 pil_img = Image.fromarray(frame_rgb, mode='RGB').convert("RGBA")
+                
+                # Smart queue management
+                queue_size = self.frame_queue.qsize()
+                if queue_size >= 4:  # Drop frames if queue is backing up
+                    try:
+                        while self.frame_queue.qsize() >= 2:
+                            self.frame_queue.get_nowait()
+                    except queue.Empty:
+                        pass
                 
                 try:
                     self.frame_queue.put_nowait(pil_img)
                 except queue.Full:
                     try:
-                        self.frame_queue.get_nowait() # Drop oldest
-                        self.frame_queue.put_nowait(pil_img) # Put current
+                        self.frame_queue.get_nowait()
+                        self.frame_queue.put_nowait(pil_img)
                     except queue.Empty:
-                        pass # Queue became empty in between
+                        pass
                 
-                # Update last_frame_time with the video's internal timestamp
+                # Update timing statistics
                 current_pos_ms = self.cap.get(cv2.CAP_PROP_POS_MSEC)
                 self.last_frame_time = current_pos_ms / 1000.0
                 frame_count += 1
                 
-                if frame_count % 120 == 0: # Approx every 2-4 seconds
+                # Less frequent performance logging
+                if frame_count % 150 == 0:  # Every ~5 seconds at 30fps
                     elapsed = time.perf_counter() - last_perf_time
-                    actual_read_fps = 120 / elapsed if elapsed > 0 else 0
-                    if actual_read_fps < self.video_fps * 0.8:                    logger.debug(f"Frame reader read FPS: {actual_read_fps:.1f} (video native: {self.video_fps:.1f})")
+                    actual_read_fps = 150 / elapsed if elapsed > 0 else 0
+                    if actual_read_fps < self.video_fps * 0.9:
+                        logger.debug(f"Frame reader FPS: {actual_read_fps:.1f} (target: {self.video_fps:.1f})")
                     last_perf_time = time.perf_counter()
                 
             except Exception as e:
@@ -236,50 +327,51 @@ class FrameReaderThread(threading.Thread):
     def stop(self):
         self.running = False
 
-    def _apply_gpu_optimizations(self):
-        """Apply GPU-specific optimizations to video capture"""
+    def _apply_enhanced_gpu_optimizations(self):
+        """Enhanced GPU-specific optimizations for smoother playback"""
         try:
             if not self.gpu_manager.preferred_gpu:
                 return
             
             gpu_name = self.gpu_manager.preferred_gpu['name'].lower()
             
-            # Set buffer size for better performance
+            # Minimal buffer for real-time playback
             self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
             
-            # NVIDIA GPU optimizations
+            # GPU-specific optimizations
             if 'nvidia' in gpu_name:
-                # Enable hardware acceleration if available
                 try:
+                    # NVIDIA hardware acceleration
                     self.cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'H264'))
-                    logger.debug("Enabled H264 hardware decoding for NVIDIA GPU")
+                    self.cap.set(cv2.CAP_PROP_CONVERT_RGB, 1)
+                    logger.debug("Enhanced NVIDIA GPU optimizations applied")
                 except:
                     pass
             
-            # AMD GPU optimizations  
             elif 'amd' in gpu_name or 'radeon' in gpu_name:
                 try:
-                    # Use DirectShow backend optimizations on Windows
+                    # AMD optimizations
                     if platform.system() == "Windows":
                         self.cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'H264'))
-                        logger.debug("Enabled H264 decoding for AMD GPU")
+                        self.cap.set(cv2.CAP_PROP_CONVERT_RGB, 1)
+                        logger.debug("Enhanced AMD GPU optimizations applied")
                 except:
                     pass
             
-            # Intel GPU optimizations
             elif 'intel' in gpu_name:
                 try:
                     # Intel Quick Sync optimizations
                     self.cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'H264'))
-                    logger.debug("Enabled H264 decoding for Intel GPU")
+                    self.cap.set(cv2.CAP_PROP_CONVERT_RGB, 1)
+                    logger.debug("Enhanced Intel GPU optimizations applied")
                 except:
                     pass
             
-            # Reduce thread count for GPU processing
-            cv2.setNumThreads(2)  # Increased from 1 for GPU processing
+            # Optimal thread count for GPU processing
+            cv2.setNumThreads(2)
             
         except Exception as e:
-            logger.warning(f"Failed to apply GPU optimizations: {e}")
+            logger.warning(f"Failed to apply enhanced GPU optimizations: {e}")
 
 def find_font_path(font_family):
     """Try to find the font file path for a given font family name."""
@@ -356,46 +448,40 @@ except ImportError as e:
 class VideoClockScreenSaver:
     def __init__(self, master, video_path_arg=None):
         self.master = master
-        self.root = master  # Add this line to fix the AttributeError
+        self.root = master
         master.attributes('-fullscreen', True)
         master.configure(bg='black')
         
-        # Define transparent key for widgets - use a more unique color
-        self.TRANSPARENT_KEY = '#010203'  # Changed from '#123456' to avoid conflicts
+        self.TRANSPARENT_KEY = '#010203'
         
-        # Store screen dimensions for widget positioning
         self.screen_width = master.winfo_screenwidth()
         self.screen_height = master.winfo_screenheight()
         
         self.user_config = load_config()
         
-        # Fetch system user name
         system_user = getpass.getuser()
         self.username_to_display = system_user
         self.username = system_user
         
-        # Use video_path from arg (CLI) if provided, else from config, else default
-        # Default to "video.mp4" which is expected to be in the project root (ScreenSaver directory)
         video_path_from_config_or_default = self.user_config.get('video_path', 'video.mp4')
         actual_video_path = video_path_arg if video_path_arg else video_path_from_config_or_default
         
-        # Ensure video path is absolute. If relative, assume it's relative to the project root.
         if not os.path.isabs(actual_video_path):
-            # Project root is two levels up from this file (screensaver_app/video_player.py -> ScreenSaver/)
             project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
             actual_video_path = os.path.join(project_root, actual_video_path)
             logger.debug(f"Resolved relative video path to: {actual_video_path}")
 
-
         self.width = master.winfo_screenwidth() 
         self.height = master.winfo_screenheight()
 
+        # Optimized for smoother playback
         self.target_fps = 30
-        self.frame_interval = int(1000 / self.target_fps) # For UI update scheduling if queue empty
+        self.frame_interval = int(1000 / self.target_fps)
         
-        # Increase buffer sizes for smoother playback
-        self.raw_frame_queue = queue.Queue(maxsize=5)  # Increased from 2
-        self.processed_frame_queue = queue.Queue(maxsize=5)  # Increased from 2
+        # Larger buffers for smoother playback without frame drops
+        self.raw_frame_queue = queue.Queue(maxsize=8)  # Increased buffer
+        self.processed_frame_queue = queue.Queue(maxsize=6)  # Increased buffer
+        self.raw_frame_queue._target_size = (self.width, self.height)
         
         self.label = tk.Label(master, bg='black', borderwidth=0, highlightthickness=0)
         self.label.pack(fill=tk.BOTH, expand=True)
@@ -473,11 +559,12 @@ class VideoClockScreenSaver:
         self.start_time = time.perf_counter()
         self.frames_processed_in_ui = 0 
         self.last_fps_print = time.perf_counter()
-        self.fps_history = collections.deque(maxlen=30)  # Track last 30 frame times
+        self.fps_history = collections.deque(maxlen=60)  # Longer history for stability
+        self.ui_frame_times = collections.deque(maxlen=30)
         
         self.last_video_timestamp = self.user_config.get('last_video_timestamp', 0)
         
-        # Start threaded pipeline
+        # Start optimized threaded pipeline
         self.frame_reader_thread = FrameReaderThread(
             actual_video_path, 
             self.raw_frame_queue, 
@@ -490,19 +577,15 @@ class VideoClockScreenSaver:
             self._process_frame_with_ui
         )
         
-        # Start threads immediately for faster startup
         self.frame_reader_thread.start()
         self.frame_processor_thread.start()
         
         self.first_frame_received = False
-        # Start frame updates immediately instead of waiting
-        self.master.after(10, self.update_frame)  # Reduced delay from default
-
-        # Initialize widgets with reduced delay for faster startup
-        self.widgets = []
-        self.master.after(200, self.init_widgets)  # Reduced from 1000ms
+        self.master.after(5, self.update_frame)  # Start immediately
         
-        # Initialize GPU manager and log GPU information
+        self.widgets = []
+        self.master.after(100, self.init_widgets)  # Faster widget initialization
+        
         self.gpu_manager = get_gpu_manager()
         gpu_info = self.gpu_manager.get_gpu_info()
         logger.info(f"GPU Detection: Found {gpu_info['total_count']} GPUs")
@@ -850,19 +933,19 @@ class VideoClockScreenSaver:
         return frame
 
     def update_frame(self):
-        """Optimized UI thread for smoother performance"""
+        """Highly optimized UI thread for maximum smoothness"""
         frame_start_time = time.perf_counter()
         
         processed_frame = None
         try:
             processed_frame = self.processed_frame_queue.get_nowait()
         except queue.Empty:
-            # Reduced delay for more responsive updates
-            delay = max(8, self.frame_interval // 6)  # Increased responsiveness
+            # Adaptive delay based on performance
+            avg_ui_time = sum(self.ui_frame_times) / len(self.ui_frame_times) if self.ui_frame_times else 0.016
+            delay = max(3, min(10, int(avg_ui_time * 1000 * 0.5)))  # Adaptive delay
             self.after_id = self.master.after(delay, self.update_frame)
             return
 
-        # Initialize UI elements on first frame if a frame was successfully dequeued
         if not self.first_frame_received and processed_frame:
             self._initialize_ui_elements_after_first_frame(processed_frame.width, processed_frame.height)        
         
@@ -870,40 +953,42 @@ class VideoClockScreenSaver:
             self.last_processed_frame = processed_frame
             try:
                 self.imgtk = ImageTk.PhotoImage(processed_frame)
-                # Only update if label and master still exist
                 if self.label.winfo_exists() and self.master.winfo_exists():
                     self.label.config(image=self.imgtk)
-                    # Force immediate update for smoother playback
+                    # Immediate update for smoothness
                     self.label.update_idletasks()
             except Exception as e:
                 logger.error(f"Error updating label image: {e}") 
         
-        # Lightweight performance monitoring
-        frame_time = time.perf_counter() - frame_start_time
-        self.fps_history.append(frame_time)
+        # Track UI performance
+        ui_frame_time = time.perf_counter() - frame_start_time
+        self.ui_frame_times.append(ui_frame_time)
+        self.fps_history.append(ui_frame_time)
         self.frames_processed_in_ui += 1
         current_time = time.perf_counter()
         
-        # Less frequent performance logging to reduce overhead
-        if current_time - self.last_fps_print >= 5.0:  # Every 5 seconds            if self.fps_history:
+        # Less frequent but more detailed performance logging
+        if current_time - self.last_fps_print >= 10.0:  # Every 10 seconds
+            if self.fps_history:
                 avg_frame_time = sum(self.fps_history) / len(self.fps_history)
                 estimated_fps = 1.0 / avg_frame_time if avg_frame_time > 0 else 0
                 queue_info = f"Raw: {self.raw_frame_queue.qsize()}, Processed: {self.processed_frame_queue.qsize()}"
                 widget_count = len(self.widgets)
-                logger.debug(f"UI FPS: {estimated_fps:.1f}, Widgets: {widget_count}, Queues: {queue_info}")
-        self.frames_processed_in_ui = 0
-        self.start_time = current_time
-        self.last_fps_print = current_time
+                avg_ui_time_ms = sum(self.ui_frame_times) / len(self.ui_frame_times) * 1000 if self.ui_frame_times else 0
+                logger.debug(f"UI FPS: {estimated_fps:.1f}, UI Time: {avg_ui_time_ms:.1f}ms, Widgets: {widget_count}, Queues: {queue_info}")
+            self.frames_processed_in_ui = 0
+            self.start_time = current_time
+            self.last_fps_print = current_time
         
-        # Optimized scheduling for smoother playback
-        ui_update_duration_ms = (time.perf_counter() - frame_start_time) * 1000
-        target_cycle_time_ms = 1000.0 / self.target_fps # e.g., 33.3ms for 30fps
+        # Optimized scheduling with adaptive timing
+        target_frame_time_ms = 1000.0 / self.target_fps
+        ui_time_ms = ui_frame_time * 1000
         
-        delay = int(target_cycle_time_ms - ui_update_duration_ms)
+        # Calculate optimal delay
+        delay = max(1, int(target_frame_time_ms - ui_time_ms))
         
-        # Ensure minimum delay for smooth updates
-        if delay < 5:  # Increased minimum delay
-            delay = 5 
+        # Cap delay for responsiveness
+        delay = min(delay, 20)
         
         self.after_id = self.master.after(delay, self.update_frame)
 
