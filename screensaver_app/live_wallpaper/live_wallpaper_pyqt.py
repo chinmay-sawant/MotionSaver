@@ -11,7 +11,7 @@ from PyQt5.QtGui import QImage, QPixmap
 
 import win32gui
 import win32con
-
+import signal
 # --- Configuration and Path Setup ---
 
 # Ensure the project root is in the path for custom module imports
@@ -22,6 +22,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..',
 try:
     from screensaver_app.PasswordConfig import load_config, save_config
     from PyQt5.QtWidgets import QApplication
+    
 except ImportError:
     print("Warning: Could not import 'load_config' or 'save_config'. Using default settings.")
     def load_config():
@@ -58,23 +59,47 @@ class FrameReader(QObject):
             return
 
         # Load last timestamp from config and seek the video position
-        start_timestamp_ms = self.config.get('last_video_timestamp', 0)
-        if start_timestamp_ms > 0:
-            print(f"Resuming video from {start_timestamp_ms / 1000:.2f} seconds.")
-            self.cap.set(cv2.CAP_PROP_POS_MSEC, start_timestamp_ms)
+        start_timestamp_sec = self.config.get('last_video_timestamp', 0)
+        if start_timestamp_sec > 0:
+            print(f"Resuming video from {start_timestamp_sec:.2f} seconds.")
+            self.cap.set(cv2.CAP_PROP_POS_MSEC, start_timestamp_sec * 1000)
 
         self.running = True
         self.thread = threading.Thread(target=self._read_loop, daemon=True)
         self.thread.start()
 
     def stop_reading(self):
-        """Stops the reading loop and releases the video capture resources."""
+        """Stops the reading loop and releases the video capture resources. Also stores the last video timestamp in seconds."""
         self.running = False
+        # Store the current video timestamp in seconds before releasing
+        if hasattr(self, 'cap') and self.cap.isOpened():
+            timestamp_sec = self.cap.get(cv2.CAP_PROP_POS_MSEC) / 1000.0
+            self.config['last_video_timestamp'] = timestamp_sec
+            save_config(self.config)
+            print(f"Saved last video timestamp: {timestamp_sec} seconds.")
         if hasattr(self, 'thread'):
             self.thread.join()
         if hasattr(self, 'cap'):
             self.cap.release()
             print("Video capture released.")
+        self.revertToOgWallpaper()
+
+    def revertToOgWallpaper(self):
+        """Reverts the wallpaper for all monitors to the original wallpaper."""
+        try:
+            import ctypes
+            from PyQt5.QtWidgets import QApplication
+            SPI_SETDESKWALLPAPER = 20
+            app = QApplication.instance()
+            screens = app.screens() if app else []
+            # This logic will refresh the wallpaper for all screens
+            for idx, screen in enumerate(screens):
+                # If you have the original wallpaper path per screen, use it here
+                # For now, just refresh the wallpaper (reapplies current wallpaper)
+                ctypes.windll.user32.SystemParametersInfoW(SPI_SETDESKWALLPAPER, 0, None, 3)
+                print(f"Reverted wallpaper for screen {idx}.")
+        except Exception as e:
+            print(f"Failed to revert wallpaper: {e}")
 
     def _read_loop(self):
         """The main loop that reads frames and periodically saves the timestamp."""
@@ -89,11 +114,11 @@ class FrameReader(QObject):
 
             self.frame_ready.emit(frame)
 
-            # Periodically save the current video timestamp
+            # Periodically save the current video timestamp in seconds
             current_time = time.time()
             if current_time - self.last_save_time > self.SAVE_INTERVAL:
-                timestamp_ms = self.cap.get(cv2.CAP_PROP_POS_MSEC)
-                self.config['last_video_timestamp'] = timestamp_ms
+                timestamp_sec = self.cap.get(cv2.CAP_PROP_POS_MSEC) / 1000.0
+                self.config['last_video_timestamp'] = timestamp_sec
                 save_config(self.config)
                 self.last_save_time = current_time
 
@@ -110,11 +135,6 @@ class WallpaperWindow(QWidget):
     def __init__(self, screen):
         super().__init__()
         self.screen_geometry = screen.geometry()
-        # # Check monitor count
-        # monitor_count = QApplication.screens().__len__()
-        # if monitor_count > 2:
-        #     print(f"Warning: More than 2 monitors detected ({monitor_count}). This app only uses the primary screen.")
-        #     self.screen_geometry.setX(1920)  # Force x to 1920 for consistency
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Tool)
         self.setGeometry(self.screen_geometry)
         self.label = QLabel(self)
@@ -195,7 +215,6 @@ class WallpaperWindow(QWidget):
         # Set the pixmap. No further scaling is needed by Qt.
         self.label.setPixmap(QPixmap.fromImage(qt_img))
 
-
     def resizeEvent(self, event):
         """Ensures the label resizes with the window."""
         self.label.setGeometry(self.rect())
@@ -269,5 +288,11 @@ if __name__ == "__main__":
 
     frame_reader.start_reading()
     app.aboutToQuit.connect(frame_reader.stop_reading)
-    
+    def handle_sigint(signum, frame):
+        print("SIGINT received. Stopping frame reader and exiting...")
+        frame_reader.stop_reading()
+        QApplication.quit()
+
+    signal.signal(signal.SIGINT, handle_sigint)
     sys.exit(app.exec_())
+   
