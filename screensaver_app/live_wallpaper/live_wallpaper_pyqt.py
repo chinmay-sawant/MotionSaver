@@ -227,16 +227,12 @@ if __name__ == "__main__":
     ### MODIFICATION START ###
     # Instead of iterating through all screens, we get the primary screen directly.
     primary_screen = app.primaryScreen()
-    
     if not primary_screen:
         print("Error: Could not determine the primary screen.")
         sys.exit(1)
 
     # The rest of the code now only acts on this single, primary screen.
     print("Found primary screen. Creating wallpaper window...")
-    
-    geo = primary_screen.geometry()
-    print(f"- Creating window for primary screen at: ({geo.x()}, {geo.y()}) with size {geo.width()}x{geo.height()}")
     win = WallpaperWindow(primary_screen)
 
     # Create just one window for the primary screen
@@ -244,10 +240,28 @@ if __name__ == "__main__":
     monitor_count = QApplication.screens().__len__()
     print(f"Detected {monitor_count} monitors.")
     if monitor_count > 1:
+        calculate_x = 0
+        calculate_width = 0
+        calculate_height = 0
+        geo = None
+        for idx, screen in enumerate(QApplication.screens()):
+            tempgeo = screen.geometry()
+            is_primary = (screen == primary_screen)
+            if is_primary:
+                calculate_width = tempgeo.width()
+                calculate_height = tempgeo.height()
+                geo = tempgeo
+            else:
+                if tempgeo.x() < 0:
+                    calculate_x += tempgeo.width()  # Update x for the next screen
+        
+        print(f"Calculated x for next screen: {calculate_x}, Calculate width: {calculate_width}, Calculate height: {calculate_height}")
+        geo.setX(calculate_x)  # Force x to calculated value for consistency
+        geo.setWidth(calculate_width)  # Ensure width is consistent
+        win.setScreenGeometry(geo)  # Force x to calculated value for consistency
+        print(f"Primary screen geometry: x={primary_screen.geometry().x()}, y={primary_screen.geometry().y()}, width={primary_screen.geometry().width()}, height={primary_screen.geometry().height()}")
         print(f"Warning: More than 1 monitor detected ({monitor_count}). This app only uses the primary screen.")
-        geo.setX(1920)  # Force x to 1920 for consistency
-        geo.setWidth(2560)  # Ensure width is consistent
-        win.setScreenGeometry(geo)  # Force x to 1920 for consistency
+
     frame_reader.frame_ready.connect(win.display_frame)
     win.show()
     windows.append(win)
