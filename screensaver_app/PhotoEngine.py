@@ -637,6 +637,7 @@ def run_in_system_tray():
         shutdown_system_tray() # Call the centralized shutdown
     
     def start_screensaver_with_return():
+        on_stop_live_wallpaper(None, None)  
         """Start screensaver and return to tray mode after authentication."""
         logger.info("start_screensaver_with_return")
         logger.info("Win + S detected or manual start. Starting screensaver...")
@@ -662,6 +663,7 @@ def run_in_system_tray():
         start_win_s_detection()
 
     def start_win_s_detection():
+        on_start_live_wallpaper(None, None)  # Ensure live wallpaper is started if needed
         """Start Win+S key detection and blocking using the same logic as key blocking."""
         logger.info("start_win_s_detection")
         global win_s_blocker
@@ -762,28 +764,47 @@ def run_in_system_tray():
         except Exception as e:
             logger.error(f"Error starting Win+S detection: {e}")
     
-    # Create system tray menu with GUI option
+    # --- Live Wallpaper Tray Actions ---
+    from screensaver_app.live_wallpaper.live_wallpaper_pyqt import LiveWallpaperController
+
+    def on_start_live_wallpaper(icon, item):
+        logger.info("on_start_live_wallpaper")
+        config = load_config()
+        video_path = config.get('video_path', None)
+        if video_path:
+            logger.info(f"Starting live wallpaper with video path: {video_path}")
+            # Start live wallpaper in a new thread to avoid blocking the tray icon
+            threading.Thread(target=LiveWallpaperController.start_live_wallpaper, args=(video_path,), daemon=True).start()
+        else:
+            logger.error("No video_path found in config for live wallpaper.")
+
+    def on_stop_live_wallpaper(icon, item):
+        threading.Thread(target=LiveWallpaperController.stop_live_wallpaper, daemon=True).start()
+
+    # Create system tray menu with GUI option and live wallpaper controls
     if getattr(sys, 'frozen', False):
-        # If running as a PyInstaller binary, launch GUI as a new process using the executable
         menu = (
-            pystray.MenuItem('Open Screensaver', on_open_screensaver),
+            pystray.MenuItem('Open Screensaver/Lockscreen', on_open_screensaver),
             pystray.MenuItem('Open GUI', lambda icon, item: subprocess.Popen([sys.executable, "--mode", "gui"], creationflags=subprocess.CREATE_NO_WINDOW if platform.system() == "Windows" else 0)),
+            pystray.MenuItem('Start Live Wallpaper', on_start_live_wallpaper),
+            pystray.MenuItem('Stop Live Wallpaper', on_stop_live_wallpaper),
             pystray.MenuItem('Exit', on_exit_app)
         )
     else:
-        # If running as a script, use the normal handler
         menu = (
-            pystray.MenuItem('Open Screensaver', on_open_screensaver),
+            pystray.MenuItem('Open Screensaver/Lockscreen', on_open_screensaver),
             pystray.MenuItem('Open GUI', on_open_gui),
+            pystray.MenuItem('Start Live Wallpaper', on_start_live_wallpaper),
+            pystray.MenuItem('Stop Live Wallpaper', on_stop_live_wallpaper),
             pystray.MenuItem('Exit', on_exit_app)
         )
 
-    icon = pystray.Icon("PhotoEngine", icon_image, "PhotoEngine Screensaver", menu)
+    icon = pystray.Icon("PhotoEngine", icon_image, "PhotoEngine Screensaver/Lockscreen", menu)
     tray_icon_instance = icon # Store the icon instance
 
     # Start Win+S detection
-    start_win_s_detection()    # Run the icon - this will block until exit is called
-    logger.info("System tray mode active. Press Win+S to activate screensaver.")
+    start_win_s_detection()
+    logger.info("System tray mode active. Press Win+S to activate screensaver/lockscreen.")
     icon.run()
     logger.info("Tray icon.run() has finished.")
 

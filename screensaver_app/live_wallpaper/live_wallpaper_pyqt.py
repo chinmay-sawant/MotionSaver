@@ -12,6 +12,8 @@ from PyQt5.QtGui import QImage, QPixmap
 import win32gui
 import win32con
 import signal
+from screensaver_app.central_logger import get_logger
+logger = get_logger('LiveWallpaperQt')
 # --- Configuration and Path Setup ---
 
 # Ensure the project root is in the path for custom module imports
@@ -24,14 +26,14 @@ try:
     from PyQt5.QtWidgets import QApplication
     
 except ImportError:
-    print("Warning: Could not import 'load_config' or 'save_config'. Using default settings.")
+    logger.info("Warning: Could not import 'load_config' or 'save_config'. Using default settings.")
     def load_config():
         """Fallback function if the original config loader is not found."""
         return {'video_path': 'video.mp4'}
 
     def save_config(config):
         """Fallback function if the original config saver is not found."""
-        print("Warning: Could not save config. This is a fallback.")
+        logger.info("Warning: Could not save config. This is a fallback.")
 
 # --- Core Logic ---
 
@@ -55,13 +57,13 @@ class FrameReader(QObject):
         """Initializes the video capture, seeks to the last saved timestamp, and starts the thread."""
         self.cap = cv2.VideoCapture(self.video_path)
         if not self.cap.isOpened():
-            print(f"Error: Could not open video file {self.video_path}")
+            logger.info(f"Error: Could not open video file {self.video_path}")
             return
 
         # Load last timestamp from config and seek the video position
         start_timestamp_sec = self.config.get('last_video_timestamp', 0)
         if start_timestamp_sec > 0:
-            print(f"Resuming video from {start_timestamp_sec:.2f} seconds.")
+            logger.info(f"Resuming video from {start_timestamp_sec:.2f} seconds.")
             self.cap.set(cv2.CAP_PROP_POS_MSEC, start_timestamp_sec * 1000)
 
         self.running = True
@@ -76,12 +78,12 @@ class FrameReader(QObject):
             timestamp_sec = self.cap.get(cv2.CAP_PROP_POS_MSEC) / 1000.0
             self.config['last_video_timestamp'] = timestamp_sec
             save_config(self.config)
-            print(f"Saved last video timestamp: {timestamp_sec} seconds.")
+            logger.info(f"Saved last video timestamp: {timestamp_sec} seconds.")
         if hasattr(self, 'thread'):
             self.thread.join()
         if hasattr(self, 'cap'):
             self.cap.release()
-            print("Video capture released.")
+            logger.info("Video capture released.")
         self.revertToOgWallpaper()
 
     def revertToOgWallpaper(self):
@@ -97,9 +99,9 @@ class FrameReader(QObject):
                 # If you have the original wallpaper path per screen, use it here
                 # For now, just refresh the wallpaper (reapplies current wallpaper)
                 ctypes.windll.user32.SystemParametersInfoW(SPI_SETDESKWALLPAPER, 0, None, 3)
-                print(f"Reverted wallpaper for screen {idx}.")
+                logger.info(f"Reverted wallpaper for screen {idx}.")
         except Exception as e:
-            print(f"Failed to revert wallpaper: {e}")
+            logger.info(f"Failed to revert wallpaper: {e}")
 
     def _read_loop(self):
         """The main loop that reads frames and periodically saves the timestamp."""
@@ -165,7 +167,7 @@ class WallpaperWindow(QWidget):
         if workerw_hwnd:
             win32gui.SetParent(hwnd, workerw_hwnd)
         else:
-            print("Warning: Could not find WorkerW. Attaching to Progman as a fallback.")
+            logger.info("Warning: Could not find WorkerW. Attaching to Progman as a fallback.")
             win32gui.SetParent(hwnd, progman)
 
         geo = self.screen_geometry
@@ -223,76 +225,106 @@ class WallpaperWindow(QWidget):
 
 # --- Application Entry Point ---
 
-if __name__ == "__main__":
-    config = load_config()
-    video_path = config.get('video_path', 'video.mp4')
-    if not os.path.exists(video_path):
-        print(f"Error: Video file not found at '{video_path}'")
-        sys.exit(1)
-
-    app = QApplication(sys.argv)
-
-    cap = cv2.VideoCapture(video_path)
-    if not cap.isOpened():
-        print(f"Error: Failed to open video file with OpenCV: '{video_path}'")
-        sys.exit(1)
-    video_fps = cap.get(cv2.CAP_PROP_FPS)
-    if not video_fps or video_fps < 1: video_fps = 30
-    cap.release()
-
-    frame_reader = FrameReader(video_path, video_fps, config)
+class LiveWallpaperController:
+    app = None
+    frame_reader = None
     windows = []
 
-    ### MODIFICATION START ###
-    # Instead of iterating through all screens, we get the primary screen directly.
-    primary_screen = app.primaryScreen()
-    if not primary_screen:
-        print("Error: Could not determine the primary screen.")
-        sys.exit(1)
+    @staticmethod
+    def start_live_wallpaper(video_path):
+        logger.info("Entered start_live_wallpaper function.")
+        try:
+            logger.info("Starting live wallpaper...")
+            config = load_config()
+            config['video_path'] = video_path
+            if not os.path.exists(video_path):
+                logger.error(f"Error: Video file not found at '{video_path}'")
+                return
 
-    # The rest of the code now only acts on this single, primary screen.
-    print("Found primary screen. Creating wallpaper window...")
-    win = WallpaperWindow(primary_screen)
+            LiveWallpaperController.app = QApplication.instance() or QApplication(sys.argv)
 
-    # Create just one window for the primary screen
-    # Check monitor count
-    monitor_count = QApplication.screens().__len__()
-    print(f"Detected {monitor_count} monitors.")
-    if monitor_count > 1:
-        calculate_x = 0
-        calculate_width = 0
-        calculate_height = 0
-        geo = None
-        for idx, screen in enumerate(QApplication.screens()):
-            tempgeo = screen.geometry()
-            is_primary = (screen == primary_screen)
-            if is_primary:
-                calculate_width = tempgeo.width()
-                calculate_height = tempgeo.height()
-                geo = tempgeo
+            cap = cv2.VideoCapture(video_path)
+            if not cap.isOpened():
+                logger.error(f"Error: Failed to open video file with OpenCV: '{video_path}'")
+                return
+            video_fps = cap.get(cv2.CAP_PROP_FPS)
+            if not video_fps or video_fps < 1:
+                logger.warning("FPS not detected or invalid. Defaulting to 30 FPS.")
+                video_fps = 30
+            cap.release()
+
+            logger.info(f"Video FPS set to: {video_fps}")
+            LiveWallpaperController.frame_reader = FrameReader(video_path, video_fps, config)
+            LiveWallpaperController.windows = []
+
+            primary_screen = LiveWallpaperController.app.primaryScreen()
+            if not primary_screen:
+                logger.error("Error: Could not determine the primary screen.")
+                return
+
+            logger.info("Found primary screen. Creating wallpaper window...")
+            win = WallpaperWindow(primary_screen)
+
+            monitor_count = QApplication.screens().__len__()
+            logger.info(f"Detected {monitor_count} monitors.")
+            if monitor_count > 1:
+                calculate_x = 0
+                calculate_width = 0
+                calculate_height = 0
+                geo = None
+                for idx, screen in enumerate(QApplication.screens()):
+                    tempgeo = screen.geometry()
+                    is_primary = (screen == primary_screen)
+                    logger.info(f"Screen {idx}: geometry={tempgeo}, is_primary={is_primary}")
+                    if is_primary:
+                        calculate_width = tempgeo.width()
+                        calculate_height = tempgeo.height()
+                        geo = tempgeo
+                    else:
+                        if tempgeo.x() < 0:
+                            calculate_x += tempgeo.width()
+                logger.info(f"Calculated x for next screen: {calculate_x}, Calculate width: {calculate_width}, Calculate height: {calculate_height}")
+                geo.setX(calculate_x)
+                geo.setWidth(calculate_width)
+                win.setScreenGeometry(geo)
+                logger.info(f"Primary screen geometry: x={primary_screen.geometry().x()}, y={primary_screen.geometry().y()}, width={primary_screen.geometry().width()}, height={primary_screen.geometry().height()}")
+                logger.warning(f"Warning: More than 1 monitor detected ({monitor_count}). This app only uses the primary screen.")
+
+            LiveWallpaperController.frame_reader.frame_ready.connect(win.display_frame)
+            win.show()
+            LiveWallpaperController.windows.append(win)
+
+            logger.info("Starting frame reader thread.")
+            LiveWallpaperController.frame_reader.start_reading()
+            LiveWallpaperController.app.aboutToQuit.connect(LiveWallpaperController.frame_reader.stop_reading)
+
+            def handle_sigint(signum, frame):
+                logger.info("SIGINT received. Stopping frame reader and exiting...")
+                LiveWallpaperController.stop_live_wallpaper()
+
+            import threading
+            if threading.current_thread() is threading.main_thread():
+                signal.signal(signal.SIGINT, handle_sigint)
+                logger.info("SIGINT handler set.")
             else:
-                if tempgeo.x() < 0:
-                    calculate_x += tempgeo.width()  # Update x for the next screen
-        
-        print(f"Calculated x for next screen: {calculate_x}, Calculate width: {calculate_width}, Calculate height: {calculate_height}")
-        geo.setX(calculate_x)  # Force x to calculated value for consistency
-        geo.setWidth(calculate_width)  # Ensure width is consistent
-        win.setScreenGeometry(geo)  # Force x to calculated value for consistency
-        print(f"Primary screen geometry: x={primary_screen.geometry().x()}, y={primary_screen.geometry().y()}, width={primary_screen.geometry().width()}, height={primary_screen.geometry().height()}")
-        print(f"Warning: More than 1 monitor detected ({monitor_count}). This app only uses the primary screen.")
+                logger.info("SIGINT handler not set: not in main thread.")
+            logger.info("Entering Qt event loop.")
+            LiveWallpaperController.app.exec_()
+        except Exception as e:
+            logger.error(f"Exception in start_live_wallpaper: {e}", exc_info=True)
 
-    frame_reader.frame_ready.connect(win.display_frame)
-    win.show()
-    windows.append(win)
-    ### MODIFICATION END ###
-
-    frame_reader.start_reading()
-    app.aboutToQuit.connect(frame_reader.stop_reading)
-    def handle_sigint(signum, frame):
-        print("SIGINT received. Stopping frame reader and exiting...")
-        frame_reader.stop_reading()
-        QApplication.quit()
-
-    signal.signal(signal.SIGINT, handle_sigint)
-    sys.exit(app.exec_())
-   
+    @staticmethod
+    def stop_live_wallpaper():
+        logger.info("Entered stop_live_wallpaper function.")
+        try:
+            if LiveWallpaperController.frame_reader:
+                logger.info("Stopping frame reader.")
+                LiveWallpaperController.frame_reader.stop_reading()
+                LiveWallpaperController.frame_reader = None
+            if LiveWallpaperController.app:
+                logger.info("Quitting QApplication.")
+                LiveWallpaperController.app.quit()
+                LiveWallpaperController.app = None
+            LiveWallpaperController.windows = []
+        except Exception as e:
+            logger.error(f"Exception in stop_live_wallpaper: {e}", exc_info=True)
