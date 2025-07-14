@@ -11,14 +11,13 @@ import platform
 from concurrent.futures import ThreadPoolExecutor
 import collections
 import getpass  # Added import
-
+from utils.config_utils import find_user_config_path, load_config, save_config
 # Add central logging
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from screensaver_app.central_logger import get_logger, log_startup, log_shutdown, log_exception
 logger = get_logger('VideoPlayer')
 
-from .PasswordConfig import load_config
 from utils.gpu_utils import get_gpu_manager, get_preferred_opencv_backend, setup_gpu_environment
 
 def get_username_from_config():
@@ -235,11 +234,7 @@ class VideoClockScreenSaver:
 
             self.first_frame_received = False
             self.widgets = []
-            # Add dummy attributes to prevent AttributeError from other modules
-            self.frame_reader_thread = None
-            self.frame_processor_thread = None
-            self.after_id = None
-
+      
             self.master.after(100, self.init_widgets)
 
             # VLC setup
@@ -254,7 +249,7 @@ class VideoClockScreenSaver:
             
             # Initialize UI elements immediately for VLC playback
             self._initialize_ui_elements_immediately()
-            
+
             self.vlc_player.play()
 
             # Schedule overlays
@@ -661,7 +656,7 @@ class VideoClockScreenSaver:
             logger.error(f"Exception in _process_frame_with_ui: {e}")
 
     def update_overlays(self):
-        logger.debug("Called update_overlays")
+        # logger.debug("Called update_overlays")
         try:
             """Draw overlays (clock, profile, widgets) over VLC video using a transparent Canvas."""
             # Ensure overlay window is properly configured
@@ -764,20 +759,31 @@ class VideoClockScreenSaver:
         except Exception as e:
             logger.error(f"Exception in close: {e}")
 
+    @staticmethod
     def pause_video(self):
         """Pause VLC video playback (for user prompt display)"""
         logger.debug("Pausing VLC video playback")
         try:
             if self.vlc_player:
-                self.vlc_player.pause()
+                self.vlc_player.set_pause(1)
         except Exception as e:
             logger.error(f"Exception in pause_video: {e}")
 
+    @staticmethod
     def resume_video(self):
         """Resume VLC video playback (after user prompt is hidden)"""
         logger.debug("Resuming VLC video playback")
         try:
             if self.vlc_player:
-                self.vlc_player.play()
+                self.vlc_player.set_pause(0)
         except Exception as e:
             logger.error(f"Exception in resume_video: {e}")
+
+    @staticmethod
+    def get_current_time_seconds(self):
+        # get_time() returns the time in milliseconds
+        current_time_ms = self.vlc_player.get_time()
+        
+        # Convert milliseconds to seconds
+        current_time_seconds = current_time_ms / 1000.0 
+        return current_time_seconds

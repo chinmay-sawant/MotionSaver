@@ -8,7 +8,7 @@
   "default_user_for_display": "test",
   "profile_pic_path": "D:\\Chinmay_Personal_Projects\\ScreenSaver\\raccon_circle.gif",
   "profile_pic_path_crop": "D:\\Chinmay_Personal_Projects\\ScreenSaver\\raccon_circle_cropped.gif",
-  "video_path": "C:\\Users\\acer\\Downloads\\big-buck-bunny-1080p-60fps-30sec.mp4",
+  "video_path": "D:\\Chinmay_Personal_Projects\\ScreenSaver\\Demo_Videos\\Lightniging_MQUEEN.mp4",
   "theme": "dark",
   "clock_font_family": "Domino Brick",
   "clock_font_size": 100,
@@ -26,5 +26,5 @@
   "preferred_gpu": "{'name': '31.0.15.5176', 'memory': '4293918720', 'type': 'unknown', 'platform': 'windows'}",
   "gpu_acceleration": true,
   "video_backend": "auto",
-  "last_video_timestamp": 9.466666666666667
+  "last_video_timestamp": 3.4
 }
