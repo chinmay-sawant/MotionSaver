@@ -324,7 +324,16 @@ def start_screensaver(video_path_override=None):
             except Exception as e:
                 logger.error(f"Failed to restart tray after login: {e}", exc_info=True)
         else:
-            VideoClockScreenSaver.resume_video(app)
+            logger.info("Password verification failed, resuming video")
+            try:
+                VideoClockScreenSaver.resume_video(app)
+                # Resume focus management and restore focus
+                if hasattr(app, 'focus_management_active'):
+                    app.focus_management_active = True
+                if root and root.winfo_exists():
+                    root.focus_force()
+            except Exception as e:
+                logger.error(f"Error resuming video after failed password verification: {e}")
 
     # Initial call to black out monitors, delayed slightly for fullscreen to establish
     if WINDOWS_MULTI_MONITOR_SUPPORT:

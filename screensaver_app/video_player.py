@@ -16,7 +16,7 @@ from utils.config_utils import find_user_config_path, load_config, save_config
 import sys
 import subprocess
 from utils.multi_monitor import update_secondary_monitor_blackouts
-
+from utils.wallpaper import set_windows_wallpaper
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from screensaver_app.central_logger import get_logger, log_startup, log_shutdown, log_exception
 logger = get_logger('VideoPlayer')
@@ -265,6 +265,33 @@ except ImportError as e:
     MediaWidget = None
     WeatherWidget = None
 
+# This function will be called whenever the VLC player enters the paused state.
+def handle_media_player_paused(event, player):
+    global captured_pil_image # Declare that we are modifying the global variable
+
+    logger.info("\n--- Player Paused ---")
+    # Determine project root for snapshot path
+    if getattr(sys, 'frozen', False):
+        # If running as a PyInstaller executable
+        project_root = os.path.dirname(sys.executable)
+    else:
+        # If running as a script
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__)))
+    snapshot_path = os.path.join(project_root, "vlc_snapshot_temp.png")
+    logger.info(f"Attempting to take snapshot to: {snapshot_path}")
+
+    player.video_take_snapshot(0, snapshot_path, 0, 0)
+    logger.info("Snapshot command issued. Waiting for file to be written...")
+
+    # Verify if the snapshot file was successfully created
+    if os.path.exists(snapshot_path):
+        try:
+            set_windows_wallpaper(snapshot_path)  # Set the captured image as wallpaper
+        except Exception as e:
+            logger.error(f"Error opening or copying snapshot with PIL: {e}")
+    else:
+        logger.warning("Snapshot file was not found after taking snapshot. There might be an issue with VLC or permissions.")
+
 class VideoClockScreenSaver:
 
     def __init__(self, master, video_path_arg=None):
@@ -416,6 +443,9 @@ class VideoClockScreenSaver:
             self._initialize_ui_elements_immediately()
 
             self.vlc_player.play()
+            # Get the event manager for the media player. This allows us to subscribe to events.
+            event_manager = self.vlc_player.event_manager()
+            event_manager.event_attach(vlc.EventType.MediaPlayerPaused, handle_media_player_paused, self.vlc_player)
 
             # Schedule overlays and ensure focus
             self.master.after(10, self.update_overlays)
@@ -512,7 +542,6 @@ class VideoClockScreenSaver:
             #     # The calling code will handle cleanup and restart
             # else:
             #     logger.info("Password verification failed, resuming video")
-            #     VideoClockScreenSaver.resume_video(self)
             #     # Resume focus management and restore focus
             #     self.focus_management_active = True
             #     self.master.focus_force()
@@ -602,8 +631,11 @@ class VideoClockScreenSaver:
                 except Exception as e:
                     logger.error(f"Failed to restart tray after login: {e}", exc_info=True)
             else:
-                VideoClockScreenSaver.resume_video(self.master)
-
+                logger.info("Password verification failed, resuming video")
+                VideoClockScreenSaver.resume_video(self)
+                # Resume focus management and restore focus
+                self.focus_management_active = True
+                self.master.focus_force()
                 
         except Exception as e:
             logger.error(f"Error in _trigger_password_dialog: {e}")

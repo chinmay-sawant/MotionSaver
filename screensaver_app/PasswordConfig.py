@@ -16,6 +16,7 @@ logger = get_logger('PasswordConfig')
 from utils.config_utils import find_user_config_path, load_config, save_config
 DEFAULT_PASSWORD = "1234"
 DEFAULT_USERNAME = "User" # Default for creating a new config if none exists
+from utils.wallpaper import set_windows_wallpaper
 
 def verify_password(username_attempt, password_attempt):
     """Verify if the given username and password are correct."""
@@ -248,20 +249,6 @@ class MacOSStyleLogin:
 
     def close(self):
         self.password_window.destroy()
-
-def set_windows_wallpaper(image_path):
-    """Set the Windows desktop wallpaper to the given image."""
-    import platform
-    if platform.system() == "Windows":
-        try:
-            import ctypes
-            SPI_SETDESKWALLPAPER = 20
-            result = ctypes.windll.user32.SystemParametersInfoW(SPI_SETDESKWALLPAPER, 0, image_path, 3)
-            if not result:
-                logger.error("Failed to set wallpaper using SystemParametersInfoW.")
-        except Exception as e:
-            logger.error(f"Failed to set wallpaper: {e}")
-            logger.error("Image Path was: " + image_path)
 
 def verify_password_dialog_macos(root, video_clock_screensaver=None):
     """Shows a macOS-style password dialog, returns True if password was verified.
