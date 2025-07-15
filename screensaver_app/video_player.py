@@ -554,7 +554,9 @@ class VideoClockScreenSaver:
                         logger.debug(f"Detected frozen executable. python_exe={python_exe}, args={script_args}")
                     else:
                         # For script mode
-                        script_path = os.path.abspath(__file__)
+                        # Find PhotoEngine.py path relative to this file
+                        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__)))
+                        script_path = os.path.join(project_root, "PhotoEngine.py")
                         python_exe = sys.executable
                         script_args = f'"{script_path}" --min --no-elevate'
                         logger.debug(f"Detected script mode. python_exe={python_exe}, args={script_args}")
@@ -583,7 +585,9 @@ class VideoClockScreenSaver:
                             cmd_args = [python_exe, "--min", "--no-elevate"]
                         else:
                             # For script mode
-                            script_path = os.path.abspath(__file__)
+                            # Find PhotoEngine.py path relative to this file
+                            project_root = os.path.abspath(os.path.join(os.path.dirname(__file__)))
+                            script_path = os.path.join(project_root, "PhotoEngine.py")
                             cmd_args = [python_exe, script_path, "--min", "--no-elevate"]
                         
                         logger.debug(f"Using subprocess.Popen to restart tray: {cmd_args}")
