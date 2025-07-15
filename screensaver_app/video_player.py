@@ -14,11 +14,153 @@ import getpass  # Added import
 from utils.config_utils import find_user_config_path, load_config, save_config
 # Add central logging
 import sys
+import subprocess
+from utils.multi_monitor import update_secondary_monitor_blackouts
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from screensaver_app.central_logger import get_logger, log_startup, log_shutdown, log_exception
 logger = get_logger('VideoPlayer')
+# Try to import enhanced blocker first, fallback to basic blocker
+try:
+    from utils.enhanced_key_blocker import EnhancedKeyBlocker as KeyBlocker
+    logger.info("Using enhanced key blocker")
+except ImportError:
+    from utils.blockit import KeyBlocker # Assuming blockit.py contains a basic KeyBlocker
+    logger.info("Using basic key blocker from blockit.py")
 
-from utils.gpu_utils import get_gpu_manager, get_preferred_opencv_backend, setup_gpu_environment
+# Custom UAC elevation functions to replace pyUAC
+def is_admin():
+    """Check if the current process is running with admin privileges."""
+    logger.info("is_admin")
+    if platform.system() != "Windows":
+        return False
+    try:
+        import ctypes
+        return ctypes.windll.shell32.IsUserAnAdmin()
+    except:
+        return False
+
+def run_as_admin():
+    """Restart the current script with admin privileges without showing console window."""
+    logger.info("run_as_admin")
+    if platform.system() != "Windows":
+        return False
+    
+    try:
+        import ctypes
+        # Get the current script path and arguments
+        script = os.path.abspath(sys.argv[0])
+        params = ' '.join(sys.argv[1:])
+        
+        # Use ShellExecuteW to run with admin privileges and hide console
+        ctypes.windll.shell32.ShellExecuteW(
+            None, 
+            "runas", 
+            sys.executable, 
+            f'"{script}" {params}', 
+            None, 
+            0  # SW_HIDE - hide the window
+        )
+        return True
+    except Exception as e:
+        logger.error(f"Failed to elevate privileges: {e}")
+        return False
+
+def hide_console_window():
+    """Hide the console window for the current process."""
+    logger.info("hide_console_window")
+    if platform.system() == "Windows":
+        try:
+            import ctypes
+            # Get console window handle
+            console_window = ctypes.windll.kernel32.GetConsoleWindow()
+            if console_window:
+                # Hide the console window
+                ctypes.windll.user32.ShowWindow(console_window, 0)  # SW_HIDE
+                logger.info("Console window hidden successfully")
+        except Exception as e:
+            logger.warning(f"Failed to hide console window: {e}")
+
+# For multi-monitor black-out and event hooking on Windows
+WINDOWS_MULTI_MONITOR_SUPPORT = False
+hWinEventHook = None
+root_ref_for_hook = None # Global reference to the root window for the hook callback
+
+# Global variables for tray mode and Ctrl+Alt+Del tracking
+tray_running = False
+win_s_blocker = None
+tray_icon_instance = None
+ctrl_alt_del_tracker = {"triggered": False, "timestamp": None}
+
+callback_ref = None
+secondary_screen_windows = [] 
+def WinEventProcCallback(hWinEventHook, event, hwnd, idObject, idChild, dwEventThread, dwmsEventTime):
+    """Callback for Windows display change events."""
+    logger.info("WinEventProcCallback")
+    global root_ref_for_hook
+    if event == EVENT_SYSTEM_DISPLAYSETTINGSCHANGED:  # Using our defined constant instead of win32con
+        if root_ref_for_hook and root_ref_for_hook.winfo_exists():
+            # Schedule the update on the main Tkinter thread
+            root_ref_for_hook.after(50, lambda: update_secondary_monitor_blackouts(root_ref_for_hook)) # Small delay
+
+
+
+# Define missing Windows constants
+# From winuser.h: EVENT_SYSTEM_DISPLAYSETTINGSCHANGED = 0x000F
+EVENT_SYSTEM_DISPLAYSETTINGSCHANGED = 0x000F
+
+if platform.system() == "Windows":
+    try:
+        import win32api
+        import win32con
+        import win32gui
+        # Remove win32ts import and any session monitoring references
+        import win32event
+        from ctypes import windll, CFUNCTYPE, c_int, c_uint, c_void_p, POINTER, Structure, c_size_t, byref, c_wchar_p, wintypes
+        
+        # Flag for multi-monitor support
+        WINDOWS_MULTI_MONITOR_SUPPORT = True
+        logger.info("Windows multi-monitor support enabled with pywin32")
+        
+        # Define the WinEventProc callback function type
+        # WINEVENTPROC callback function prototype
+        WinEventProcType = CFUNCTYPE(
+            None,               # return type: void
+            c_void_p,           # hWinEventHook
+            c_uint,             # event
+            c_void_p,           # hwnd
+            c_int,              # idObject
+            c_int,              # idChild
+            c_uint,             # dwEventThread
+            c_uint              # dwmsEventTime
+        )
+        
+        # Define SetWinEventHook function prototype
+        user32 = windll.user32
+        user32.SetWinEventHook.argtypes = [
+            c_uint,             # eventMin
+            c_uint,             # eventMax
+            c_void_p,           # hmodWinEventProc
+            WinEventProcType,   # lpfnWinEventProc
+            c_uint,             # idProcess
+            c_uint,             # idThread
+            c_uint              # dwFlags
+        ]
+        user32.SetWinEventHook.restype = c_void_p
+        
+        # Define UnhookWinEvent function prototype
+        user32.UnhookWinEvent.argtypes = [c_void_p]  # hWinEventHook
+        user32.UnhookWinEvent.restype = c_int        # BOOL
+        
+        # Use the properly defined functions
+        SetWinEventHook = user32.SetWinEventHook
+        UnhookWinEvent = user32.UnhookWinEvent
+        
+    except ImportError:
+        logger.warning("pywin32 not installed, multi-monitor features and session monitoring will be limited.")
+
+else:
+    logger.info("Non-Windows OS detected, session monitoring not available")
 
 def get_username_from_config():
     config = load_config()
@@ -278,7 +420,39 @@ class VideoClockScreenSaver:
             # Schedule overlays and ensure focus
             self.master.after(10, self.update_overlays)
             # Use a different approach - schedule periodic focus checks through update_overlays instead
+            # Initial call to black out monitors, delayed slightly for fullscreen to establish
+            if WINDOWS_MULTI_MONITOR_SUPPORT:
+                self.master.after(200, lambda: update_secondary_monitor_blackouts(self.master))
+
+                # Set up the Windows event hook for display changes using ctypes directly
+                try:
+                    # Convert Python callback to C callback
+                    callback_ref = WinEventProcType(WinEventProcCallback)
+                    
+                    hWinEventHook = SetWinEventHook(
+                        EVENT_SYSTEM_DISPLAYSETTINGSCHANGED, # Event Min - using our defined constant
+                        EVENT_SYSTEM_DISPLAYSETTINGSCHANGED, # Event Max - using our defined constant
+                        0, # hmodWinEventProc
+                        callback_ref, # Callback function
+                        0, # idProcess
+                        0, # idThread
+                        win32con.WINEVENT_OUTOFCONTEXT | win32con.WINEVENT_SKIPOWNPROCESS
+                    )            
+                    if not hWinEventHook:
+                        logger.warning("Failed to set event hook")
+                except Exception as e:
+                    logger.error(f"Error setting up display change event hook: {e}")
+                    hWinEventHook = None
             
+            # Remove the old key bindings since VideoClockScreenSaver now handles them internally
+            # The app now handles key events internally through _on_key_event and _on_click_event
+            
+            # Make sure the root window can receive focus for key events
+            self.master.focus_set()
+            self.master.focus_force()
+            global ctrl_alt_del_detector
+            ctrl_alt_del_detector = None
+    
         except Exception as e:
             logger.error(f"Exception in __init__: {e}")
 
@@ -315,6 +489,9 @@ class VideoClockScreenSaver:
     def _trigger_password_dialog(self, event):
         """Trigger the password dialog"""
         try:
+            global hWinEventHook
+            global secondary_screen_windows
+            global root_ref_for_hook
             # Import here to avoid circular imports
             from screensaver_app.PasswordConfig import verify_password_dialog_macos
             
@@ -328,17 +505,101 @@ class VideoClockScreenSaver:
             
             # Show password dialog
             success = verify_password_dialog_macos(self.master, video_clock_screensaver=self)
-            
-            if success:
+            logger.info(f"Password dialog returned success: {success}")
+            # if success:
+            #     logger.info("Password verification successful, closing screensaver")
+            #     self.close()
+            #     # The calling code will handle cleanup and restart
+            # else:
+            #     logger.info("Password verification failed, resuming video")
+            #     VideoClockScreenSaver.resume_video(self)
+            #     # Resume focus management and restore focus
+            #     self.focus_management_active = True
+            #     self.master.focus_force()
+            key_blocker = KeyBlocker(debug_print=True)
+            if success: 
                 logger.info("Password verification successful, closing screensaver")
-                self.close()
-                # The calling code will handle cleanup and restart
+                self.master.destroy()  # Changed from self.master.close()
+                if hWinEventHook: # Unhook before destroying windows
+                    try:
+                        UnhookWinEvent(hWinEventHook)  # Use ctypes function
+                    except Exception as e_unhook:
+                        logger.error(f"Error unhooking display event: {e_unhook}")
+                    hWinEventHook = None
+                root_ref_for_hook = None
+
+                # Disable key blocking
+                if key_blocker:
+                    if hasattr(key_blocker, 'stop_blocking'):
+                        key_blocker.stop_blocking()
+                    else:
+                        key_blocker.disable_all_blocking()
+                        
+                # Stop Ctrl+Alt+Del detector
+                if ctrl_alt_del_detector:
+                    ctrl_alt_del_detector.restart_pending = True  # Prevent restart during shutdown
+
+                for sec_win in secondary_screen_windows:
+                    if sec_win.winfo_exists():
+                        sec_win.destroy()
+                secondary_screen_windows = []
+                # --- Relaunch tray with same elevation ---
+                try:
+                    logger.info("Attempting to restart system tray after successful screensaver login...")
+                    # Refactored for PyInstaller one-folder logic
+                    if getattr(sys, 'frozen', False):
+                        # For frozen executable, use the executable directly
+                        python_exe = sys.executable
+                        script_args = "--min --no-elevate"
+                        logger.debug(f"Detected frozen executable. python_exe={python_exe}, args={script_args}")
+                    else:
+                        # For script mode
+                        script_path = os.path.abspath(__file__)
+                        python_exe = sys.executable
+                        script_args = f'"{script_path}" --min --no-elevate'
+                        logger.debug(f"Detected script mode. python_exe={python_exe}, args={script_args}")
+
+                    # Check if we're running as admin and preserve elevation
+                    if is_admin():
+                        logger.info("Restarting tray with admin privileges...")
+                        import ctypes
+                        logger.debug(f"Using ShellExecuteW to restart tray with: {python_exe} {script_args}")
+                        # Use ShellExecuteW to maintain admin privileges
+                        result = ctypes.windll.shell32.ShellExecuteW(
+                            None,
+                            "runas",
+                            python_exe,
+                            script_args,
+                            None,
+                            0  # SW_HIDE
+                        )
+                        logger.debug(f"ShellExecuteW result: {result}")
+                        if result <= 32:  # ShellExecuteW returns > 32 for success
+                            logger.error(f"ShellExecuteW failed with result: {result}")
+                    else:
+                        logger.info("Restarting tray without admin privileges...")
+                        if getattr(sys, 'frozen', False):
+                            # For frozen executable
+                            cmd_args = [python_exe, "--min", "--no-elevate"]
+                        else:
+                            # For script mode
+                            script_path = os.path.abspath(__file__)
+                            cmd_args = [python_exe, script_path, "--min", "--no-elevate"]
+                        
+                        logger.debug(f"Using subprocess.Popen to restart tray: {cmd_args}")
+                        proc = subprocess.Popen(cmd_args,
+                                    creationflags=subprocess.CREATE_NO_WINDOW if platform.system() == "Windows" else 0)
+                        logger.debug(f"subprocess.Popen returned pid: {proc.pid if proc else 'unknown'}")
+
+                    logger.info("New tray process started, exiting current process.")
+                    # Add a small delay to ensure the new process starts before we exit
+                    time.sleep(1)
+                    os._exit(0)
+                except Exception as e:
+                    logger.error(f"Failed to restart tray after login: {e}", exc_info=True)
             else:
-                logger.info("Password verification failed, resuming video")
-                VideoClockScreenSaver.resume_video(self)
-                # Resume focus management and restore focus
-                self.focus_management_active = True
-                self.master.focus_force()
+                VideoClockScreenSaver.resume_video(self.master)
+
                 
         except Exception as e:
             logger.error(f"Error in _trigger_password_dialog: {e}")
