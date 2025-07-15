@@ -465,15 +465,12 @@ def start_screensaver(video_path_override=None):
             logger.error(f"Error setting up display change event hook: {e}")
             hWinEventHook = None
     
-    # Bind multiple keys and mouse click to trigger password prompt
-    root.bind("<Escape>", on_escape)
-    root.bind("<Return>", on_escape)  # Enter key
-    root.bind("<KP_Enter>", on_escape)  # Numpad Enter key
-    root.bind("<space>", on_escape)  # Spacebar
-    root.bind("<Button-1>", on_escape)  # Left mouse click
+    # Remove the old key bindings since VideoClockScreenSaver now handles them internally
+    # The app now handles key events internally through _on_key_event and _on_click_event
     
     # Make sure the root window can receive focus for key events
     root.focus_set()
+    root.focus_force()
     
     # Ensure hook is unhooked if window is closed by other means (though less likely for fullscreen)
     def on_closing_main_window():

@@ -173,9 +173,29 @@ class VideoClockScreenSaver:
                 self.overlay_win.config(bg=self.TRANSPARENT_KEY)
                 self.overlay_canvas = tk.Canvas(self.overlay_win, bg=self.TRANSPARENT_KEY, highlightthickness=0, borderwidth=0)
             else:
-                self.overlay_win.config(bg='black')  # Fix: use a valid color name instead of ""
+                self.overlay_win.config(bg='black')
                 self.overlay_canvas = tk.Canvas(self.overlay_win, bg='black', highlightthickness=0, borderwidth=0)
             self.overlay_canvas.place(x=0, y=0, width=self.width, height=self.height)
+
+            # Make overlay window non-interactive but keep it visible
+            if platform.system() == 'Windows':
+                self.overlay_win.wm_attributes("-disabled", True)
+            
+            # Ensure main window can receive all key events
+            master.focus_force()
+            master.bind("<Key>", self._on_key_event)
+            master.bind("<KeyPress>", self._on_key_event)
+            master.bind("<Button-1>", self._on_click_event)
+            master.bind("<Button-2>", self._on_click_event)
+            master.bind("<Button-3>", self._on_click_event)
+            
+            # Also bind to video frame and label to ensure events are captured
+            self.video_frame.bind("<Key>", self._on_key_event)
+            self.video_frame.bind("<KeyPress>", self._on_key_event)
+            self.video_frame.bind("<Button-1>", self._on_click_event)
+            self.label.bind("<Key>", self._on_key_event)
+            self.label.bind("<KeyPress>", self._on_key_event)
+            self.label.bind("<Button-1>", self._on_click_event)
 
             # Load clock font settings from config
             self.clock_font_family = self.user_config.get("clock_font_family", "Segoe UI Emoji")
@@ -234,14 +254,17 @@ class VideoClockScreenSaver:
 
             self.first_frame_received = False
             self.widgets = []
+            
+            # Add flag to control focus management
+            self.focus_management_active = True
       
             self.master.after(100, self.init_widgets)
 
             # VLC setup
             self.vlc_instance = vlc.Instance()
             self.vlc_player = self.vlc_instance.media_player_new()
-            media = self.vlc_instance.media_new(actual_video_path)
-            self.vlc_player.set_media(media)
+            self.media = self.vlc_instance.media_new(actual_video_path)
+            self.vlc_player.set_media(self.media)
             # Embed VLC video output into Tkinter Label
             self.vlc_player.set_hwnd(self.label.winfo_id())
             # Mute VLC player to remove sound
@@ -252,10 +275,75 @@ class VideoClockScreenSaver:
 
             self.vlc_player.play()
 
-            # Schedule overlays
+            # Schedule overlays and ensure focus
             self.master.after(10, self.update_overlays)
+            # Use a different approach - schedule periodic focus checks through update_overlays instead
+            
         except Exception as e:
             logger.error(f"Exception in __init__: {e}")
+
+    def _check_and_restore_focus(self):
+        """Check and restore focus if needed - called from update_overlays"""
+        try:
+            if not self.focus_management_active:
+                return
+                
+            if hasattr(self, 'master') and self.master and self.master.winfo_exists():
+                current_focus = self.master.focus_get()
+                if current_focus != self.master:
+                    self.master.focus_force()
+                    self.master.tkraise()
+        except (tk.TclError, AttributeError):
+            # Window destroyed or other Tkinter error - ignore
+            pass
+        except Exception as e:
+            logger.error(f"Error in _check_and_restore_focus: {e}")
+
+    def _on_key_event(self, event):
+        """Handle all key events"""
+        # logger.debug(f"Key event detected: {event.keysym}")
+        if event.keysym in ['Escape', 'Return', 'KP_Enter', 'space']:
+            self._trigger_password_dialog(event)
+        return "break"  # Prevent further propagation
+
+    def _on_click_event(self, event):
+        """Handle click events"""
+        logger.debug("Click event detected")
+        self._trigger_password_dialog(event)
+        return "break"  # Prevent further propagation
+
+    def _trigger_password_dialog(self, event):
+        """Trigger the password dialog"""
+        try:
+            # Import here to avoid circular imports
+            from screensaver_app.PasswordConfig import verify_password_dialog_macos
+            
+            logger.info(f"Password dialog triggered by: {event.keysym if hasattr(event, 'keysym') else 'mouse click'}")
+            
+            # Pause focus management to prevent interference with dialog
+            self.focus_management_active = False
+            
+            # Pause video before showing dialog
+            VideoClockScreenSaver.pause_video(self)
+            
+            # Show password dialog
+            success = verify_password_dialog_macos(self.master, video_clock_screensaver=self)
+            
+            if success:
+                logger.info("Password verification successful, closing screensaver")
+                self.close()
+                # The calling code will handle cleanup and restart
+            else:
+                logger.info("Password verification failed, resuming video")
+                VideoClockScreenSaver.resume_video(self)
+                # Resume focus management and restore focus
+                self.focus_management_active = True
+                self.master.focus_force()
+                
+        except Exception as e:
+            logger.error(f"Error in _trigger_password_dialog: {e}")
+            # Ensure focus management is resumed even if there's an error
+            self.focus_management_active = True
 
     def _initialize_ui_elements_immediately(self):
         logger.debug("Called _initialize_ui_elements_immediately")
@@ -423,9 +511,9 @@ class VideoClockScreenSaver:
             label_width = self.pre_rendered_username_label.width
             self.username_label_pos = (self.profile_center_x - label_width // 2, self.profile_name_y_base)
             
-            # Calculate initial clock position here, now that frame dimensions are known
+            # Calculate initial clock position
             try: 
-                clock_bbox = self.clock_font.getbbox(self.current_time_text) # Use current_time_text from __init__
+                clock_bbox = self.clock_font.getbbox(self.current_time_text)
                 self.clock_text_width = clock_bbox[2] - clock_bbox[0]
             except AttributeError: 
                 self.clock_text_width, _ = self.clock_font.getsize(self.current_time_text)
@@ -659,10 +747,13 @@ class VideoClockScreenSaver:
         # logger.debug("Called update_overlays")
         try:
             """Draw overlays (clock, profile, widgets) over VLC video using a transparent Canvas."""
-            # Ensure overlay window is properly configured
+            # Ensure overlay window is properly configured and stays on top
             if platform.system() == 'Windows':
                 self.overlay_win.config(bg=self.TRANSPARENT_KEY)
                 self.overlay_canvas.config(bg=self.TRANSPARENT_KEY)
+                # Ensure overlay stays on top and non-interactive
+                self.overlay_win.attributes('-topmost', True)
+                self.overlay_win.wm_attributes("-disabled", True)
             
             # Clear previous overlays
             self.overlay_canvas.delete('all')
@@ -714,6 +805,15 @@ class VideoClockScreenSaver:
                 self.username_label_tk_img = ImageTk.PhotoImage(self.pre_rendered_username_label)
                 self.overlay_canvas.create_image(self.username_label_pos[0], self.username_label_pos[1], anchor='nw', image=self.username_label_tk_img)
 
+            # Ensure main window maintains focus for key events
+            if not hasattr(self, '_focus_check_count'):
+                self._focus_check_count = 0
+            
+            # Reduce frequency of focus checks and only when focus management is active
+            if self._focus_check_count % 33 == 0 and self.focus_management_active:  # Check every ~1 second (33 * 30ms)
+                self._check_and_restore_focus()
+            self._focus_check_count += 1
+
             # Schedule next overlay update
             self.master.after(30, self.update_overlays)
         except Exception as e:
@@ -734,28 +834,47 @@ class VideoClockScreenSaver:
                 logger.warning("No widgets attribute found during close.")
             
             logger.info("Closing VideoClockScreenSaver...")
-            if hasattr(self, 'after_id') and self.after_id:
-                self.master.after_cancel(self.after_id)
-                self.after_id = None 
             
-            # Stop processor thread first
-            if hasattr(self, 'frame_processor_thread') and self.frame_processor_thread.is_alive():
-                logger.debug("Stopping frame processor thread...")
-                self.frame_processor_thread.stop()
-                self.frame_processor_thread.join(timeout=2)
+            # Non-blocking VLC cleanup with timeout
+            def cleanup_vlc():
+                try:
+                    if hasattr(self, 'vlc_player') and self.vlc_player:
+                        logger.info("Stopping VLC player...")
+                        self.vlc_player.stop()
+                        logger.info("VLC player stopped")
+                        self.vlc_player.release()
+                        logger.info("VLC player released")
+                        self.vlc_player = None
+
+                    if hasattr(self, 'media') and self.media:
+                        self.media.release()
+                        self.media = None
+                        logger.info("VLC media released")
+
+                    if hasattr(self, 'vlc_instance') and self.vlc_instance:
+                        logger.info("Releasing VLC instance...")
+                        self.vlc_instance.release()
+                        self.vlc_instance = None
+                        logger.info("VLC instance released")
+                        
+                except Exception as e:
+                    logger.error(f"Exception during VLC cleanup: {e}")
+                
+            # Run VLC cleanup in separate thread with timeout
+            cleanup_thread = threading.Thread(target=cleanup_vlc, daemon=True)
+            cleanup_thread.start()
             
-            # Then stop reader thread
-            if hasattr(self, 'frame_reader_thread'):
-                if hasattr(self.frame_reader_thread, 'is_alive') and self.frame_reader_thread.is_alive():
-                    logger.debug("Stopping frame reader thread...")
-                    if hasattr(self.frame_reader_thread, 'paused'):
-                        self.frame_reader_thread.paused = False # Ensure it's not stuck in a paused state
-                    if hasattr(self.frame_reader_thread, 'running'):
-                        self.frame_reader_thread.running = False # Set running to false to exit loop
-                    self.frame_reader_thread.join(timeout=2) 
-                    if hasattr(self.frame_reader_thread, 'is_alive') and self.frame_reader_thread.is_alive():
-                        logger.warning("Frame reader thread did not stop in time.")
+            # Wait for cleanup with timeout (max 2 seconds)
+            cleanup_thread.join(timeout=2.0)
+            
+            if cleanup_thread.is_alive():
+                logger.warning("VLC cleanup thread did not finish within timeout - proceeding anyway")
+            else:
+                logger.info("VLC cleanup completed successfully")
+                
+            logger.info("VLC player exited.")
             logger.info("VideoClockScreenSaver closed.")
+            
         except Exception as e:
             logger.error(f"Exception in close: {e}")
 
@@ -764,7 +883,7 @@ class VideoClockScreenSaver:
         """Pause VLC video playback (for user prompt display)"""
         logger.debug("Pausing VLC video playback")
         try:
-            if self.vlc_player:
+            if hasattr(self, 'vlc_player') and self.vlc_player:
                 self.vlc_player.set_pause(1)
         except Exception as e:
             logger.error(f"Exception in pause_video: {e}")
@@ -774,7 +893,7 @@ class VideoClockScreenSaver:
         """Resume VLC video playback (after user prompt is hidden)"""
         logger.debug("Resuming VLC video playback")
         try:
-            if self.vlc_player:
+            if hasattr(self, 'vlc_player') and self.vlc_player:
                 self.vlc_player.set_pause(0)
         except Exception as e:
             logger.error(f"Exception in resume_video: {e}")
@@ -782,8 +901,9 @@ class VideoClockScreenSaver:
     @staticmethod
     def get_current_time_seconds(self):
         # get_time() returns the time in milliseconds
-        current_time_ms = self.vlc_player.get_time()
-        
-        # Convert milliseconds to seconds
-        current_time_seconds = current_time_ms / 1000.0 
-        return current_time_seconds
+        if hasattr(self, 'vlc_player') and self.vlc_player:
+            current_time_ms = self.vlc_player.get_time()
+            # Convert milliseconds to seconds
+            current_time_seconds = current_time_ms / 1000.0 
+            return current_time_seconds
+        return 0.0
