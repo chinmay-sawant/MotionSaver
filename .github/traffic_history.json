@@ -29,8 +29,8 @@
       "uniques": 1
     },
     "2025-07-01": {
-      "count": 2,
-      "uniques": 2
+      "count": 1,
+      "uniques": 1
     },
     "2025-07-02": {
       "count": 94,
@@ -83,6 +83,10 @@
     "2025-07-14": {
       "count": 15,
       "uniques": 9
+    },
+    "2025-07-15": {
+      "count": 3,
+      "uniques": 2
     }
   },
   "views": {
@@ -135,8 +139,8 @@
       "uniques": 11
     },
     "2025-07-01": {
-      "count": 87,
-      "uniques": 27
+      "count": 56,
+      "uniques": 19
     },
     "2025-07-02": {
       "count": 2335,
@@ -189,10 +193,14 @@
     "2025-07-14": {
       "count": 121,
       "uniques": 50
+    },
+    "2025-07-15": {
+      "count": 32,
+      "uniques": 12
     }
   },
   "releases": {
-    "total_downloads": 462,
+    "total_downloads": 483,
     "by_release": {
       "V2": {
         "total_downloads": 275,
@@ -208,9 +216,9 @@
         }
       },
       "V3": {
-        "total_downloads": 182,
+        "total_downloads": 203,
         "assets": {
-          "MotionSaver_V3.zip": 182
+          "MotionSaver_V3.zip": 203
         }
       }
     }
