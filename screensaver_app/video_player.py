@@ -440,6 +440,14 @@ class VideoClockScreenSaver:
             # Mute VLC player to remove sound
             self.vlc_player.audio_set_mute(True)
             
+            # Configure video scaling to fill entire screen (removes black bars)
+            # Set aspect ratio to match screen dimensions to stretch video
+            screen_aspect = f"{self.screen_width}:{self.screen_height}"
+            self.vlc_player.video_set_aspect_ratio(screen_aspect.encode('utf-8'))
+            
+            # Set video to stretch to fill the window completely
+            self.vlc_player.video_set_scale(0)  # 0 = fit to window, stretching if necessary
+            
             # Enable video looping
             media_list = self.vlc_instance.media_list_new([actual_video_path])
             media_list_player = self.vlc_instance.media_list_player_new()
@@ -452,7 +460,39 @@ class VideoClockScreenSaver:
             self._initialize_ui_elements_immediately()
 
             # Start playback with looping
+            # Read last_video_timestamp from config (default to 0.0 if not present)
+            last_video_timestamp = 0.0
+            try:
+                last_video_timestamp = float(self.user_config.get("last_video_timestamp", 0.0))
+            except Exception as e:
+                logger.warning(f"Could not parse last_video_timestamp from config: {e}")
+
             self.media_list_player.play()
+
+            # Start video from last_video_timestamp (skip initial video)
+            if last_video_timestamp > 0:
+                # Wait briefly to ensure playback has started before seeking
+                def seek_to_last_timestamp():
+                    try:
+                        if hasattr(self, 'vlc_player') and self.vlc_player:
+                            self.vlc_player.set_time(int(last_video_timestamp * 1000))
+                            logger.info(f"Seeked video to {last_video_timestamp} seconds")
+                    except Exception as e:
+                        logger.error(f"Error seeking to last_video_timestamp: {e}")
+                self.master.after(300, seek_to_last_timestamp)
+            
+            # Additional video scaling configuration after playback starts
+            def configure_video_after_start():
+                try:
+                    # Ensure video fills the entire window by setting crop geometry
+                    self.vlc_player.video_set_crop_geometry(None)  # Remove any cropping
+                    # Force aspect ratio again after video starts
+                    self.vlc_player.video_set_aspect_ratio(screen_aspect.encode('utf-8'))
+                except Exception as e:
+                    logger.warning(f"Could not configure video scaling: {e}")
+            
+            # Schedule video configuration after a short delay to ensure video has started
+            self.master.after(500, configure_video_after_start)
             
             # Get the event manager for the media player. This allows us to subscribe to events.
             event_manager = self.vlc_player.event_manager()
