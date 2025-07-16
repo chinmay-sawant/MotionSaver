@@ -431,7 +431,12 @@ class VideoClockScreenSaver:
             self.master.after(100, self.init_widgets)
 
             # VLC setup
-            self.vlc_instance = vlc.Instance()
+            vlc_options = [
+                '--no-osd',              # Disable On-Screen Display (OSD)
+                '--no-snapshot-preview'  # Disable the snapshot preview thumbnail
+            ]
+
+            self.vlc_instance = vlc.Instance(vlc_options)
             self.vlc_player = self.vlc_instance.media_player_new()
             self.media = self.vlc_instance.media_new(actual_video_path)
             self.vlc_player.set_media(self.media)
