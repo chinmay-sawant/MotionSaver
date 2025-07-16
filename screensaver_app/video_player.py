@@ -538,6 +538,9 @@ class VideoClockScreenSaver:
             self.master.focus_force()
             global ctrl_alt_del_detector
             ctrl_alt_del_detector = None
+            
+            # Force an immediate focus check to counter any startup focus stealing
+            self.master.after(0, self._check_and_restore_focus)
     
         except Exception as e:
             logger.error(f"Exception in __init__: {e}")
@@ -551,6 +554,7 @@ class VideoClockScreenSaver:
             if hasattr(self, 'master') and self.master and self.master.winfo_exists():
                 current_focus = self.master.focus_get()
                 if current_focus != self.master:
+                    self.master.focus_set()
                     self.master.focus_force()
                     self.master.tkraise()
         except (tk.TclError, AttributeError):
