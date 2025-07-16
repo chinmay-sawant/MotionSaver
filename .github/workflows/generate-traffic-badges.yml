@@ -99,12 +99,49 @@ jobs:
               // --- 3. Update historical data ---
               console.log('Merging new traffic data with historical data...');
               
-              // This logic is CORRECT. It updates the last 14 days of data from the API into our history file.
+              // **FIXED LOGIC**: Preserve historical maximum values to prevent data loss due to API rolling window
               clonesResponse.clones.forEach(day => {
-                historicalData.clones[day.timestamp.split('T')[0]] = { count: day.count, uniques: day.uniques };
+                const dateKey = day.timestamp.split('T')[0];
+                const existingData = historicalData.clones[dateKey];
+                
+                if (!existingData) {
+                  // New date, add it
+                  historicalData.clones[dateKey] = { count: day.count, uniques: day.uniques };
+                } else {
+                  // Existing date, preserve maximum values
+                  historicalData.clones[dateKey] = {
+                    count: Math.max(existingData.count, day.count),
+                    uniques: Math.max(existingData.uniques, day.uniques)
+                  };
+                  if (day.count < existingData.count) {
+                    console.log(`- Preserved higher clone count for ${dateKey}: ${existingData.count} (API: ${day.count})`);
+                  }
+                  if (day.uniques < existingData.uniques) {
+                    console.log(`- Preserved higher unique clones for ${dateKey}: ${existingData.uniques} (API: ${day.uniques})`);
+                  }
+                }
               });
+              
               viewsResponse.views.forEach(day => {
-                historicalData.views[day.timestamp.split('T')[0]] = { count: day.count, uniques: day.uniques };
+                const dateKey = day.timestamp.split('T')[0];
+                const existingData = historicalData.views[dateKey];
+                
+                if (!existingData) {
+                  // New date, add it
+                  historicalData.views[dateKey] = { count: day.count, uniques: day.uniques };
+                } else {
+                  // Existing date, preserve maximum values
+                  historicalData.views[dateKey] = {
+                    count: Math.max(existingData.count, day.count),
+                    uniques: Math.max(existingData.uniques, day.uniques)
+                  };
+                  if (day.count < existingData.count) {
+                    console.log(`- Preserved higher view count for ${dateKey}: ${existingData.count} (API: ${day.count})`);
+                  }
+                  if (day.uniques < existingData.uniques) {
+                    console.log(`- Preserved higher unique views for ${dateKey}: ${existingData.uniques} (API: ${day.uniques})`);
+                  }
+                }
               });
               
               // Release Download Data Merge Logic
