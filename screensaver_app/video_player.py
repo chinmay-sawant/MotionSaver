@@ -484,7 +484,7 @@ class VideoClockScreenSaver:
                             logger.info(f"Seeked video to {last_video_timestamp} seconds")
                     except Exception as e:
                         logger.error(f"Error seeking to last_video_timestamp: {e}")
-                self.master.after(300, seek_to_last_timestamp)
+                self.master.after(0, seek_to_last_timestamp)
             
             # Additional video scaling configuration after playback starts
             def configure_video_after_start():
@@ -504,11 +504,11 @@ class VideoClockScreenSaver:
             event_manager.event_attach(vlc.EventType.MediaPlayerPaused, handle_media_player_paused, self.vlc_player)
 
             # Schedule overlays and ensure focus
-            self.master.after(10, self.update_overlays)
+            self.master.after(0, self.update_overlays)
             # Use a different approach - schedule periodic focus checks through update_overlays instead
             # Initial call to black out monitors, delayed slightly for fullscreen to establish
             if WINDOWS_MULTI_MONITOR_SUPPORT:
-                self.master.after(200, lambda: update_secondary_monitor_blackouts(self.master))
+                self.master.after(0, lambda: update_secondary_monitor_blackouts(self.master))
 
                 # Set up the Windows event hook for display changes using ctypes directly
                 try:
