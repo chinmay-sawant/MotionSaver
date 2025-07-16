@@ -8,10 +8,10 @@
   "default_user_for_display": "test",
   "profile_pic_path": "D:\\Chinmay_Personal_Projects\\ScreenSaver\\raccon_circle.gif",
   "profile_pic_path_crop": "D:\\Chinmay_Personal_Projects\\ScreenSaver\\raccon_circle_cropped.gif",
-  "video_path": "D:\\Chinmay_Personal_Projects\\ScreenSaver\\Demo_Videos\\Lightniging_MQUEEN.mp4",
+  "video_path": "D:\\Chinmay_Personal_Projects\\ScreenSaver\\Demo_Videos\\Tanjiro.mp4",
   "theme": "dark",
   "clock_font_family": "Domino Brick",
-  "clock_font_size": 100,
+  "clock_font_size": 150,
   "ui_font_family": "Maus",
   "ui_font_size": 60,
   "screensaver_timer_minutes": 10,
@@ -26,5 +26,5 @@
   "preferred_gpu": "{'name': '31.0.15.5176', 'memory': '4293918720', 'type': 'unknown', 'platform': 'windows'}",
   "gpu_acceleration": true,
   "video_backend": "auto",
-  "last_video_timestamp": 26.2
+  "last_video_timestamp": 10.833333333333334
 }

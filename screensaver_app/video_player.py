@@ -287,6 +287,7 @@ def handle_media_player_paused(event, player):
     if os.path.exists(snapshot_path):
         try:
             set_windows_wallpaper(snapshot_path)  # Set the captured image as wallpaper
+            logger.info("Successfully set snapshot as wallpaper")
         except Exception as e:
             logger.error(f"Error opening or copying snapshot with PIL: {e}")
     else:
@@ -439,10 +440,20 @@ class VideoClockScreenSaver:
             # Mute VLC player to remove sound
             self.vlc_player.audio_set_mute(True)
             
+            # Enable video looping
+            media_list = self.vlc_instance.media_list_new([actual_video_path])
+            media_list_player = self.vlc_instance.media_list_player_new()
+            media_list_player.set_media_list(media_list)
+            media_list_player.set_media_player(self.vlc_player)
+            media_list_player.set_playback_mode(vlc.PlaybackMode.loop)
+            self.media_list_player = media_list_player  # Store reference
+            
             # Initialize UI elements immediately for VLC playback
             self._initialize_ui_elements_immediately()
 
-            self.vlc_player.play()
+            # Start playback with looping
+            self.media_list_player.play()
+            
             # Get the event manager for the media player. This allows us to subscribe to events.
             event_manager = self.vlc_player.event_manager()
             event_manager.event_attach(vlc.EventType.MediaPlayerPaused, handle_media_player_paused, self.vlc_player)
