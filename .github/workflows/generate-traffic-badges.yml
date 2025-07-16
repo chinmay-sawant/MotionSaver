@@ -179,17 +179,16 @@ jobs:
                 by_release: mergedReleasesData
               };
 
-              // --- 4. Calculate All-Time Totals and 14-Day Uniques ---
+              // --- 4. Calculate All-Time Totals and All-Time Uniques ---
               console.log('Calculating totals for badges...');
               
               // The sum of all daily counts from our history gives the true all-time total.
               const allTimeTotalClones = Object.values(historicalData.clones).reduce((sum, day) => sum + day.count, 0);
               const allTimeTotalViews = Object.values(historicalData.views).reduce((sum, day) => sum + day.count, 0);
               
-              // **FIXED LOGIC**: Calculating "all-time unique" visitors by summing daily uniques is incorrect.
-              // Instead, we use the accurate 14-day unique count provided directly by the API summary.
-              const uniqueCloners14Days = clonesResponse.uniques;
-              const uniqueVisitors14Days = viewsResponse.uniques;
+              // Calculate all-time unique counts by summing daily uniques from historical data
+              const allTimeUniqueCloners = Object.values(historicalData.clones).reduce((sum, day) => sum + day.uniques, 0);
+              const allTimeUniqueVisitors = Object.values(historicalData.views).reduce((sum, day) => sum + day.uniques, 0);
               
               const allTimeTotalDownloads = historicalData.releases.total_downloads || 0;
 
@@ -198,9 +197,9 @@ jobs:
               const filesToCommit = [];
               filesToCommit.push({ path: historyFile, content: JSON.stringify(historicalData, null, 2) });
               
-              // **FIXED BADGES**: Updated badges to show the correct all-time total and the accurate 14-day unique count.
-              filesToCommit.push({ path: `${badgeDir}/clones_badge.svg`, content: createBadgeSvg('Clones', `${allTimeTotalClones} (14d unique: ${uniqueCloners14Days})`, '#8FBCBB') });
-              filesToCommit.push({ path: `${badgeDir}/views_badge.svg`, content: createBadgeSvg('Views', `${allTimeTotalViews} (14d unique: ${uniqueVisitors14Days})`, '#88C0D0') });
+              // Updated badges to show all-time totals and all-time unique counts from historical data
+              filesToCommit.push({ path: `${badgeDir}/clones_badge.svg`, content: createBadgeSvg('Clones', `${allTimeTotalClones} (unique: ${allTimeUniqueCloners})`, '#8FBCBB') });
+              filesToCommit.push({ path: `${badgeDir}/views_badge.svg`, content: createBadgeSvg('Views', `${allTimeTotalViews} (unique: ${allTimeUniqueVisitors})`, '#88C0D0') });
               filesToCommit.push({ path: `${badgeDir}/total_downloads_badge.svg`, content: createBadgeSvg('Total Downloads', `${allTimeTotalDownloads}`, '#A3BE8C') });
               
               if (historicalData.releases.by_release) {
@@ -224,4 +223,5 @@ jobs:
             } catch (error) {
               console.error('Error during workflow execution:', error);
               core.setFailed(`Action failed with error: ${error.message}`);
+            }
             }
