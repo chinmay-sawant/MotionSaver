@@ -1,165 +1,190 @@
-script: |
-  const owner = context.repo.owner;
-  const repo = context.repo.repo;
-  const badgeDir = '.github/badges';
-  const historyFile = '.github/traffic_history.json';
-  const branch = context.ref.replace('refs/heads/', ''); // Get current branch name
+# .github/workflows/generate-traffic-badges.yml
 
-  /**
-   * Fetches a file's content from the repository.
-   */
-  async function getFileContent(filePath) {
-    try {
-      const response = await github.rest.repos.getContent({ owner, repo, path: filePath, ref: branch });
-      return Buffer.from(response.data.content, 'base64').toString('utf8');
-    } catch (error) {
-      if (error.status === 404) { return null; }
-      console.error(`Error getting file ${filePath}:`, error);
-      throw error;
-    }
-  }
+name: Generate GitHub Traffic Badges
 
-  /**
-   * Commits multiple files to the repository in a single commit.
-   */
-  async function commitMultipleFiles(files, commitMessage) {
-    console.log('Starting multi-file commit process...');
-    const { data: refData } = await github.rest.git.getRef({ owner, repo, ref: `heads/${branch}` });
-    const baseCommitSha = refData.object.sha;
-    const { data: commitData } = await github.rest.git.getCommit({ owner, repo, commit_sha: baseCommitSha });
-    const baseTreeSha = commitData.tree.sha;
-    const blobPromises = files.map(file => github.rest.git.createBlob({ owner, repo, content: file.content, encoding: 'utf-8' }));
-    const blobResults = await Promise.all(blobPromises);
-    const tree = blobResults.map((blob, index) => ({ path: files[index].path, mode: '100644', type: 'blob', sha: blob.data.sha, }));
-    const { data: treeData } = await github.rest.git.createTree({ owner, repo, base_tree: baseTreeSha, tree });
-    const newTreeSha = treeData.sha;
-    const { data: newCommitData } = await github.rest.git.createCommit({ owner, repo, message: commitMessage, tree: newTreeSha, parents: [baseCommitSha], });
-    await github.rest.git.updateRef({ owner, repo, ref: `heads/${branch}`, sha: newCommitData.sha });
-    console.log(`- Updated branch '${branch}' to point to the new commit.`);
-  }
+on:
+  schedule:
+    - cron: "0 0 * * *" # Runs daily at midnight UTC to collect new data
+  workflow_dispatch: {} # Allows manual triggering
 
-  /**
-   * Creates a themed SVG badge.
-   */
-  function createBadgeSvg(label, message, color) {
-      const labelWidth = label.length * 7 + 12;
-      const messageWidth = message.length * 7.5 + 12;
-      const totalWidth = labelWidth + messageWidth;
-      const primaryBgColor = '#3B4252'; const labelBgColor = '#4C566A'; const textColor = '#ECEFF4'; const shadowColor = '#2E3440';
-      return `<svg xmlns="http://www.w3.org/2000/svg" width="${totalWidth}" height="20" role="img" aria-label="${label}: ${message}"><title>${label}: ${message}</title><linearGradient id="s" x2="0" y2="100%"><stop offset="0" stop-color="#bbb" stop-opacity=".1"/><stop offset="1" stop-opacity=".1"/></linearGradient><clipPath id="r"><rect width="${totalWidth}" height="20" rx="3" fill="#fff"/></clipPath><g clip-path="url(#r)"><rect width="${labelWidth}" height="20" fill="${labelBgColor}"/><rect x="${labelWidth}" width="${messageWidth}" height="20" fill="${color}"/><rect width="${totalWidth}" height="20" fill="url(#s)"/></g><g fill="${textColor}" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" text-rendering="geometricPrecision" font-size="110"><text aria-hidden="true" x="${(labelWidth / 2) * 10}" y="150" fill="${shadowColor}" fill-opacity=".3" transform="scale(.1)" textLength="${(labelWidth - 10) * 10}">${label}</text><text x="${(labelWidth / 2) * 10}" y="140" transform="scale(.1)" textLength="${(labelWidth - 10) * 10}">${label}</text><text aria-hidden="true" x="${(labelWidth + messageWidth / 2) * 10}" y="150" fill="${shadowColor}" fill-opacity=".3" transform="scale(.1)" textLength="${(messageWidth - 10) * 10}">${message}</text><text x="${(labelWidth + messageWidth / 2) * 10}" y="140" transform="scale(.1)" textLength="${(messageWidth - 10) * 10}">${message}</text></g></svg>`;
-  }
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Required to commit changes to the repository
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          # Fetch all history to ensure the script has the full context.
+          fetch-depth: 0
 
-  // Main execution logic
-  try {
-    // --- 1. Load historical data ---
-    console.log(`Loading historical data from ${historyFile} on branch ${branch}...`);
-    const historyFileContent = await getFileContent(historyFile);
-    let historicalData = { clones: {}, views: {}, releases: {} };
-    if (historyFileContent) {
-      const loadedData = JSON.parse(historyFileContent);
-      historicalData.clones = loadedData.clones || {};
-      historicalData.views = loadedData.views || {};
-      historicalData.releases = loadedData.releases || { by_release: {}, total_downloads: 0 };
-      console.log('Successfully loaded existing historical data.');
-    } else {
-      console.log('No historical data file found. A new one will be created.');
-    }
+      - name: Generate and Commit Traffic Data
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GH_TOKEN }} # Use a PAT for this to work correctly, GH_TOKEN may have limitations
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const badgeDir = '.github/badges';
+            const historyFile = '.github/traffic_history.json';
+            const branch = context.ref.replace('refs/heads/', ''); // Get current branch name
 
-    // --- 2. Fetch new traffic and release data ---
-    console.log('Fetching latest traffic data and release counts...');
-    const { data: clonesResponse } = await github.rest.repos.getClones({ owner, repo, per: 'day' });
-    const { data: viewsResponse } = await github.rest.repos.getViews({ owner, repo, per: 'day' });
-    const releases = await github.paginate(github.rest.repos.listReleases, { owner, repo });
-    
-    // --- 3. Update historical data ---
-    console.log('Merging new traffic data with historical data...');
-    
-    // This logic is CORRECT. It updates the last 14 days of data from the API into our history file.
-    clonesResponse.clones.forEach(day => {
-      historicalData.clones[day.timestamp.split('T')[0]] = { count: day.count, uniques: day.uniques };
-    });
-    viewsResponse.views.forEach(day => {
-      historicalData.views[day.timestamp.split('T')[0]] = { count: day.count, uniques: day.uniques };
-    });
-    
-    // Release Download Data Merge Logic
-    console.log('Merging release download counts...');
-    const mergedReleasesData = JSON.parse(JSON.stringify(historicalData.releases.by_release || {}));
+            /**
+             * Fetches a file's content from the repository.
+             */
+            async function getFileContent(filePath) {
+              try {
+                const response = await github.rest.repos.getContent({ owner, repo, path: filePath, ref: branch });
+                return Buffer.from(response.data.content, 'base64').toString('utf8');
+              } catch (error) {
+                if (error.status === 404) { return null; }
+                console.error(`Error getting file ${filePath}:`, error);
+                throw error;
+              }
+            }
 
-    for (const release of releases) {
-      if (!release.tag_name) continue;
-      const oldReleaseData = mergedReleasesData[release.tag_name] || { total_downloads: 0, assets: {} };
-      const finalAssetsData = { ...oldReleaseData.assets };
+            /**
+             * Commits multiple files to the repository in a single commit.
+             */
+            async function commitMultipleFiles(files, commitMessage) {
+              console.log('Starting multi-file commit process...');
+              const { data: refData } = await github.rest.git.getRef({ owner, repo, ref: `heads/${branch}` });
+              const baseCommitSha = refData.object.sha;
+              const { data: commitData } = await github.rest.git.getCommit({ owner, repo, commit_sha: baseCommitSha });
+              const baseTreeSha = commitData.tree.sha;
+              const blobPromises = files.map(file => github.rest.git.createBlob({ owner, repo, content: file.content, encoding: 'utf-8' }));
+              const blobResults = await Promise.all(blobPromises);
+              const tree = blobResults.map((blob, index) => ({ path: files[index].path, mode: '100644', type: 'blob', sha: blob.data.sha, }));
+              const { data: treeData } = await github.rest.git.createTree({ owner, repo, base_tree: baseTreeSha, tree });
+              const newTreeSha = treeData.sha;
+              const { data: newCommitData } = await github.rest.git.createCommit({ owner, repo, message: commitMessage, tree: newTreeSha, parents: [baseCommitSha], });
+              await github.rest.git.updateRef({ owner, repo, ref: `heads/${branch}`, sha: newCommitData.sha });
+              console.log(`- Updated branch '${branch}' to point to the new commit.`);
+            }
 
-      for (const asset of release.assets) {
-        const assetName = asset.name;
-        const newApiTotalCount = asset.download_count;
-        const oldStoredCount = oldReleaseData.assets[assetName] || 0;
-        
-        if (newApiTotalCount >= oldStoredCount) {
-          finalAssetsData[assetName] = newApiTotalCount;
-        } else {
-          console.log(`- API counter reset detected for asset '${assetName}'.`);
-          console.log(`- Stored historical count: ${oldStoredCount}, New API count: ${newApiTotalCount}.`);
-          console.log(`- Combining counts to preserve history.`);
-          finalAssetsData[assetName] = oldStoredCount + newApiTotalCount;
-        }
-      }
-      const finalReleaseTotal = Object.values(finalAssetsData).reduce((sum, count) => sum + count, 0);
-      mergedReleasesData[release.tag_name] = {
-          total_downloads: finalReleaseTotal,
-          assets: finalAssetsData
-      };
-    }
-    const newGrandTotalDownloads = Object.values(mergedReleasesData).reduce((sum, release) => sum + release.total_downloads, 0);
-    historicalData.releases = {
-      total_downloads: newGrandTotalDownloads,
-      by_release: mergedReleasesData
-    };
+            /**
+             * Creates a themed SVG badge.
+             */
+            function createBadgeSvg(label, message, color) {
+                const labelWidth = label.length * 7 + 12;
+                const messageWidth = message.length * 7.5 + 12;
+                const totalWidth = labelWidth + messageWidth;
+                const primaryBgColor = '#3B4252'; const labelBgColor = '#4C566A'; const textColor = '#ECEFF4'; const shadowColor = '#2E3440';
+                return `<svg xmlns="http://www.w3.org/2000/svg" width="${totalWidth}" height="20" role="img" aria-label="${label}: ${message}"><title>${label}: ${message}</title><linearGradient id="s" x2="0" y2="100%"><stop offset="0" stop-color="#bbb" stop-opacity=".1"/><stop offset="1" stop-opacity=".1"/></linearGradient><clipPath id="r"><rect width="${totalWidth}" height="20" rx="3" fill="#fff"/></clipPath><g clip-path="url(#r)"><rect width="${labelWidth}" height="20" fill="${labelBgColor}"/><rect x="${labelWidth}" width="${messageWidth}" height="20" fill="${color}"/><rect width="${totalWidth}" height="20" fill="url(#s)"/></g><g fill="${textColor}" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" text-rendering="geometricPrecision" font-size="110"><text aria-hidden="true" x="${(labelWidth / 2) * 10}" y="150" fill="${shadowColor}" fill-opacity=".3" transform="scale(.1)" textLength="${(labelWidth - 10) * 10}">${label}</text><text x="${(labelWidth / 2) * 10}" y="140" transform="scale(.1)" textLength="${(labelWidth - 10) * 10}">${label}</text><text aria-hidden="true" x="${(labelWidth + messageWidth / 2) * 10}" y="150" fill="${shadowColor}" fill-opacity=".3" transform="scale(.1)" textLength="${(messageWidth - 10) * 10}">${message}</text><text x="${(labelWidth + messageWidth / 2) * 10}" y="140" transform="scale(.1)" textLength="${(messageWidth - 10) * 10}">${message}</text></g></svg>`;
+            }
 
-    // --- 4. Calculate All-Time Totals and 14-Day Uniques ---
-    console.log('Calculating totals for badges...');
-    
-    // The sum of all daily counts from our history gives the true all-time total.
-    const allTimeTotalClones = Object.values(historicalData.clones).reduce((sum, day) => sum + day.count, 0);
-    const allTimeTotalViews = Object.values(historicalData.views).reduce((sum, day) => sum + day.count, 0);
-    
-    // **FIXED LOGIC**: Calculating "all-time unique" visitors by summing daily uniques is incorrect.
-    // Instead, we use the accurate 14-day unique count provided directly by the API summary.
-    const uniqueCloners14Days = clonesResponse.uniques;
-    const uniqueVisitors14Days = viewsResponse.uniques;
-    
-    const allTimeTotalDownloads = historicalData.releases.total_downloads || 0;
+            // Main execution logic
+            try {
+              // --- 1. Load historical data ---
+              console.log(`Loading historical data from ${historyFile} on branch ${branch}...`);
+              const historyFileContent = await getFileContent(historyFile);
+              let historicalData = { clones: {}, views: {}, releases: {} };
+              if (historyFileContent) {
+                const loadedData = JSON.parse(historyFileContent);
+                historicalData.clones = loadedData.clones || {};
+                historicalData.views = loadedData.views || {};
+                historicalData.releases = loadedData.releases || { by_release: {}, total_downloads: 0 };
+                console.log('Successfully loaded existing historical data.');
+              } else {
+                console.log('No historical data file found. A new one will be created.');
+              }
 
-    // --- 5. Generate new badge SVGs and collect all file changes ---
-    console.log('Generating files to commit...');
-    const filesToCommit = [];
-    filesToCommit.push({ path: historyFile, content: JSON.stringify(historicalData, null, 2) });
-    
-    // **FIXED BADGES**: Updated badges to show the correct all-time total and the accurate 14-day unique count.
-    filesToCommit.push({ path: `${badgeDir}/clones_badge.svg`, content: createBadgeSvg('Clones', `${allTimeTotalClones} (14d unique: ${uniqueCloners14Days})`, '#8FBCBB') });
-    filesToCommit.push({ path: `${badgeDir}/views_badge.svg`, content: createBadgeSvg('Views', `${allTimeTotalViews} (14d unique: ${uniqueVisitors14Days})`, '#88C0D0') });
-    filesToCommit.push({ path: `${badgeDir}/total_downloads_badge.svg`, content: createBadgeSvg('Total Downloads', `${allTimeTotalDownloads}`, '#A3BE8C') });
-    
-    if (historicalData.releases.by_release) {
-        for (const [tagName, data] of Object.entries(historicalData.releases.by_release)) {
-            const safeTagName = tagName.replace(/[^a-zA-Z0-9.-]/g, '_');
-            const badgePath = `${badgeDir}/release_${safeTagName}_badge.svg`;
-            const badgeLabel = `Release ${tagName}`;
-            const badgeMessage = `${data.total_downloads} downloads`;
-            filesToCommit.push({ path: badgePath, content: createBadgeSvg(badgeLabel, badgeMessage, '#B48EAD') });
-        }
-    }
+              // --- 2. Fetch new traffic and release data ---
+              console.log('Fetching latest traffic data and release counts...');
+              const { data: clonesResponse } = await github.rest.repos.getClones({ owner, repo, per: 'day' });
+              const { data: viewsResponse } = await github.rest.repos.getViews({ owner, repo, per: 'day' });
+              const releases = await github.paginate(github.rest.repos.listReleases, { owner, repo });
+              
+              // --- 3. Update historical data ---
+              console.log('Merging new traffic data with historical data...');
+              
+              // This logic is CORRECT. It updates the last 14 days of data from the API into our history file.
+              clonesResponse.clones.forEach(day => {
+                historicalData.clones[day.timestamp.split('T')[0]] = { count: day.count, uniques: day.uniques };
+              });
+              viewsResponse.views.forEach(day => {
+                historicalData.views[day.timestamp.split('T')[0]] = { count: day.count, uniques: day.uniques };
+              });
+              
+              // Release Download Data Merge Logic
+              console.log('Merging release download counts...');
+              const mergedReleasesData = JSON.parse(JSON.stringify(historicalData.releases.by_release || {}));
 
-    // --- 6. Commit all files in a single commit ---
-    if (filesToCommit.length > 0) {
-      await commitMultipleFiles(filesToCommit, 'feat: Update traffic history, downloads, and badges');
-      console.log(`✅ Committed ${filesToCommit.length} file(s) in a single commit.`);
-    } else {
-      console.log('No changes to commit.');
-    }
+              for (const release of releases) {
+                if (!release.tag_name) continue;
+                const oldReleaseData = mergedReleasesData[release.tag_name] || { total_downloads: 0, assets: {} };
+                const finalAssetsData = { ...oldReleaseData.assets };
 
-  } catch (error) {
-    console.error('Error during workflow execution:', error);
-    core.setFailed(`Action failed with error: ${error.message}`);
-  }
+                for (const asset of release.assets) {
+                  const assetName = asset.name;
+                  const newApiTotalCount = asset.download_count;
+                  const oldStoredCount = oldReleaseData.assets[assetName] || 0;
+                  
+                  if (newApiTotalCount >= oldStoredCount) {
+                    finalAssetsData[assetName] = newApiTotalCount;
+                  } else {
+                    console.log(`- API counter reset detected for asset '${assetName}'.`);
+                    console.log(`- Stored historical count: ${oldStoredCount}, New API count: ${newApiTotalCount}.`);
+                    console.log(`- Combining counts to preserve history.`);
+                    finalAssetsData[assetName] = oldStoredCount + newApiTotalCount;
+                  }
+                }
+                const finalReleaseTotal = Object.values(finalAssetsData).reduce((sum, count) => sum + count, 0);
+                mergedReleasesData[release.tag_name] = {
+                    total_downloads: finalReleaseTotal,
+                    assets: finalAssetsData
+                };
+              }
+              const newGrandTotalDownloads = Object.values(mergedReleasesData).reduce((sum, release) => sum + release.total_downloads, 0);
+              historicalData.releases = {
+                total_downloads: newGrandTotalDownloads,
+                by_release: mergedReleasesData
+              };
+
+              // --- 4. Calculate All-Time Totals and 14-Day Uniques ---
+              console.log('Calculating totals for badges...');
+              
+              // The sum of all daily counts from our history gives the true all-time total.
+              const allTimeTotalClones = Object.values(historicalData.clones).reduce((sum, day) => sum + day.count, 0);
+              const allTimeTotalViews = Object.values(historicalData.views).reduce((sum, day) => sum + day.count, 0);
+              
+              // **FIXED LOGIC**: Calculating "all-time unique" visitors by summing daily uniques is incorrect.
+              // Instead, we use the accurate 14-day unique count provided directly by the API summary.
+              const uniqueCloners14Days = clonesResponse.uniques;
+              const uniqueVisitors14Days = viewsResponse.uniques;
+              
+              const allTimeTotalDownloads = historicalData.releases.total_downloads || 0;
+
+              // --- 5. Generate new badge SVGs and collect all file changes ---
+              console.log('Generating files to commit...');
+              const filesToCommit = [];
+              filesToCommit.push({ path: historyFile, content: JSON.stringify(historicalData, null, 2) });
+              
+              // **FIXED BADGES**: Updated badges to show the correct all-time total and the accurate 14-day unique count.
+              filesToCommit.push({ path: `${badgeDir}/clones_badge.svg`, content: createBadgeSvg('Clones', `${allTimeTotalClones} (14d unique: ${uniqueCloners14Days})`, '#8FBCBB') });
+              filesToCommit.push({ path: `${badgeDir}/views_badge.svg`, content: createBadgeSvg('Views', `${allTimeTotalViews} (14d unique: ${uniqueVisitors14Days})`, '#88C0D0') });
+              filesToCommit.push({ path: `${badgeDir}/total_downloads_badge.svg`, content: createBadgeSvg('Total Downloads', `${allTimeTotalDownloads}`, '#A3BE8C') });
+              
+              if (historicalData.releases.by_release) {
+                  for (const [tagName, data] of Object.entries(historicalData.releases.by_release)) {
+                      const safeTagName = tagName.replace(/[^a-zA-Z0-9.-]/g, '_');
+                      const badgePath = `${badgeDir}/release_${safeTagName}_badge.svg`;
+                      const badgeLabel = `Release ${tagName}`;
+                      const badgeMessage = `${data.total_downloads} downloads`;
+                      filesToCommit.push({ path: badgePath, content: createBadgeSvg(badgeLabel, badgeMessage, '#B48EAD') });
+                  }
+              }
+
+              // --- 6. Commit all files in a single commit ---
+              if (filesToCommit.length > 0) {
+                await commitMultipleFiles(filesToCommit, 'feat: Update traffic history, downloads, and badges');
+                console.log(`✅ Committed ${filesToCommit.length} file(s) in a single commit.`);
+              } else {
+                console.log('No changes to commit.');
+              }
+
+            } catch (error) {
+              console.error('Error during workflow execution:', error);
+              core.setFailed(`Action failed with error: ${error.message}`);
+            }
