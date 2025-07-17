@@ -34,7 +34,7 @@ from PIL import Image, ImageDraw # Added for system tray icon
 import pystray # Added for system tray functionality
 from utils.config_utils import find_user_config_path
 from screensaver_app.ServiceReg import ServiceRegistrar
-
+from utils.multi_monitor import update_secondary_monitor_blackouts
 # Custom UAC elevation functions to replace pyUAC
 def is_admin():
     """Check if the current process is running with admin privileges."""
@@ -158,121 +158,6 @@ else:
 
 secondary_screen_windows = []
 
-def update_secondary_monitor_blackouts(main_tk_window):
-    """
-    Identifies secondary monitors and creates/updates/destroys black Toplevel windows on them.
-    This function is designed to be called initially and whenever display settings change.
-    Ensures only secondary monitors are blocked, not the primary (main) display.
-    """
-    logger.info("update_secondary_monitor_blackouts")
-    global secondary_screen_windows
-    if not main_tk_window.winfo_exists() or not WINDOWS_MULTI_MONITOR_SUPPORT:
-        logger.debug("Skipping monitor blackout update - main window not exists or no multi-monitor support")
-        return
-
-    main_tk_window.update_idletasks() # Ensure Tkinter's view of window state is up-to-date
-
-    try:
-        raw_monitors_info = win32api.EnumDisplayMonitors()
-        logger.debug(f"Enumerated {len(raw_monitors_info)} monitors")
-    except Exception as e:
-        logger.error(f"Error enumerating display monitors: {e}")
-        return    
-    detailed_monitors_info = []
-    primary_monitor_hMonitor = None # Store the hMonitor of the primary display
-
-    for hMonitor, _, monitor_rect_coords in raw_monitors_info:
-        try:
-            monitor_info_dict = win32api.GetMonitorInfo(hMonitor)
-            is_primary = bool(monitor_info_dict.get('Flags') == win32con.MONITORINFOF_PRIMARY)
-            detailed_monitors_info.append({'hMonitor': hMonitor, 'rect': monitor_rect_coords, 'is_primary': is_primary})
-            if is_primary:
-                primary_monitor_hMonitor = hMonitor
-        except Exception as e_info:
-            logger.warning(f"Error getting info for monitor {hMonitor}: {e_info}")
-            detailed_monitors_info.append({'hMonitor': hMonitor, 'rect': monitor_rect_coords, 'is_primary': False})
-
-    # Fallback if no primary monitor was explicitly flagged
-    if primary_monitor_hMonitor is None and detailed_monitors_info:
-        logger.warning("No explicit primary monitor found. Attempting fallback identification.")
-        # Fallback 1: Monitor containing (0,0)
-        found_fallback_primary = False
-        for i, mon_data in enumerate(detailed_monitors_info):
-            mx1, my1, _, _ = mon_data['rect']
-            if mx1 == 0 and my1 == 0:
-                detailed_monitors_info[i]['is_primary'] = True
-                primary_monitor_hMonitor = mon_data['hMonitor']
-                # Ensure all others are marked non-primary if this fallback is used
-                for j_idx, j_mon_data in enumerate(detailed_monitors_info):
-                    if i != j_idx: detailed_monitors_info[j_idx]['is_primary'] = False
-                logger.info(f"Fallback: Identified monitor at (0,0) as primary: {primary_monitor_hMonitor}")
-                found_fallback_primary = True
-                break
-          # Fallback 2: Use the main Tkinter window's current monitor (less reliable if Tk window placement is uncertain)
-        if not found_fallback_primary:
-            logger.debug("[PhotoEngine] Fallback: Using main Tkinter window's location to identify primary.")
-            main_win_center_x = main_tk_window.winfo_x() + main_tk_window.winfo_width() // 2
-            main_win_center_y = main_tk_window.winfo_y() + main_tk_window.winfo_height() // 2
-            for i, mon_data in enumerate(detailed_monitors_info):
-                mx1, my1, mx2, my2 = mon_data['rect']
-                if (mx1 <= main_win_center_x < mx2 and my1 <= main_win_center_y < my2):
-                    detailed_monitors_info[i]['is_primary'] = True
-                    primary_monitor_hMonitor = mon_data['hMonitor']
-                    for j_idx, j_mon_data in enumerate(detailed_monitors_info):
-                        if i != j_idx: detailed_monitors_info[j_idx]['is_primary'] = False
-                    logger.debug(f"[PhotoEngine] Fallback: Identified monitor via Tk window center as primary: {primary_monitor_hMonitor}")
-                    found_fallback_primary = True
-                    break        # Fallback 3: Default to the first enumerated monitor if all else fails
-        if not found_fallback_primary and detailed_monitors_info:
-            logger.debug("[PhotoEngine] Ultimate Fallback: Assuming first enumerated monitor is primary.")
-            detailed_monitors_info[0]['is_primary'] = True
-            primary_monitor_hMonitor = detailed_monitors_info[0]['hMonitor']
-
-
-    old_black_windows_to_process = list(secondary_screen_windows)
-    secondary_screen_windows.clear()
-
-    # Only block secondary monitors (not primary)
-    for mon_data in detailed_monitors_info:
-        if not mon_data['is_primary']:
-            mx1, my1, mx2, my2 = mon_data['rect']
-            width = mx2 - mx1
-            height = my2 - my1
-
-            found_and_reused_existing = False
-            for i, existing_win in enumerate(old_black_windows_to_process):
-                if existing_win.winfo_exists() and \
-                   existing_win.winfo_x() == mx1 and existing_win.winfo_y() == my1 and \
-                   existing_win.winfo_width() == width and existing_win.winfo_height() == height:
-                    secondary_screen_windows.append(existing_win)
-                    old_black_windows_to_process.pop(i)
-                    found_and_reused_existing = True
-                    logger.debug(f"Reusing existing blackout window for monitor at ({mx1},{my1})")
-                    break
-
-            if not found_and_reused_existing:
-                logger.info(f"Creating new blackout window for monitor at ({mx1},{my1}) {width}x{height}")
-                black_screen_window = tk.Toplevel(main_tk_window)
-                black_screen_window.configure(bg='black')
-                black_screen_window.overrideredirect(True)
-                black_screen_window.geometry(f"{width}x{height}+{mx1}+{my1}")
-                black_screen_window.attributes('-topmost', True)
-                black_screen_window.wm_attributes("-disabled", True) # Make uninteractable
-
-                # Block events (though -disabled might cover this)
-                black_screen_window.bind("<Key>", lambda e: "break")
-                black_screen_window.bind("<Button>", lambda e: "break")
-                black_screen_window.bind("<Motion>", lambda e: "break")
-                black_screen_window.protocol("WM_DELETE_WINDOW", lambda: None) # Prevent closing
-
-                black_screen_window.lift() # Ensure it's on top
-                black_screen_window.focus_set() # Attempt to give focus to solidify topmost
-                secondary_screen_windows.append(black_screen_window)
-    # Destroy any old blackout windows that are no longer needed
-    for old_win in old_black_windows_to_process:
-        if old_win.winfo_exists():
-            logger.debug(f"Destroying obsolete blackout window at ({old_win.winfo_x()},{old_win.winfo_y()})")
-            old_win.destroy()
 
 # Store the callback as a global to prevent garbage collection
 callback_ref = None
@@ -354,7 +239,8 @@ def start_screensaver(video_path_override=None):
         global secondary_screen_windows, hWinEventHook, root_ref_for_hook
         if event:
             logger.info(f"Password dialog triggered by: {event.keysym if hasattr(event, 'keysym') else 'mouse click'}")
-        success = verify_password_dialog_macos(root)
+        # Pass app to password dialog for pause/screenshot/lockscreen
+        success = verify_password_dialog_macos(root, video_clock_screensaver=app)
         if success: 
             app.close()
             if hWinEventHook: # Unhook before destroying windows
@@ -438,13 +324,16 @@ def start_screensaver(video_path_override=None):
             except Exception as e:
                 logger.error(f"Failed to restart tray after login: {e}", exc_info=True)
         else:
+            logger.info("Password verification failed, resuming video")
             try:
-                logger.info("Login cancelled or failed. Attempting to refocus root window.")
+                VideoClockScreenSaver.resume_video(app)
+                # Resume focus management and restore focus
+                if hasattr(app, 'focus_management_active'):
+                    app.focus_management_active = True
                 if root and root.winfo_exists():
-                    root.focus_set()
-            except tk.TclError:
-                logger.debug("Root window already destroyed during login cancel/failure.")
-            logger.info("Login cancelled or failed.")
+                    root.focus_force()
+            except Exception as e:
+                logger.error(f"Error resuming video after failed password verification: {e}")
 
     # Initial call to black out monitors, delayed slightly for fullscreen to establish
     if WINDOWS_MULTI_MONITOR_SUPPORT:
@@ -470,15 +359,12 @@ def start_screensaver(video_path_override=None):
             logger.error(f"Error setting up display change event hook: {e}")
             hWinEventHook = None
     
-    # Bind multiple keys and mouse click to trigger password prompt
-    root.bind("<Escape>", on_escape)
-    root.bind("<Return>", on_escape)  # Enter key
-    root.bind("<KP_Enter>", on_escape)  # Numpad Enter key
-    root.bind("<space>", on_escape)  # Spacebar
-    root.bind("<Button-1>", on_escape)  # Left mouse click
+    # Remove the old key bindings since VideoClockScreenSaver now handles them internally
+    # The app now handles key events internally through _on_key_event and _on_click_event
     
     # Make sure the root window can receive focus for key events
     root.focus_set()
+    root.focus_force()
     
     # Ensure hook is unhooked if window is closed by other means (though less likely for fullscreen)
     def on_closing_main_window():
@@ -633,6 +519,7 @@ def run_in_system_tray():
         shutdown_system_tray() # Call the centralized shutdown
     
     def start_screensaver_with_return():
+        on_stop_live_wallpaper(None, None)  
         """Start screensaver and return to tray mode after authentication."""
         logger.info("start_screensaver_with_return")
         logger.info("Win + S detected or manual start. Starting screensaver...")
@@ -658,6 +545,7 @@ def run_in_system_tray():
         start_win_s_detection()
 
     def start_win_s_detection():
+        on_start_live_wallpaper(None, None)  # Ensure live wallpaper is started if needed
         """Start Win+S key detection and blocking using the same logic as key blocking."""
         logger.info("start_win_s_detection")
         global win_s_blocker
@@ -758,28 +646,47 @@ def run_in_system_tray():
         except Exception as e:
             logger.error(f"Error starting Win+S detection: {e}")
     
-    # Create system tray menu with GUI option
+    # --- Live Wallpaper Tray Actions ---
+    from screensaver_app.live_wallpaper.live_wallpaper_pyqt import LiveWallpaperController
+
+    def on_start_live_wallpaper(icon, item):
+        logger.info("on_start_live_wallpaper")
+        config = load_config()
+        video_path = config.get('video_path', None)
+        if video_path:
+            logger.info(f"Starting live wallpaper with video path: {video_path}")
+            # Start live wallpaper in a new thread to avoid blocking the tray icon
+            threading.Thread(target=LiveWallpaperController.start_live_wallpaper, args=(video_path,), daemon=True).start()
+        else:
+            logger.error("No video_path found in config for live wallpaper.")
+
+    def on_stop_live_wallpaper(icon, item):
+        threading.Thread(target=LiveWallpaperController.stop_live_wallpaper, daemon=True).start()
+
+    # Create system tray menu with GUI option and live wallpaper controls
     if getattr(sys, 'frozen', False):
-        # If running as a PyInstaller binary, launch GUI as a new process using the executable
         menu = (
-            pystray.MenuItem('Open Screensaver', on_open_screensaver),
+            pystray.MenuItem('Open Screensaver/Lockscreen', on_open_screensaver),
             pystray.MenuItem('Open GUI', lambda icon, item: subprocess.Popen([sys.executable, "--mode", "gui"], creationflags=subprocess.CREATE_NO_WINDOW if platform.system() == "Windows" else 0)),
+            pystray.MenuItem('Start Live Wallpaper', on_start_live_wallpaper),
+            pystray.MenuItem('Stop Live Wallpaper', on_stop_live_wallpaper),
             pystray.MenuItem('Exit', on_exit_app)
         )
     else:
-        # If running as a script, use the normal handler
         menu = (
-            pystray.MenuItem('Open Screensaver', on_open_screensaver),
+            pystray.MenuItem('Open Screensaver/Lockscreen', on_open_screensaver),
             pystray.MenuItem('Open GUI', on_open_gui),
+            pystray.MenuItem('Start Live Wallpaper', on_start_live_wallpaper),
+            pystray.MenuItem('Stop Live Wallpaper', on_stop_live_wallpaper),
             pystray.MenuItem('Exit', on_exit_app)
         )
 
-    icon = pystray.Icon("PhotoEngine", icon_image, "PhotoEngine Screensaver", menu)
+    icon = pystray.Icon("PhotoEngine", icon_image, "PhotoEngine Screensaver/Lockscreen", menu)
     tray_icon_instance = icon # Store the icon instance
 
     # Start Win+S detection
-    start_win_s_detection()    # Run the icon - this will block until exit is called
-    logger.info("System tray mode active. Press Win+S to activate screensaver.")
+    start_win_s_detection()
+    logger.info("System tray mode active. Press Win+S to activate screensaver/lockscreen.")
     icon.run()
     logger.info("Tray icon.run() has finished.")
 
