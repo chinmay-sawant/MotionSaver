@@ -77,6 +77,7 @@ class FrameReader(QObject):
         if hasattr(self, 'cap') and self.cap.isOpened():
             timestamp_sec = self.cap.get(cv2.CAP_PROP_POS_MSEC) / 1000.0
             self.config['last_video_timestamp'] = timestamp_sec
+            self.config['enable_livewallpaper'] = False  # Disable live wallpaper on stop
             save_config(self.config)
             logger.info(f"Saved last video timestamp: {timestamp_sec} seconds.")
         if hasattr(self, 'thread'):

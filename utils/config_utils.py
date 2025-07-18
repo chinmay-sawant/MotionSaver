@@ -113,3 +113,18 @@ def save_config(config_data):
         traceback.print_exc()
         return False
 
+
+
+def update_config(key, value):
+    """
+    Update a single key in the user configuration and save it.
+    Returns True if successful, False otherwise.
+    """
+    config = load_config()
+    config[key] = value
+    success = save_config(config)
+    if success:
+        logger.info(f"Updated '{key}' in config to: {value}")
+    else:
+        logger.error(f"Failed to update '{key}' in config.")
+    return success

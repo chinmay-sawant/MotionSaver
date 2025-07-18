@@ -32,7 +32,7 @@ import screensaver_app.gui as gui
 import json
 from PIL import Image, ImageDraw # Added for system tray icon
 import pystray # Added for system tray functionality
-from utils.config_utils import find_user_config_path
+from utils.config_utils import find_user_config_path, update_config
 from screensaver_app.ServiceReg import ServiceRegistrar
 from utils.multi_monitor import update_secondary_monitor_blackouts
 # Custom UAC elevation functions to replace pyUAC
@@ -650,6 +650,7 @@ def run_in_system_tray():
     from screensaver_app.live_wallpaper.live_wallpaper_pyqt import LiveWallpaperController
 
     def on_start_live_wallpaper(icon, item):
+        update_config('enable_livewallpaper', True)
         logger.info("on_start_live_wallpaper")
         config = load_config()
         video_path = config.get('video_path', None)
