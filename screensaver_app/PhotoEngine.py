@@ -729,8 +729,21 @@ def run_in_system_tray():
     from screensaver_app.live_wallpaper.live_wallpaper_pyqt import LiveWallpaperController
 
     def on_start_live_wallpaper(icon, item):
-        update_config('enable_livewallpaper', True)
         logger.info("on_start_live_wallpaper")
+        config = load_config()
+        video_path = config.get('video_path', None)
+        livewallpaper_bool = config.get('enable_livewallpaper', None)
+        if livewallpaper_bool:
+            if video_path:
+                logger.info(f"Starting live wallpaper with video path: {video_path}")
+                # Start live wallpaper in a new thread to avoid blocking the tray icon
+                threading.Thread(target=LiveWallpaperController.start_live_wallpaper, args=(video_path,), daemon=True).start()
+        else:
+            logger.error("No video_path found in config for live wallpaper.")
+    
+    def on_start_live_wallpaper_tray(icon, item):
+        update_config('enable_livewallpaper', True)
+        logger.info("on_start_live_wallpaper_tray")
         config = load_config()
         video_path = config.get('video_path', None)
         if video_path:
@@ -748,7 +761,7 @@ def run_in_system_tray():
         menu = (
             pystray.MenuItem('Open Screensaver/Lockscreen', on_open_screensaver),
             pystray.MenuItem('Open GUI', lambda icon, item: subprocess.Popen([sys.executable, "--mode", "gui"], creationflags=subprocess.CREATE_NO_WINDOW if platform.system() == "Windows" else 0)),
-            pystray.MenuItem('Start Live Wallpaper', on_start_live_wallpaper),
+            pystray.MenuItem('Start Live Wallpaper', on_start_live_wallpaper_tray),
             pystray.MenuItem('Stop Live Wallpaper', on_stop_live_wallpaper),
             pystray.MenuItem('Restart MotionSaver', on_restart_app),
             pystray.MenuItem('Exit', on_exit_app)
@@ -757,7 +770,7 @@ def run_in_system_tray():
         menu = (
             pystray.MenuItem('Open Screensaver/Lockscreen', on_open_screensaver),
             pystray.MenuItem('Open GUI', on_open_gui),
-            pystray.MenuItem('Start Live Wallpaper', on_start_live_wallpaper),
+            pystray.MenuItem('Start Live Wallpaper', on_start_live_wallpaper_tray),
             pystray.MenuItem('Stop Live Wallpaper', on_stop_live_wallpaper),
             pystray.MenuItem('Restart MotionSaver', on_restart_app),
             pystray.MenuItem('Exit', on_exit_app)
