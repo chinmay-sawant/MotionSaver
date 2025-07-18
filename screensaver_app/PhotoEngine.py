@@ -232,7 +232,7 @@ def start_screensaver(video_path_override=None):
     except Exception as e:
         logger.warning(f"Could not enforce topmost/focus for single monitor: {e}")
 
-    app = VideoClockScreenSaver(root, video_path_override)
+    app = VideoClockScreenSaver(root, video_path_override, key_blocker_instance=key_blocker)
 
     def on_escape(event):
         logger.info("on_escape")

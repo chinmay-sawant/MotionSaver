@@ -295,10 +295,11 @@ def handle_media_player_paused(event, player):
 
 class VideoClockScreenSaver:
 
-    def __init__(self, master, video_path_arg=None):
+    def __init__(self, master, video_path_arg=None, key_blocker_instance=None):
         logger.debug("Initializing VideoClockScreenSaver")
         try:
             self.master = master
+            self.key_blocker_instance = key_blocker_instance  # Store the actual blocker instance
             master.attributes('-fullscreen', True)
             master.configure(bg='black')
             
@@ -605,7 +606,6 @@ class VideoClockScreenSaver:
             #     # Resume focus management and restore focus
             #     self.focus_management_active = True
             #     self.master.focus_force()
-            key_blocker = KeyBlocker(debug_print=True)
             if success: 
                 logger.info("Password verification successful, closing screensaver")
                 self.master.destroy()  # Changed from self.master.close()
@@ -617,13 +617,6 @@ class VideoClockScreenSaver:
                     hWinEventHook = None
                 root_ref_for_hook = None
 
-                # Disable key blocking
-                if key_blocker:
-                    if hasattr(key_blocker, 'stop_blocking'):
-                        key_blocker.stop_blocking()
-                    else:
-                        key_blocker.disable_all_blocking()
-                        
                 # Stop Ctrl+Alt+Del detector
                 if ctrl_alt_del_detector:
                     ctrl_alt_del_detector.restart_pending = True  # Prevent restart during shutdown
@@ -632,6 +625,40 @@ class VideoClockScreenSaver:
                     if sec_win.winfo_exists():
                         sec_win.destroy()
                 secondary_screen_windows = []
+                
+                # Add key blocker cleanup before quitting application
+                logger.info("Performing key blocker cleanup to ensure all blocking is disabled...")
+                try:
+                    # Use the actual key blocker instance that was passed from PhotoEngine
+                    if self.key_blocker_instance:
+                        logger.info("Using passed key blocker instance for cleanup")
+                        if hasattr(self.key_blocker_instance, 'stop_blocking'):
+                            # Enhanced blocker
+                            self.key_blocker_instance.stop_blocking()
+                            logger.info("Enhanced blocker cleanup completed via passed instance.")
+                        elif hasattr(self.key_blocker_instance, 'disable_all_blocking'):
+                            # Basic blocker
+                            self.key_blocker_instance.disable_all_blocking()
+                            logger.info("Basic blocker cleanup completed via passed instance.")
+                        else:
+                            logger.warning("Passed key blocker instance doesn't have expected cleanup methods")
+                    else:
+                        logger.info("No key blocker instance passed, attempting fallback cleanup")
+                        # Fallback: Try to import the same KeyBlocker that might have been used
+                        try:
+                            from utils.enhanced_key_blocker import EnhancedKeyBlocker as CleanupBlocker
+                            cleanup_blocker = CleanupBlocker(debug_print=True)
+                            if hasattr(cleanup_blocker, 'python_blocker') and cleanup_blocker.python_blocker:
+                                cleanup_blocker.python_blocker.disable_all_blocking()
+                                logger.info("Enhanced blocker cleanup completed via fallback.")
+                        except ImportError:
+                            from utils.key_blocker import KeyBlocker as CleanupBlocker
+                            cleanup_blocker = CleanupBlocker(debug_print=True)
+                            cleanup_blocker.disable_all_blocking()
+                            logger.info("Basic blocker cleanup completed via fallback.")
+                except Exception as e:
+                    logger.warning(f"Error during key blocker cleanup: {e}")
+                
                 # --- Relaunch tray with same elevation ---
                 try:
                     logger.info("Attempting to restart system tray after successful screensaver login...")
