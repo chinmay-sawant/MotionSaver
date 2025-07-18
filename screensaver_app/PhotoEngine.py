@@ -464,6 +464,76 @@ def create_image(width, height, color1, color2):
         fill=color2)
     return image
 
+def stop_application():
+    """Stop the current application and clean up all resources."""
+    logger.info("stop_application called")
+    
+    # Stop system tray if running
+    shutdown_system_tray()
+    
+    # Additional cleanup if needed
+    logger.info("Application stopped successfully")
+
+def restart_application():
+    """Restart the application by stopping current instance and launching a new one."""
+    logger.info("restart_application called")
+    
+    try:
+        # Determine the command to restart with
+        if getattr(sys, 'frozen', False):
+            # For frozen executable, use the executable directly
+            python_exe = sys.executable
+            script_args = ["--min", "--no-elevate"]
+            logger.debug(f"Detected frozen executable. python_exe={python_exe}, args={script_args}")
+        else:
+            # For script mode
+            script_path = os.path.abspath(__file__)
+            python_exe = sys.executable
+            script_args = [script_path, "--min", "--no-elevate"]
+            logger.debug(f"Detected script mode. python_exe={python_exe}, args={script_args}")
+
+        # Check if we're running as admin and preserve elevation
+        if is_admin():
+            logger.info("Restarting application with admin privileges...")
+            import ctypes
+            cmd_string = " ".join([f'"{arg}"' if " " in arg else arg for arg in script_args])
+            logger.debug(f"Using ShellExecuteW to restart with: {python_exe} {cmd_string}")
+            
+            # Use ShellExecuteW to maintain admin privileges
+            result = ctypes.windll.shell32.ShellExecuteW(
+                None,
+                "runas",
+                python_exe,
+                cmd_string,
+                None,
+                0  # SW_HIDE
+            )
+            logger.debug(f"ShellExecuteW result: {result}")
+            if result <= 32:  # ShellExecuteW returns > 32 for success
+                logger.error(f"ShellExecuteW failed with result: {result}")
+                return False
+        else:
+            logger.info("Restarting application without admin privileges...")
+            cmd_args = [python_exe] + script_args
+            
+            logger.debug(f"Using subprocess.Popen to restart: {cmd_args}")
+            proc = subprocess.Popen(cmd_args,
+                           creationflags=subprocess.CREATE_NO_WINDOW if platform.system() == "Windows" else 0)
+            logger.debug(f"subprocess.Popen returned pid: {proc.pid if proc else 'unknown'}")
+
+        logger.info("New application process started, stopping current process...")
+        
+        # Stop current application
+        stop_application()
+        
+        # Add a small delay to ensure the new process starts before we exit
+        time.sleep(1)
+        os._exit(0)
+        
+    except Exception as e:
+        logger.error(f"Failed to restart application: {e}", exc_info=True)
+        return False
+
 def run_in_system_tray():
     logger.info("run_in_system_tray")
     logger.info("Running in system tray mode...")
@@ -512,6 +582,15 @@ def run_in_system_tray():
                 logger.info("GUI started in fallback mode")
             except Exception as fallback_error:
                 logger.error(f"Fallback GUI launch also failed: {fallback_error}")
+    
+    def on_restart_app(icon, item):
+        logger.info("on_restart_app")
+        logger.info("Restarting application from tray...")
+        # Run restart in a new thread to avoid blocking the tray icon
+        import threading
+        thread = threading.Thread(target=restart_application)
+        thread.daemon = True
+        thread.start()
     
     def on_exit_app(icon, item):
         logger.info("on_exit_app")
@@ -671,6 +750,7 @@ def run_in_system_tray():
             pystray.MenuItem('Open GUI', lambda icon, item: subprocess.Popen([sys.executable, "--mode", "gui"], creationflags=subprocess.CREATE_NO_WINDOW if platform.system() == "Windows" else 0)),
             pystray.MenuItem('Start Live Wallpaper', on_start_live_wallpaper),
             pystray.MenuItem('Stop Live Wallpaper', on_stop_live_wallpaper),
+            pystray.MenuItem('Restart MotionSaver', on_restart_app),
             pystray.MenuItem('Exit', on_exit_app)
         )
     else:
@@ -679,6 +759,7 @@ def run_in_system_tray():
             pystray.MenuItem('Open GUI', on_open_gui),
             pystray.MenuItem('Start Live Wallpaper', on_start_live_wallpaper),
             pystray.MenuItem('Stop Live Wallpaper', on_stop_live_wallpaper),
+            pystray.MenuItem('Restart MotionSaver', on_restart_app),
             pystray.MenuItem('Exit', on_exit_app)
         )
 
