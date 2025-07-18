@@ -78,15 +78,27 @@ class EnhancedKeyBlocker:
             self._print_debug("Joining ctrl_alt_del_monitor_thread...")
             self.ctrl_alt_del_monitor_thread.join(timeout=2)
 
-        # Stop Python blocking
+        # Stop Python blocking - ensure ALL blocking is disabled including registry
         if self.python_blocker:
             try:
+                # Make sure to call disable_all_blocking which should handle both hooks and registry
                 self.python_blocker.disable_all_blocking()
-                self._print_debug("Python key blocking disabled")
+                self._print_debug("Python key blocking disabled (including registry cleanup)")
             except Exception as e:
                 self._print_debug(f"Error stopping Python blocking: {e}")
                 log_exception(e)
-    
+
+    def disable_all_blocking(self):
+        """Public method to disable all blocking - ensures compatibility."""
+        logger.info("disable_all_blocking")
+        if self.python_blocker:
+            try:
+                self.python_blocker.disable_all_blocking()
+                self._print_debug("All blocking disabled via python_blocker")
+            except Exception as e:
+                self._print_debug(f"Error disabling all blocking: {e}")
+                log_exception(e)
+
     def start_monitoring(self):
         """Start a monitoring thread to check and restart Python hooks if needed."""
         logger.info("start_monitoring")

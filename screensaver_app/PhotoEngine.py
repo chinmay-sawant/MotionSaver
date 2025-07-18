@@ -713,6 +713,24 @@ def shutdown_system_tray():
         win_s_blocker = None
         logger.info("Win+S blocker stopped.")
 
+    # Additional cleanup: Create a temporary key blocker to ensure all registry changes are reverted
+    logger.info("Performing additional cleanup to ensure all blocking is disabled...")
+    try:
+        # Try to import the same KeyBlocker that might have been used
+        try:
+            from utils.enhanced_key_blocker import EnhancedKeyBlocker as CleanupBlocker
+            cleanup_blocker = CleanupBlocker(debug_print=True)
+            if hasattr(cleanup_blocker, 'python_blocker') and cleanup_blocker.python_blocker:
+                cleanup_blocker.python_blocker.disable_all_blocking()
+                logger.info("Enhanced blocker cleanup completed.")
+        except ImportError:
+            from utils.key_blocker import KeyBlocker as CleanupBlocker
+            cleanup_blocker = CleanupBlocker(debug_print=True)
+            cleanup_blocker.disable_all_blocking()
+            logger.info("Basic blocker cleanup completed.")
+    except Exception as e:
+        logger.warning(f"Error during additional cleanup: {e}")
+
     if tray_icon_instance:
         logger.info("Stopping tray icon instance...")
         try:
@@ -724,14 +742,6 @@ def shutdown_system_tray():
     else:
         logger.info("No tray icon instance to stop.")
     
-    # If there are any screensaver windows open, try to close them.
-    # This is a bit tricky as they are managed by start_screensaver.
-    # For now, focus on stopping the tray icon. A more robust solution
-    # might involve PhotoEngine.start_screensaver returning its root window
-    # or having a global reference to it that can be destroyed.
-    # However, the screensaver should ideally close itself upon authentication.
-    # If the service stops it abruptly, it might bypass password.
-
     logger.info("System tray shutdown process complete.")
 
 def admin_main():
