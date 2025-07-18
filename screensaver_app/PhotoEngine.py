@@ -739,7 +739,7 @@ def run_in_system_tray():
                 # Start live wallpaper in a new thread to avoid blocking the tray icon
                 threading.Thread(target=LiveWallpaperController.start_live_wallpaper, args=(video_path,), daemon=True).start()
         else:
-            logger.error("No video_path found in config for live wallpaper.")
+            logger.warning("No video_path found in config for live wallpaper/ or is disabled.")
     
     def on_start_live_wallpaper_tray(icon, item):
         update_config('enable_livewallpaper', True)
@@ -751,7 +751,7 @@ def run_in_system_tray():
             # Start live wallpaper in a new thread to avoid blocking the tray icon
             threading.Thread(target=LiveWallpaperController.start_live_wallpaper, args=(video_path,), daemon=True).start()
         else:
-            logger.error("No video_path found in config for live wallpaper.")
+            logger.warning("No video_path found in config for live wallpaper/ or is disabled.")
 
     def on_stop_live_wallpaper(icon, item):
         threading.Thread(target=LiveWallpaperController.stop_live_wallpaper, daemon=True).start()
