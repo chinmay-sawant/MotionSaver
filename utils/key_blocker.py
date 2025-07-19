@@ -2,14 +2,14 @@
 Key blocking utility for the ScreenSaver application.
 Provides both registry-based and hook-based key blocking methods.
 """
-import logging
 import platform
 import json
 import os
+
 # Initialize central logging
 from screensaver_app.central_logger import get_logger, log_startup, log_shutdown, log_exception
 logger = get_logger('KeyBlocker')
-logger.setLevel(logging.INFO)
+
 # Registry-based blocking (Windows only)
 if platform.system() == "Windows":
     try:

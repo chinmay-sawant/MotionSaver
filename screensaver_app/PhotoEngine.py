@@ -1,4 +1,3 @@
-
 import logging
 import tkinter as tk
 import argparse
@@ -8,6 +7,7 @@ import sys
 import subprocess # Added for service registration
 import threading
 import time
+
 # Ensure parent directory is in sys.path for package imports
 current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
@@ -16,13 +16,6 @@ if parent_dir not in sys.path:
 
 from screensaver_app.central_logger import get_logger, log_startup, log_shutdown, log_exception
 logger = get_logger('PhotoEngine')
-
-from utils.app_utils import acquire_lock, release_lock
-
-if not acquire_lock():
-    logger.warning("Another instance of PhotoEngine is already running. Exiting this instance.")
-    sys.exit(1)
-
 logging.getLogger("PIL.Image").setLevel(logging.WARNING)
 
 from screensaver_app.video_player import VideoClockScreenSaver 
@@ -250,7 +243,6 @@ def start_screensaver(video_path_override=None):
         success = verify_password_dialog_macos(root, video_clock_screensaver=app)
         if success: 
             app.close()
-            release_lock()
             if hWinEventHook: # Unhook before destroying windows
                 try:
                     UnhookWinEvent(hWinEventHook)  # Use ctypes function
