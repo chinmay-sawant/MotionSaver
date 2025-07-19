@@ -34,13 +34,25 @@ class StockWidget:
         self.window.configure(bg=transparent_key)
         self.window.overrideredirect(True)
         
-        # Position in bottom-right corner
+        # Position in bottom-right corner (closer to bottom)
         widget_width = 280
         widget_height = 200
         x_pos = screen_width - widget_width - 20
-        y_pos = screen_height - widget_height - 80  # Account for taskbar
+        y_pos = screen_height - widget_height - 20  # Reduced offset for true bottom alignment
         
-        self.symbols = symbols
+        # Default symbols for each market
+        self.stock_symbols = {
+            "NASDAQ": ["AAPL", "MSFT", "GOOGL", "AMZN", "TSLA"],
+            "NYSE": ["JPM", "JNJ", "PG", "V", "WMT"],
+            "DOW": ["AAPL", "MSFT", "UNH", "GS", "HD"],
+            "SP500": ["AAPL", "MSFT", "AMZN", "NVDA", "GOOGL"],
+            "CRYPTO": ["BTC-USD", "ETH-USD", "BNB-USD", "SOL-USD", "DOGE-USD"],
+            "NSE": ["RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "INFY.NS", "ICICIBANK.NS"],
+            "BSE": ["500325.BO", "500112.BO", "532540.BO", "500209.BO", "500875.BO"]
+        }
+        
+        # Use the current market's symbols instead of the passed symbols parameter
+        self.symbols = self.stock_symbols.get(self.current_market, self.stock_symbols["NASDAQ"])
         
         self.window.geometry(f"{widget_width}x{widget_height}+{x_pos}+{y_pos}")
         logger.debug(f"StockWidget positioned at {x_pos}x{y_pos} with size {widget_width}x{widget_height}")
@@ -50,13 +62,8 @@ class StockWidget:
         self.last_update = 0
         self.update_interval = 300  # 5 minutes during market hours
         
-        # Popular stock symbols by market
-        self.stock_symbols = {
-            "NASDAQ": ["AAPL", "MSFT", "GOOGL", "AMZN", "TSLA"],
-            "NYSE": ["JPM", "JNJ", "PG", "V", "WMT"],
-            "DOW": ["AAPL", "MSFT", "UNH", "GS", "HD"],
-            "SP500": ["AAPL", "MSFT", "AMZN", "NVDA", "GOOGL"]
-        }
+        # Market names from GUI (referenced)
+        self.market_names = ["NASDAQ", "NYSE", "CRYPTO", "NSE", "BSE"]
         
         self.setup_ui()
         self.start_stock_updates()
@@ -103,11 +110,12 @@ class StockWidget:
 
     def update_stock_display(self):
         """Update the stock display with current data"""
+        import numpy as np
         try:
             # Clear existing stock items
             for widget in self.stock_list_frame.winfo_children():
                 widget.destroy()
-            
+
             if not self.stock_data:
                 error_label = tk.Label(
                     self.stock_list_frame, text="No stock data available",
@@ -116,19 +124,21 @@ class StockWidget:
                 error_label.pack(pady=20)
                 self.status_label.config(text="Error loading stocks")
                 return
-            
-            # Display stock information
-            for stock in self.stock_data:
+
+            # Show only top 5 gainers
+            top_stocks = sorted(self.stock_data, key=lambda x: x['change_percent'], reverse=True)[:5]
+
+            for stock in top_stocks:
                 stock_frame = tk.Frame(self.stock_list_frame, bg=self.transparent_key)
                 stock_frame.pack(fill=tk.X, pady=3, padx=5)
-                
+
                 # Symbol
                 symbol_label = tk.Label(
                     stock_frame, text=stock["symbol"], font=('Arial', 10, 'bold'),
                     fg='white', bg=self.transparent_key, width=6, anchor='w'
                 )
                 symbol_label.pack(side=tk.LEFT)
-                
+
                 # Price
                 price_text = f"${stock['price']:.2f}"
                 price_label = tk.Label(
@@ -136,27 +146,58 @@ class StockWidget:
                     fg='white', bg=self.transparent_key, width=8, anchor='e'
                 )
                 price_label.pack(side=tk.LEFT, padx=(5, 0))
-                
+
                 # Change amount and percentage
                 change = stock['change']
                 change_percent = stock['change_percent']
-                
+
                 if change >= 0:
                     change_color = '#00ff88'
                     change_text = f"+${change:.2f} (+{change_percent:.1f}%)"
                 else:
                     change_color = '#ff4444'
                     change_text = f"${change:.2f} ({change_percent:.1f}%)"
-                
+
                 change_label = tk.Label(
                     stock_frame, text=change_text, font=('Arial', 9),
                     fg=change_color, bg=self.transparent_key, anchor='e'
                 )
                 change_label.pack(side=tk.RIGHT, fill=tk.X, expand=True, padx=(5, 0))
-            
+
+                # Transparent graph for past data using numpy
+                closes = stock.get('history', [])
+                dates = stock.get('history_dates', [])
+                if closes and len(closes) >= 2:
+                    import matplotlib.pyplot as plt
+                    from io import BytesIO
+                    from PIL import Image, ImageTk
+                    closes_np = np.array(closes)
+                    fig, ax = plt.subplots(figsize=(1.8, 0.7), dpi=60)
+                    ax.plot(dates, closes_np, color='#00BFFF', marker='o', linewidth=2)
+                    ax.fill_between(dates, closes_np, closes_np.min(), color='#00BFFF', alpha=0.15)
+                    ax.set_xticks(dates)
+                    ax.set_xticklabels(dates, fontsize=6)
+                    ax.set_yticklabels([])
+                    ax.set_yticks([])
+                    ax.set_frame_on(False)
+                    for spine in ax.spines.values():
+                        spine.set_visible(False)
+                    plt.tight_layout(pad=0.2)
+                    fig.patch.set_alpha(0.0)  # Transparent background
+                    ax.patch.set_alpha(0.0)
+                    buf = BytesIO()
+                    plt.savefig(buf, format='png', bbox_inches='tight', transparent=True, pad_inches=0.05)
+                    plt.close(fig)
+                    buf.seek(0)
+                    pil_img = Image.open(buf)
+                    photo = ImageTk.PhotoImage(pil_img)
+                    graph_label = tk.Label(stock_frame, image=photo, bg=self.transparent_key)
+                    graph_label.image = photo
+                    graph_label.pack(side=tk.RIGHT, padx=(5, 0))
+
             # Update status
-            self.status_label.config(text=f"Updated: {time.strftime('%H:%M')} • Demo Data")
-            
+            self.status_label.config(text=f"Updated: {time.strftime('%H:%M')} • Top 5 Gainers")
+
         except Exception as e:
             logger.error(f"Error updating stock display: {e}")
     
@@ -168,20 +209,23 @@ class StockWidget:
                     if hasattr(self, 'window') and self.window.winfo_exists():
                         current_time = time.time()
                         if current_time - self.last_update > self.update_interval:
-                            symbols = self.symbols if self.symbols else self.stock_symbols.get(self.current_market, [])
-                            stocks_data = self.fetch_stock_data(symbols)
+                            # Use the symbols for the current market
+                            symbols_to_fetch = self.stock_symbols.get(self.current_market, self.stock_symbols["NASDAQ"])
+                            stocks_data = self.fetch_stock_data(symbols_to_fetch)
                             self.stock_data = [
                                 {
                                     "symbol": symbol,
                                     "price": data["price"],
                                     "change": data["change"],
-                                    "change_percent": data["change_percent"]
+                                    "change_percent": data["change_percent"],
+                                    "history": data.get("history", []),
+                                    "history_dates": data.get("history_dates", [])
                                 }
                                 for symbol, data in stocks_data.items()
                             ]
                             self.last_update = current_time
                             self.update_stock_display()
-                        time.sleep(2)  # Check every 30 seconds
+                        time.sleep(20)  # Check every 20 seconds
                     else:
                         break
                 except tk.TclError:
@@ -192,14 +236,17 @@ class StockWidget:
 
         # Initial fetch and UI update
         def initial_fetch():
-            symbols = self.symbols if self.symbols else self.stock_symbols.get(self.current_market, [])
-            stocks_data = self.fetch_stock_data(symbols)
+            # Use the symbols for the current market
+            symbols_to_fetch = self.stock_symbols.get(self.current_market, self.stock_symbols["NASDAQ"])
+            stocks_data = self.fetch_stock_data(symbols_to_fetch)
             self.stock_data = [
                 {
                     "symbol": symbol,
                     "price": data["price"],
                     "change": data["change"],
-                    "change_percent": data["change_percent"]
+                    "change_percent": data["change_percent"],
+                    "history": data.get("history", []),
+                    "history_dates": data.get("history_dates", [])
                 }
                 for symbol, data in stocks_data.items()
             ]
@@ -225,7 +272,20 @@ class StockWidget:
         """Fetch stock data using Yahoo Finance API alternative, including last 5 days for graph"""
         stocks_data = {}
 
-        for symbol in symbols:
+        # Handle both list and dict inputs for symbols
+        if isinstance(symbols, dict):
+            symbol_list = []
+            for v in symbols.values():
+                if isinstance(v, list):
+                    symbol_list.extend(v)
+                else:
+                    symbol_list.append(v)
+        elif isinstance(symbols, list):
+            symbol_list = symbols
+        else:
+            symbol_list = [symbols]
+
+        for symbol in symbol_list:
             try:
                 # Fetch chart data for last 5 days (interval=1d)
                 url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?range=5d&interval=1d"
@@ -299,94 +359,6 @@ class StockWidget:
                                 reverse=True))
         return sorted_data
 
-  
-    def _update_stock_display_ui(self, stocks_data):
-        """Update stock display in main thread - optimized for performance and alignment"""
-        if not self.window.winfo_exists():
-            return
-        current_time = datetime.now().strftime("%H:%M:%S")
-        if not self.last_updated_label:
-            self.last_updated_label = tk.Label(
-                self.window,
-                text=f"Updated: {current_time}",
-                bg=self.transparent_key,
-                fg='#AAAAAA',
-                font=('Segoe UI', 8)
-            )
-            self.last_updated_label.pack(pady=(0, 3), side=tk.BOTTOM)
-        else:
-            self.last_updated_label.config(text=f"Updated: {current_time}")
-
-        symbols_to_display = self.markets.get(self.current_market, [])
-        for symbol in symbols_to_display:
-            data = stocks_data.get(symbol)
-            if symbol not in self.stock_labels:
-                # This block is a fallback, ideally all labels are pre-created
-                row_frame = tk.Frame(self.stock_frame, bg=self.transparent_key) 
-                row_frame.pack(fill=tk.X, pady=2, padx=5)
-                
-                symbol_label = tk.Label(row_frame, text=symbol, bg=self.transparent_key, fg='white', font=('Segoe UI', 10, 'bold'), width=15, anchor='w')
-                symbol_label.pack(side=tk.LEFT, padx=(0,5))
-                
-                price_label = tk.Label(row_frame, bg=self.transparent_key, fg='white', font=('Segoe UI', 10), width=18, anchor='e')
-                price_label.pack(side=tk.RIGHT)
-                
-                self.stock_labels[symbol] = {'frame': row_frame, 'symbol': symbol_label, 'price': price_label}
-
-            if not data: # If data for a symbol is missing after fetch
-                self.stock_labels[symbol]['price'].config(text="N/A", fg='gray')
-                # Update symbol name to just symbol if company name was previously shown
-                self.stock_labels[symbol]['symbol'].config(text=symbol) 
-                continue
-
-            # Update existing labels
-            price = data['price']
-            change = data['change']
-            change_percent = data['change_percent']
-            
-            color = '#00DD00' if change >= 0 else '#DD5555'
-            sign = '+' if change >= 0 else ''
-            
-            currency_symbol = "₹" if self.current_market in ["NSE", "BSE"] else "$"
-            
-            formatted_price = f"{currency_symbol}{price:,.2f}"
-            price_text = f"{formatted_price} ({sign}{change_percent:.2f}%)"
-            
-            display_name = data.get('name', symbol)
-            max_name_len = 18
-            shortened_name = display_name[:max_name_len] + '...' if len(display_name) > max_name_len else display_name
-            
-            self.stock_labels[symbol]['symbol'].config(text=shortened_name) # Update symbol/name
-            self.stock_labels[symbol]['price'].config(text=price_text, fg=color) # Update price
-
-            # --- Render and display the graph ---
-            closes = data.get('history', [])
-            dates = data.get('history_dates', [])
-            if closes and len(closes) >= 2:
-                fig, ax = plt.subplots(figsize=(1.8, 0.7), dpi=60)
-                ax.plot(dates, closes, color='#00BFFF', marker='o', linewidth=2)
-                ax.fill_between(dates, closes, min(closes), color='#00BFFF', alpha=0.15)
-                ax.set_xticks(dates)
-                ax.set_xticklabels(dates, fontsize=6)
-                ax.set_yticklabels([])
-                ax.set_yticks([])
-                ax.set_frame_on(False)
-                for spine in ax.spines.values():
-                    spine.set_visible(False)
-                plt.tight_layout(pad=0.2)
-                buf = BytesIO()
-                plt.savefig(buf, format='png', bbox_inches='tight', transparent=True, pad_inches=0.05)
-                plt.close(fig)
-                buf.seek(0)
-                pil_img = Image.open(buf)
-                photo = ImageTk.PhotoImage(pil_img)
-                self.stock_labels[symbol]['graph'].config(image=photo)
-                self.stock_labels[symbol]['graph'].image = photo
-                self.stock_graphs[symbol] = photo
-            else:
-                self.stock_labels[symbol]['graph'].config(image='')
-                self.stock_graphs[symbol] = None
-
     def update_stocks(self):
         """Update stock data in background thread"""
         if not self.running or not hasattr(self, 'window') or not self.window.winfo_exists():
@@ -395,7 +367,7 @@ class StockWidget:
         def fetch_and_update():
             try:
                 symbols = self.markets.get(self.current_market, [])
-                stocks_data = self.fetch_stock_data(symbols)
+                stocks_data = self.fetch_stock_data(self.stock_symbols)
                 if hasattr(self, 'window') and self.window.winfo_exists():
                     self.update_stock_display(stocks_data)
             except Exception as e:

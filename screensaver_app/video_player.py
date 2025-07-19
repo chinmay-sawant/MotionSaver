@@ -795,7 +795,9 @@ class VideoClockScreenSaver:
                     
                     # Prepare stock widget creation (medium priority)
                     if config.get("enable_stock_widget", False) and StockWidget:
-                        widgets_to_create.append(("stock", config.get("stock_market", "NASDAQ")))
+                        # Pass the stock_market from config instead of hardcoded value
+                        stock_market = config.get("stock_market", "NASDAQ")
+                        widgets_to_create.append(("stock", stock_market))
                     
                     # Prepare media widget creation (lower priority - more resource intensive)
                     if config.get("enable_media_widget", False) and MediaWidget:
@@ -856,14 +858,15 @@ class VideoClockScreenSaver:
         logger.debug(f"Called _create_stock_widget with market={market}")
         try:
             """Create stock widget on main thread and make it sticky"""
-            symbols = self.user_config.get("stock_market", ["NASDAQ"])
+            # Get the market from config, not symbols
+            market_from_config = self.user_config.get("stock_market", "NASDAQ")
             stock_widget_toplevel = StockWidget(
                 self.master, 
                 self.TRANSPARENT_KEY, 
                 screen_width=screen_w,
                 screen_height=screen_h,
-                initial_market=market,
-                symbols=symbols
+                initial_market=market_from_config,  # Use the market from config
+                symbols=None  # Let the widget determine symbols based on market
             )
             # Make stock widget sticky (always on top)
             try:
@@ -876,7 +879,7 @@ class VideoClockScreenSaver:
             except Exception as e:
                 logger.warning(f"Could not set stock widget always on top: {e}")
             self.widgets.append(stock_widget_toplevel)
-            logger.info(f"Stock widget (Toplevel) for {market} created with symbols: {symbols}.")
+            logger.info(f"Stock widget (Toplevel) for {market_from_config} created.")
         except Exception as e:
             logger.error(f"Exception in _create_stock_widget: {e}")
         
