@@ -295,10 +295,11 @@ def handle_media_player_paused(event, player):
 
 class VideoClockScreenSaver:
 
-    def __init__(self, master, video_path_arg=None):
+    def __init__(self, master, video_path_arg=None, key_blocker_instance=None):
         logger.debug("Initializing VideoClockScreenSaver")
         try:
             self.master = master
+            self.key_blocker_instance = key_blocker_instance  # Store the actual blocker instance
             master.attributes('-fullscreen', True)
             master.configure(bg='black')
             
@@ -348,8 +349,9 @@ class VideoClockScreenSaver:
             self.overlay_canvas.place(x=0, y=0, width=self.width, height=self.height)
 
             # Make overlay window non-interactive but keep it visible
+            # Remove the -disabled attribute as we're using WS_EX_TRANSPARENT instead
             if platform.system() == 'Windows':
-                self.overlay_win.wm_attributes("-disabled", True)
+                self.overlay_win.wm_attributes("-disabled", False)
             
             # Ensure main window can receive all key events
             master.focus_force()
@@ -367,6 +369,8 @@ class VideoClockScreenSaver:
             self.label.bind("<KeyPress>", self._on_key_event)
             self.label.bind("<Button-1>", self._on_click_event)
 
+            self.overlay_canvas.bind("<Button-1>", self._on_click_event)
+            self.overlay_canvas.focus_force()
             # Load clock font settings from config
             self.clock_font_family = self.user_config.get("clock_font_family", "Segoe UI Emoji")
             self.clock_font_size = self.user_config.get("clock_font_size", 64)
@@ -605,7 +609,6 @@ class VideoClockScreenSaver:
             #     # Resume focus management and restore focus
             #     self.focus_management_active = True
             #     self.master.focus_force()
-            key_blocker = KeyBlocker(debug_print=True)
             if success: 
                 logger.info("Password verification successful, closing screensaver")
                 self.master.destroy()  # Changed from self.master.close()
@@ -617,13 +620,6 @@ class VideoClockScreenSaver:
                     hWinEventHook = None
                 root_ref_for_hook = None
 
-                # Disable key blocking
-                if key_blocker:
-                    if hasattr(key_blocker, 'stop_blocking'):
-                        key_blocker.stop_blocking()
-                    else:
-                        key_blocker.disable_all_blocking()
-                        
                 # Stop Ctrl+Alt+Del detector
                 if ctrl_alt_del_detector:
                     ctrl_alt_del_detector.restart_pending = True  # Prevent restart during shutdown
@@ -632,6 +628,40 @@ class VideoClockScreenSaver:
                     if sec_win.winfo_exists():
                         sec_win.destroy()
                 secondary_screen_windows = []
+                
+                # Add key blocker cleanup before quitting application
+                logger.info("Performing key blocker cleanup to ensure all blocking is disabled...")
+                try:
+                    # Use the actual key blocker instance that was passed from PhotoEngine
+                    if self.key_blocker_instance:
+                        logger.info("Using passed key blocker instance for cleanup")
+                        if hasattr(self.key_blocker_instance, 'stop_blocking'):
+                            # Enhanced blocker
+                            self.key_blocker_instance.stop_blocking()
+                            logger.info("Enhanced blocker cleanup completed via passed instance.")
+                        elif hasattr(self.key_blocker_instance, 'disable_all_blocking'):
+                            # Basic blocker
+                            self.key_blocker_instance.disable_all_blocking()
+                            logger.info("Basic blocker cleanup completed via passed instance.")
+                        else:
+                            logger.warning("Passed key blocker instance doesn't have expected cleanup methods")
+                    else:
+                        logger.info("No key blocker instance passed, attempting fallback cleanup")
+                        # Fallback: Try to import the same KeyBlocker that might have been used
+                        try:
+                            from utils.enhanced_key_blocker import EnhancedKeyBlocker as CleanupBlocker
+                            cleanup_blocker = CleanupBlocker(debug_print=True)
+                            if hasattr(cleanup_blocker, 'python_blocker') and cleanup_blocker.python_blocker:
+                                cleanup_blocker.python_blocker.disable_all_blocking()
+                                logger.info("Enhanced blocker cleanup completed via fallback.")
+                        except ImportError:
+                            from utils.key_blocker import KeyBlocker as CleanupBlocker
+                            cleanup_blocker = CleanupBlocker(debug_print=True)
+                            cleanup_blocker.disable_all_blocking()
+                            logger.info("Basic blocker cleanup completed via fallback.")
+                except Exception as e:
+                    logger.warning(f"Error during key blocker cleanup: {e}")
+                
                 # --- Relaunch tray with same elevation ---
                 try:
                     logger.info("Attempting to restart system tray after successful screensaver login...")
@@ -753,7 +783,7 @@ class VideoClockScreenSaver:
                 """Create widgets in separate thread with optimized timing"""
                 try:
                     # Reduced delay for faster startup
-                    time.sleep(0.1)  # Reduced from 0.5
+                    time.sleep(3)  # Reduced from 5
                     
                     widgets_to_create = []
                     
@@ -798,7 +828,7 @@ class VideoClockScreenSaver:
     def _create_weather_widget(self, pincode, country, screen_w, screen_h):
         logger.debug(f"Called _create_weather_widget with pincode={pincode}, country={country}")
         try:
-            """Create weather widget on main thread"""
+            """Create weather widget on main thread and make it sticky"""
             weather_widget_toplevel = WeatherWidget(
                 self.master, 
                 self.TRANSPARENT_KEY, 
@@ -807,44 +837,78 @@ class VideoClockScreenSaver:
                 pincode=pincode,
                 country_code=country
             )
-            
+            # Make weather widget sticky (always on top)
+            try:
+                weather_widget_toplevel.window.attributes('-topmost', True)
+                def keep_weather_widget_on_top():
+                    if hasattr(weather_widget_toplevel, 'window') and weather_widget_toplevel.window.winfo_exists():
+                        weather_widget_toplevel.window.attributes('-topmost', True)
+                        self.master.after(1000, keep_weather_widget_on_top)
+                self.master.after(1000, keep_weather_widget_on_top)
+            except Exception as e:
+                logger.warning(f"Could not set weather widget always on top: {e}")
             self.widgets.append(weather_widget_toplevel)
             logger.info(f"Weather widget created for {pincode}, {country}.")
-            
         except Exception as e:
             logger.error(f"Exception in _create_weather_widget: {e}")
 
     def _create_stock_widget(self, market, screen_w, screen_h):
         logger.debug(f"Called _create_stock_widget with market={market}")
         try:
-            """Create stock widget on main thread"""
+            """Create stock widget on main thread and make it sticky"""
+            if StockWidget is None:
+                logger.error("StockWidget class is None - import may have failed")
+                return
+                
+            # Get the market from config, not symbols
+            market_from_config = self.user_config.get("stock_market", "NASDAQ")
             stock_widget_toplevel = StockWidget(
                 self.master, 
                 self.TRANSPARENT_KEY, 
                 screen_width=screen_w,
                 screen_height=screen_h,
-                initial_market=market
+                initial_market=market_from_config,  # Use the market from config
+                symbols=None  # Let the widget determine symbols based on market
             )
-            
+            # Make stock widget sticky (always on top)
+            try:
+                stock_widget_toplevel.window.attributes('-topmost', True)
+                def keep_stock_widget_on_top():
+                    if hasattr(stock_widget_toplevel, 'window') and stock_widget_toplevel.window.winfo_exists():
+                        stock_widget_toplevel.window.attributes('-topmost', True)
+                        self.master.after(1000, keep_stock_widget_on_top)
+                self.master.after(1000, keep_stock_widget_on_top)
+            except Exception as e:
+                logger.warning(f"Could not set stock widget always on top: {e}")
             self.widgets.append(stock_widget_toplevel)
-            logger.info(f"Stock widget (Toplevel) for {market} created.")
-            
+            logger.info(f"Stock widget (Toplevel) for {market_from_config} created.")
         except Exception as e:
             logger.error(f"Exception in _create_stock_widget: {e}")
-    
+            logger.error(f"StockWidget class: {StockWidget}")
+            logger.error(f"Available attributes: {dir(StockWidget) if StockWidget else 'None'}")
+        
     def _create_media_widget(self, screen_w, screen_h):
         logger.debug("Called _create_media_widget")
         try:
-            """Create media widget on main thread"""
+            """Create media widget on main thread and make it sticky"""
             media_widget_toplevel = MediaWidget(
                 self.master, 
                 self.TRANSPARENT_KEY,
                 screen_width=screen_w,
                 screen_height=screen_h
             )
+            # Make media widget sticky (always on top)
+            try:
+                media_widget_toplevel.window.attributes('-topmost', True)
+                def keep_media_widget_on_top():
+                    if hasattr(media_widget_toplevel, 'window') and media_widget_toplevel.window.winfo_exists():
+                        media_widget_toplevel.window.attributes('-topmost', True)
+                        self.master.after(1000, keep_media_widget_on_top)
+                self.master.after(1000, keep_media_widget_on_top)
+            except Exception as e:
+                logger.warning(f"Could not set media widget always on top: {e}")
             self.widgets.append(media_widget_toplevel)
             logger.info(f"Media widget (Toplevel) created.")
-            
         except Exception as e:
             logger.error(f"Exception in _create_media_widget: {e}")
 
@@ -1110,7 +1174,7 @@ class VideoClockScreenSaver:
                 self.overlay_canvas.config(bg=self.TRANSPARENT_KEY)
                 # Ensure overlay stays on top and non-interactive
                 self.overlay_win.attributes('-topmost', True)
-                self.overlay_win.wm_attributes("-disabled", True)
+                self.overlay_win.wm_attributes("-disabled", False)
             
             # Clear previous overlays
             self.overlay_canvas.delete('all')

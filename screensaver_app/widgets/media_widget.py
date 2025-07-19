@@ -38,7 +38,7 @@ class MediaWidget:
         self.transparent_key = transparent_key
         
         self.media_track_info = None
-        self.media_check_interval = 20
+        self.media_check_interval = 5  # Reduced interval for more frequent detection
         self.detection_running = False
         self.initialized = False
         self.last_detection_time = 0

@@ -350,12 +350,28 @@ class KeyBlocker:
     
     def disable_all_blocking(self):
         """Disable all blocking methods and restore normal behavior."""
-        if self.registry_disabled and WINDOWS_REGISTRY_SUPPORT:
-            self.enable_task_manager_registry()
-            self.enable_windows_hotkeys_registry()
-            self.registry_disabled = False
+        self._print_debug("Starting disable_all_blocking...")
         
+        # Clear the special flags that might prevent cleanup
+        KeyBlocker._block_action_flags.clear()
+        
+        # Re-enable registry-based blocking if it was enabled
+        if self.registry_disabled and WINDOWS_REGISTRY_SUPPORT:
+            self._print_debug("Re-enabling Task Manager and Windows hotkeys via registry...")
+            task_mgr_enabled = self.enable_task_manager_registry()
+            hotkeys_enabled = self.enable_windows_hotkeys_registry()
+            self.registry_disabled = False
+            self._print_debug(f"Task Manager re-enabled: {task_mgr_enabled}, Hotkeys re-enabled: {hotkeys_enabled}")
+        else:
+            # Even if registry_disabled flag is False, try to re-enable anyway as a safety measure
+            if WINDOWS_REGISTRY_SUPPORT:
+                self._print_debug("Attempting registry cleanup as safety measure...")
+                self.enable_task_manager_registry()
+                self.enable_windows_hotkeys_registry()
+        
+        # Stop hook-based blocking
         if self.hooks_active:
+            self._print_debug("Stopping hook-based blocking...")
             self.stop_hook_blocking()
         
         self._print_debug("All key blocking disabled")
