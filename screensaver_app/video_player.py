@@ -349,8 +349,9 @@ class VideoClockScreenSaver:
             self.overlay_canvas.place(x=0, y=0, width=self.width, height=self.height)
 
             # Make overlay window non-interactive but keep it visible
+            # Remove the -disabled attribute as we're using WS_EX_TRANSPARENT instead
             if platform.system() == 'Windows':
-                self.overlay_win.wm_attributes("-disabled", True)
+                self.overlay_win.wm_attributes("-disabled", False)
             
             # Ensure main window can receive all key events
             master.focus_force()
@@ -368,6 +369,8 @@ class VideoClockScreenSaver:
             self.label.bind("<KeyPress>", self._on_key_event)
             self.label.bind("<Button-1>", self._on_click_event)
 
+            self.overlay_canvas.bind("<Button-1>", self._on_click_event)
+            self.overlay_canvas.focus_force()
             # Load clock font settings from config
             self.clock_font_family = self.user_config.get("clock_font_family", "Segoe UI Emoji")
             self.clock_font_size = self.user_config.get("clock_font_size", 64)
@@ -1137,7 +1140,7 @@ class VideoClockScreenSaver:
                 self.overlay_canvas.config(bg=self.TRANSPARENT_KEY)
                 # Ensure overlay stays on top and non-interactive
                 self.overlay_win.attributes('-topmost', True)
-                self.overlay_win.wm_attributes("-disabled", True)
+                self.overlay_win.wm_attributes("-disabled", False)
             
             # Clear previous overlays
             self.overlay_canvas.delete('all')
