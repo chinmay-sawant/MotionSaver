@@ -35,10 +35,10 @@ class StockWidget:
         self.window.overrideredirect(True)
         
         # Position in bottom-right corner (closer to bottom)
-        widget_width = 280
-        widget_height = 200
-        x_pos = screen_width - widget_width - 20
-        y_pos = screen_height - widget_height - 20  # Reduced offset for true bottom alignment
+        widget_width = 320  # Increased width for better layout
+        widget_height = 240  # Increased height to fit all 5 stocks
+        x_pos = screen_width - widget_width - 50  # Increased right padding
+        y_pos = screen_height - widget_height - 50  # Increased bottom padding
         
         # Default symbols for each market
         self.stock_symbols = {
@@ -125,46 +125,41 @@ class StockWidget:
                 self.status_label.config(text="Error loading stocks")
                 return
 
-            # Show only top 5 gainers
-            top_stocks = sorted(self.stock_data, key=lambda x: x['change_percent'], reverse=True)[:5]
+            # Show first 5 stocks (removed sorting by gains)
+            top_stocks = self.stock_data[:5]
 
             for stock in top_stocks:
                 stock_frame = tk.Frame(self.stock_list_frame, bg=self.transparent_key)
-                stock_frame.pack(fill=tk.X, pady=3, padx=5)
+                stock_frame.pack(fill=tk.X, pady=1, padx=5)  # Reduced padding for compactness
 
-                # Symbol
+                # Symbol - shortened and smaller
+                symbol = stock["symbol"]
+                # Shorten symbol for display
+                if "." in symbol:
+                    symbol = symbol.split(".")[0][:4]  # Remove suffix and limit to 4 chars
+                else:
+                    symbol = symbol[:4]  # Limit to 4 characters
+                    
                 symbol_label = tk.Label(
-                    stock_frame, text=stock["symbol"], font=('Arial', 10, 'bold'),
-                    fg='white', bg=self.transparent_key, width=6, anchor='w'
+                    stock_frame, text=symbol, font=('Arial', 9, 'bold'),  # Smaller font
+                    fg='white', bg=self.transparent_key, width=4, anchor='w'  # Reduced width
                 )
                 symbol_label.pack(side=tk.LEFT)
 
-                # Price
-                price_text = f"${stock['price']:.2f}"
-                price_label = tk.Label(
-                    stock_frame, text=price_text, font=('Arial', 10),
-                    fg='white', bg=self.transparent_key, width=8, anchor='e'
-                )
-                price_label.pack(side=tk.LEFT, padx=(5, 0))
-
-                # Change amount and percentage
-                change = stock['change']
-                change_percent = stock['change_percent']
-
-                if change >= 0:
-                    change_color = '#00ff88'
-                    change_text = f"+${change:.2f} (+{change_percent:.1f}%)"
+                # Price with currency conversion - smaller font and width
+                price = stock['price']
+                if self.current_market in ["NSE", "BSE"]:
+                    price_text = f"₹{price:.0f}"  # Remove decimal for compactness
                 else:
-                    change_color = '#ff4444'
-                    change_text = f"${change:.2f} ({change_percent:.1f}%)"
-
-                change_label = tk.Label(
-                    stock_frame, text=change_text, font=('Arial', 9),
-                    fg=change_color, bg=self.transparent_key, anchor='e'
+                    price_text = f"${price:.2f}"
+                
+                price_label = tk.Label(
+                    stock_frame, text=price_text, font=('Arial', 9),  # Smaller font
+                    fg='white', bg=self.transparent_key, width=6, anchor='e'  # Reduced width
                 )
-                change_label.pack(side=tk.RIGHT, fill=tk.X, expand=True, padx=(5, 0))
+                price_label.pack(side=tk.LEFT, padx=(3, 0))  # Reduced padding
 
-                # Transparent graph for past data using numpy
+                # Transparent graph for past data using numpy - smaller and no timestamps
                 closes = stock.get('history', [])
                 dates = stock.get('history_dates', [])
                 if closes and len(closes) >= 2:
@@ -172,31 +167,32 @@ class StockWidget:
                     from io import BytesIO
                     from PIL import Image, ImageTk
                     closes_np = np.array(closes)
-                    fig, ax = plt.subplots(figsize=(1.8, 0.7), dpi=60)
-                    ax.plot(dates, closes_np, color='#00BFFF', marker='o', linewidth=2)
+                    fig, ax = plt.subplots(figsize=(1.5, 0.5), dpi=50)  # Smaller graph
+                    ax.plot(dates, closes_np, color='#00BFFF', linewidth=1.5)  # Removed markers
                     ax.fill_between(dates, closes_np, closes_np.min(), color='#00BFFF', alpha=0.15)
-                    ax.set_xticks(dates)
-                    ax.set_xticklabels(dates, fontsize=6)
-                    ax.set_yticklabels([])
+                    # Remove all axis elements including timestamps
+                    ax.set_xticks([])
                     ax.set_yticks([])
+                    ax.set_xticklabels([])
+                    ax.set_yticklabels([])
                     ax.set_frame_on(False)
                     for spine in ax.spines.values():
                         spine.set_visible(False)
-                    plt.tight_layout(pad=0.2)
+                    plt.tight_layout(pad=0.1)  # Reduced padding
                     fig.patch.set_alpha(0.0)  # Transparent background
                     ax.patch.set_alpha(0.0)
                     buf = BytesIO()
-                    plt.savefig(buf, format='png', bbox_inches='tight', transparent=True, pad_inches=0.05)
+                    plt.savefig(buf, format='png', bbox_inches='tight', transparent=True, pad_inches=0.02)
                     plt.close(fig)
                     buf.seek(0)
                     pil_img = Image.open(buf)
                     photo = ImageTk.PhotoImage(pil_img)
                     graph_label = tk.Label(stock_frame, image=photo, bg=self.transparent_key)
                     graph_label.image = photo
-                    graph_label.pack(side=tk.RIGHT, padx=(5, 0))
+                    graph_label.pack(side=tk.RIGHT, padx=(3, 0))  # Reduced padding
 
-            # Update status
-            self.status_label.config(text=f"Updated: {time.strftime('%H:%M')} • Top 5 Gainers")
+            # Update status (removed "Top 5 Gainers" text)
+            self.status_label.config(text=f"Updated: {time.strftime('%H:%M')}")
 
         except Exception as e:
             logger.error(f"Error updating stock display: {e}")
@@ -379,6 +375,18 @@ class StockWidget:
     def start_updates(self):
         """Start periodic updates"""
         self.running = True
+        self.update_stocks()
+        self._schedule_updates()
+        
+    def stop_updates(self):
+        """Stop periodic updates"""
+        self.running = False
+        
+    def destroy(self):
+        """Clean up widget"""
+        self.stop_updates()
+        if hasattr(self, 'window') and self.window.winfo_exists():
+            self.window.destroy()
         self.update_stocks()
         self._schedule_updates()
         
