@@ -828,7 +828,7 @@ class VideoClockScreenSaver:
     def _create_weather_widget(self, pincode, country, screen_w, screen_h):
         logger.debug(f"Called _create_weather_widget with pincode={pincode}, country={country}")
         try:
-            """Create weather widget on main thread"""
+            """Create weather widget on main thread and make it sticky"""
             weather_widget_toplevel = WeatherWidget(
                 self.master, 
                 self.TRANSPARENT_KEY, 
@@ -837,44 +837,71 @@ class VideoClockScreenSaver:
                 pincode=pincode,
                 country_code=country
             )
-            
+            # Make weather widget sticky (always on top)
+            try:
+                weather_widget_toplevel.window.attributes('-topmost', True)
+                def keep_weather_widget_on_top():
+                    if hasattr(weather_widget_toplevel, 'window') and weather_widget_toplevel.window.winfo_exists():
+                        weather_widget_toplevel.window.attributes('-topmost', True)
+                        self.master.after(1000, keep_weather_widget_on_top)
+                self.master.after(1000, keep_weather_widget_on_top)
+            except Exception as e:
+                logger.warning(f"Could not set weather widget always on top: {e}")
             self.widgets.append(weather_widget_toplevel)
             logger.info(f"Weather widget created for {pincode}, {country}.")
-            
         except Exception as e:
             logger.error(f"Exception in _create_weather_widget: {e}")
 
     def _create_stock_widget(self, market, screen_w, screen_h):
         logger.debug(f"Called _create_stock_widget with market={market}")
         try:
-            """Create stock widget on main thread"""
+            """Create stock widget on main thread and make it sticky"""
+            symbols = self.user_config.get("stock_symbols", ["AAPL", "GOOGL", "MSFT"])
             stock_widget_toplevel = StockWidget(
                 self.master, 
                 self.TRANSPARENT_KEY, 
                 screen_width=screen_w,
                 screen_height=screen_h,
-                initial_market=market
+                initial_market=market,
+                symbols=symbols
             )
-            
+            # Make stock widget sticky (always on top)
+            try:
+                stock_widget_toplevel.window.attributes('-topmost', True)
+                def keep_stock_widget_on_top():
+                    if hasattr(stock_widget_toplevel, 'window') and stock_widget_toplevel.window.winfo_exists():
+                        stock_widget_toplevel.window.attributes('-topmost', True)
+                        self.master.after(1000, keep_stock_widget_on_top)
+                self.master.after(1000, keep_stock_widget_on_top)
+            except Exception as e:
+                logger.warning(f"Could not set stock widget always on top: {e}")
             self.widgets.append(stock_widget_toplevel)
-            logger.info(f"Stock widget (Toplevel) for {market} created.")
-            
+            logger.info(f"Stock widget (Toplevel) for {market} created with symbols: {symbols}.")
         except Exception as e:
             logger.error(f"Exception in _create_stock_widget: {e}")
-    
+        
     def _create_media_widget(self, screen_w, screen_h):
         logger.debug("Called _create_media_widget")
         try:
-            """Create media widget on main thread"""
+            """Create media widget on main thread and make it sticky"""
             media_widget_toplevel = MediaWidget(
                 self.master, 
                 self.TRANSPARENT_KEY,
                 screen_width=screen_w,
                 screen_height=screen_h
             )
+            # Make media widget sticky (always on top)
+            try:
+                media_widget_toplevel.window.attributes('-topmost', True)
+                def keep_media_widget_on_top():
+                    if hasattr(media_widget_toplevel, 'window') and media_widget_toplevel.window.winfo_exists():
+                        media_widget_toplevel.window.attributes('-topmost', True)
+                        self.master.after(1000, keep_media_widget_on_top)
+                self.master.after(1000, keep_media_widget_on_top)
+            except Exception as e:
+                logger.warning(f"Could not set media widget always on top: {e}")
             self.widgets.append(media_widget_toplevel)
             logger.info(f"Media widget (Toplevel) created.")
-            
         except Exception as e:
             logger.error(f"Exception in _create_media_widget: {e}")
 
