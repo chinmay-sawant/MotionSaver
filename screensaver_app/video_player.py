@@ -17,6 +17,8 @@ import sys
 import subprocess
 from utils.multi_monitor import update_secondary_monitor_blackouts
 from utils.wallpaper import set_windows_wallpaper
+from utils.app_utils import  release_lock
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from screensaver_app.central_logger import get_logger, log_startup, log_shutdown, log_exception
 logger = get_logger('VideoPlayer')
@@ -610,6 +612,8 @@ class VideoClockScreenSaver:
             #     self.focus_management_active = True
             #     self.master.focus_force()
             if success: 
+                release_lock()
+
                 logger.info("Password verification successful, closing screensaver")
                 self.master.destroy()  # Changed from self.master.close()
                 if hWinEventHook: # Unhook before destroying windows
