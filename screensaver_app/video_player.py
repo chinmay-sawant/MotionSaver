@@ -856,7 +856,7 @@ class VideoClockScreenSaver:
         logger.debug(f"Called _create_stock_widget with market={market}")
         try:
             """Create stock widget on main thread and make it sticky"""
-            symbols = self.user_config.get("stock_symbols", ["AAPL", "GOOGL", "MSFT"])
+            symbols = self.user_config.get("stock_market", ["NASDAQ"])
             stock_widget_toplevel = StockWidget(
                 self.master, 
                 self.TRANSPARENT_KEY, 

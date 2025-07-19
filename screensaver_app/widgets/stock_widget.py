@@ -100,61 +100,7 @@ class StockWidget:
             fg='#888888', bg=self.transparent_key
         )
         self.status_label.pack(side=tk.BOTTOM, pady=5)
-    
-    def get_stock_data_demo(self):
-        """Get demo stock data (since real APIs require keys)"""
-        import random
-        
-        symbols = self.stock_symbols.get(self.current_market, ["DEMO"])
-        stock_data = []
-        
-        for symbol in symbols:
-            # Generate realistic demo data
-            base_price = random.uniform(50, 500)
-            change_percent = random.uniform(-5, 5)
-            change_amount = base_price * (change_percent / 100)
-            
-            stock_data.append({
-                "symbol": symbol,
-                "price": base_price,
-                "change": change_amount,
-                "change_percent": change_percent
-            })
-        
-        return stock_data
-    
-    def get_stock_data_free_api(self):
-        """Attempt to get real stock data from free APIs"""
-        try:
-            # Using Alpha Vantage free tier (requires API key - demo fallback)
-            # For production, users would need to add their API key to config
-            symbols = self.stock_symbols.get(self.current_market, ["AAPL"])
-            
-            # This is a placeholder - in real implementation, 
-            # you'd use a free API like Alpha Vantage, IEX Cloud, or Yahoo Finance
-            logger.info("Free API stock data not configured, using demo data")
-            return self.get_stock_data_demo()
-            
-        except Exception as e:
-            logger.error(f"Error fetching stock data: {e}")
-            return self.get_stock_data_demo()
-    
-    # def fetch_stock_data(self):
-    #     """Fetch stock market data"""
-    #     try:
-    #         logger.debug(f"Fetching stock data for {self.current_market}")
-    #         self.stock_data = self.get_stock_data_free_api()
-    #         self.last_update = time.time()
-    #         logger.info("Stock data fetched successfully")
-            
-    #         # Schedule UI update on main thread
-    #         self.window.after(0, self.update_stock_display)
-            
-    #     except Exception as e:
-    #         logger.error(f"Error fetching stock data: {e}")
-    #         self.stock_data = []
-    #         self.window.after(0, self.update_stock_display)
-    
+
     def update_stock_display(self):
         """Update the stock display with current data"""
         try:
@@ -222,10 +168,20 @@ class StockWidget:
                     if hasattr(self, 'window') and self.window.winfo_exists():
                         current_time = time.time()
                         if current_time - self.last_update > self.update_interval:
-                            symbols = self.stock_symbols.get(self.current_market, [])
-                            self.fetch_stock_data(symbols)
-
-                        time.sleep(30)  # Check every 30 seconds
+                            symbols = self.symbols if self.symbols else self.stock_symbols.get(self.current_market, [])
+                            stocks_data = self.fetch_stock_data(symbols)
+                            self.stock_data = [
+                                {
+                                    "symbol": symbol,
+                                    "price": data["price"],
+                                    "change": data["change"],
+                                    "change_percent": data["change_percent"]
+                                }
+                                for symbol, data in stocks_data.items()
+                            ]
+                            self.last_update = current_time
+                            self.update_stock_display()
+                        time.sleep(2)  # Check every 30 seconds
                     else:
                         break
                 except tk.TclError:
@@ -233,11 +189,24 @@ class StockWidget:
                 except Exception as e:
                     logger.error(f"Error in stock update cycle: {e}")
                     time.sleep(30)
-        
-        # Initial fetch
-        threading.Thread(target=self.fetch_stock_data, args=(self.symbols,), daemon=True).start()
-        
-        # Start update cycle
+
+        # Initial fetch and UI update
+        def initial_fetch():
+            symbols = self.symbols if self.symbols else self.stock_symbols.get(self.current_market, [])
+            stocks_data = self.fetch_stock_data(symbols)
+            self.stock_data = [
+                {
+                    "symbol": symbol,
+                    "price": data["price"],
+                    "change": data["change"],
+                    "change_percent": data["change_percent"]
+                }
+                for symbol, data in stocks_data.items()
+            ]
+            self.last_update = time.time()
+            self.update_stock_display()
+
+        threading.Thread(target=initial_fetch, daemon=True).start()
         threading.Thread(target=update_cycle, daemon=True).start()
     
     def destroy(self):
@@ -330,11 +299,7 @@ class StockWidget:
                                 reverse=True))
         return sorted_data
 
-    def update_stock_display(self, stocks_data):
-        """Update the stock display with new data"""
-        if self.window.winfo_exists():
-            self.parent_root.after(0, self._update_stock_display_ui, stocks_data)
-
+  
     def _update_stock_display_ui(self, stocks_data):
         """Update stock display in main thread - optimized for performance and alignment"""
         if not self.window.winfo_exists():

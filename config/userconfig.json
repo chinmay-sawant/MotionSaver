@@ -26,6 +26,6 @@
   "preferred_gpu": "{'name': '31.0.15.5176', 'memory': '4293918720', 'type': 'unknown', 'platform': 'windows'}",
   "gpu_acceleration": true,
   "video_backend": "auto",
-  "last_video_timestamp": 3.15,
+  "last_video_timestamp": 17.651,
   "enable_livewallpaper": false
 }
