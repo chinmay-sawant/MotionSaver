@@ -1,3 +1,4 @@
+import logging
 import tkinter as tk
 import threading
 import time
@@ -8,6 +9,8 @@ import urllib.request
 import urllib.parse
 import requests 
 from datetime import datetime
+import matplotlib
+matplotlib.use('Agg')  # Use non-interactive backend
 import matplotlib.pyplot as plt
 from io import BytesIO
 from PIL import Image, ImageTk
@@ -16,6 +19,7 @@ from PIL import Image, ImageTk
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from screensaver_app.central_logger import get_logger
 logger = get_logger('StockWidget')
+logger.setLevel(logging.INFO)  # Fix: separate the setLevel call
 
 class StockWidget:
     def __init__(self, parent, transparent_key, screen_width, screen_height, initial_market="NASDAQ", symbols=None):
@@ -110,11 +114,17 @@ class StockWidget:
 
     def update_stock_display(self):
         """Update the stock display with current data"""
-        import numpy as np
         try:
-            # Clear existing stock items
+            # Check if window still exists
+            if not hasattr(self, 'window') or not self.window.winfo_exists():
+                return
+                
+            # Clear existing stock items safely
             for widget in self.stock_list_frame.winfo_children():
-                widget.destroy()
+                try:
+                    widget.destroy()
+                except tk.TclError:
+                    pass  # Widget already destroyed
 
             if not self.stock_data:
                 error_label = tk.Label(
@@ -122,78 +132,94 @@ class StockWidget:
                     font=('Arial', 10), fg='#888888', bg=self.transparent_key
                 )
                 error_label.pack(pady=20)
-                self.status_label.config(text="Error loading stocks")
+                if hasattr(self, 'status_label') and self.status_label.winfo_exists():
+                    self.status_label.config(text="Error loading stocks")
                 return
 
-            # Show first 5 stocks (removed sorting by gains)
+            # Show first 5 stocks
             top_stocks = self.stock_data[:5]
 
             for stock in top_stocks:
-                stock_frame = tk.Frame(self.stock_list_frame, bg=self.transparent_key)
-                stock_frame.pack(fill=tk.X, pady=1, padx=5)  # Reduced padding for compactness
+                try:
+                    stock_frame = tk.Frame(self.stock_list_frame, bg=self.transparent_key)
+                    stock_frame.pack(fill=tk.X, pady=2, padx=5)
 
-                # Symbol - shortened and smaller
-                symbol = stock["symbol"]
-                # Shorten symbol for display
-                if "." in symbol:
-                    symbol = symbol.split(".")[0][:4]  # Remove suffix and limit to 4 chars
-                else:
-                    symbol = symbol[:4]  # Limit to 4 characters
+                    # Symbol - keep more readable
+                    symbol = stock["symbol"]
+                    if "." in symbol:
+                        symbol = symbol.split(".")[0][:6]  # Increased for readability
+                    else:
+                        symbol = symbol[:6]
+                        
+                    symbol_label = tk.Label(
+                        stock_frame, text=symbol, font=('Arial', 9, 'bold'),
+                        fg='white', bg=self.transparent_key, width=6, anchor='w'
+                    )
+                    symbol_label.pack(side=tk.LEFT)
+
+                    # Price with currency conversion
+                    price = stock['price']
+                    if self.current_market in ["NSE", "BSE"]:
+                        price_text = f"₹{price:.1f}"
+                    else:
+                        price_text = f"${price:.2f}"
                     
-                symbol_label = tk.Label(
-                    stock_frame, text=symbol, font=('Arial', 9, 'bold'),  # Smaller font
-                    fg='white', bg=self.transparent_key, width=4, anchor='w'  # Reduced width
-                )
-                symbol_label.pack(side=tk.LEFT)
+                    price_label = tk.Label(
+                        stock_frame, text=price_text, font=('Arial', 9),
+                        fg='white', bg=self.transparent_key, width=8, anchor='e'
+                    )
+                    price_label.pack(side=tk.LEFT, padx=(5, 0))
 
-                # Price with currency conversion - smaller font and width
-                price = stock['price']
-                if self.current_market in ["NSE", "BSE"]:
-                    price_text = f"₹{price:.0f}"  # Remove decimal for compactness
-                else:
-                    price_text = f"${price:.2f}"
-                
-                price_label = tk.Label(
-                    stock_frame, text=price_text, font=('Arial', 9),  # Smaller font
-                    fg='white', bg=self.transparent_key, width=6, anchor='e'  # Reduced width
-                )
-                price_label.pack(side=tk.LEFT, padx=(3, 0))  # Reduced padding
+                    # Transparent graph with proper error handling
+                    closes = stock.get('history', [])
+                    dates = stock.get('history_dates', [])
+                    if closes and len(closes) >= 2:
+                        try:
+                            import numpy as np
+                            closes_np = np.array(closes)
+                            
+                            # Create figure with proper cleanup
+                            fig, ax = plt.subplots(figsize=(1.8, 0.6), dpi=60)
+                            ax.plot(dates, closes_np, color='#00BFFF', linewidth=2)
+                            ax.fill_between(dates, closes_np, closes_np.min(), color='#00BFFF', alpha=0.15)
+                            # Remove all axis elements
+                            ax.set_xticks([])
+                            ax.set_yticks([])
+                            ax.set_xticklabels([])
+                            ax.set_yticklabels([])
+                            ax.set_frame_on(False)
+                            for spine in ax.spines.values():
+                                spine.set_visible(False)
+                            plt.tight_layout(pad=0.2)
+                            fig.patch.set_alpha(0.0)
+                            ax.patch.set_alpha(0.0)
+                            
+                            # Save to buffer
+                            buf = BytesIO()
+                            fig.savefig(buf, format='png', bbox_inches='tight', transparent=True, pad_inches=0.05)
+                            plt.close(fig)  # Important: close figure to free memory
+                            
+                            buf.seek(0)
+                            pil_img = Image.open(buf)
+                            photo = ImageTk.PhotoImage(pil_img)
+                            graph_label = tk.Label(stock_frame, image=photo, bg=self.transparent_key)
+                            graph_label.image = photo  # Keep reference
+                            graph_label.pack(side=tk.RIGHT, padx=(5, 0))
+                            buf.close()  # Close buffer
+                            
+                        except Exception as graph_error:
+                            logger.debug(f"Error creating graph for {symbol}: {graph_error}")
+                            
+                except tk.TclError as widget_error:
+                    logger.debug(f"Widget error for {stock.get('symbol', 'unknown')}: {widget_error}")
+                    continue
 
-                # Transparent graph for past data using numpy - smaller and no timestamps
-                closes = stock.get('history', [])
-                dates = stock.get('history_dates', [])
-                if closes and len(closes) >= 2:
-                    import matplotlib.pyplot as plt
-                    from io import BytesIO
-                    from PIL import Image, ImageTk
-                    closes_np = np.array(closes)
-                    fig, ax = plt.subplots(figsize=(1.5, 0.5), dpi=50)  # Smaller graph
-                    ax.plot(dates, closes_np, color='#00BFFF', linewidth=1.5)  # Removed markers
-                    ax.fill_between(dates, closes_np, closes_np.min(), color='#00BFFF', alpha=0.15)
-                    # Remove all axis elements including timestamps
-                    ax.set_xticks([])
-                    ax.set_yticks([])
-                    ax.set_xticklabels([])
-                    ax.set_yticklabels([])
-                    ax.set_frame_on(False)
-                    for spine in ax.spines.values():
-                        spine.set_visible(False)
-                    plt.tight_layout(pad=0.1)  # Reduced padding
-                    fig.patch.set_alpha(0.0)  # Transparent background
-                    ax.patch.set_alpha(0.0)
-                    buf = BytesIO()
-                    plt.savefig(buf, format='png', bbox_inches='tight', transparent=True, pad_inches=0.02)
-                    plt.close(fig)
-                    buf.seek(0)
-                    pil_img = Image.open(buf)
-                    photo = ImageTk.PhotoImage(pil_img)
-                    graph_label = tk.Label(stock_frame, image=photo, bg=self.transparent_key)
-                    graph_label.image = photo
-                    graph_label.pack(side=tk.RIGHT, padx=(3, 0))  # Reduced padding
+            # Update status safely
+            if hasattr(self, 'status_label') and self.status_label.winfo_exists():
+                self.status_label.config(text=f"Updated: {time.strftime('%H:%M')}")
 
-            # Update status (removed "Top 5 Gainers" text)
-            self.status_label.config(text=f"Updated: {time.strftime('%H:%M')}")
-
+        except tk.TclError as e:
+            logger.debug(f"Window no longer exists during update: {e}")
         except Exception as e:
             logger.error(f"Error updating stock display: {e}")
     
@@ -230,33 +256,43 @@ class StockWidget:
                     logger.error(f"Error in stock update cycle: {e}")
                     time.sleep(30)
 
-        # Initial fetch and UI update
+        # Initial fetch and UI update - ensure it runs in main thread
         def initial_fetch():
-            # Use the symbols for the current market
-            symbols_to_fetch = self.stock_symbols.get(self.current_market, self.stock_symbols["NASDAQ"])
-            stocks_data = self.fetch_stock_data(symbols_to_fetch)
-            self.stock_data = [
-                {
-                    "symbol": symbol,
-                    "price": data["price"],
-                    "change": data["change"],
-                    "change_percent": data["change_percent"],
-                    "history": data.get("history", []),
-                    "history_dates": data.get("history_dates", [])
-                }
-                for symbol, data in stocks_data.items()
-            ]
-            self.last_update = time.time()
-            self.update_stock_display()
+            try:
+                # Use the symbols for the current market
+                symbols_to_fetch = self.stock_symbols.get(self.current_market, self.stock_symbols["NASDAQ"])
+                stocks_data = self.fetch_stock_data(symbols_to_fetch)
+                self.stock_data = [
+                    {
+                        "symbol": symbol,
+                        "price": data["price"],
+                        "change": data["change"],
+                        "change_percent": data["change_percent"],
+                        "history": data.get("history", []),
+                        "history_dates": data.get("history_dates", [])
+                    }
+                    for symbol, data in stocks_data.items()
+                ]
+                self.last_update = time.time()
+                
+                # Schedule UI update in main thread
+                if hasattr(self, 'window') and self.window.winfo_exists():
+                    self.window.after(0, self.update_stock_display)
+            except Exception as e:
+                logger.error(f"Error in initial fetch: {e}")
 
         threading.Thread(target=initial_fetch, daemon=True).start()
         threading.Thread(target=update_cycle, daemon=True).start()
     
     def destroy(self):
         """Clean up the widget"""
-        if hasattr(self, 'window'):
-            self.window.destroy()
-            logger.warning(f"Unknown market: {self.current_market}")
+        try:
+            if hasattr(self, 'window') and self.window.winfo_exists():
+                self.window.destroy()
+        except tk.TclError:
+            pass  # Window already destroyed
+        except Exception as e:
+            logger.debug(f"Error during widget cleanup: {e}")
         
     def clear_stock_display(self):
         """Clear current stock display"""

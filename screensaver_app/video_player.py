@@ -856,6 +856,10 @@ class VideoClockScreenSaver:
         logger.debug(f"Called _create_stock_widget with market={market}")
         try:
             """Create stock widget on main thread and make it sticky"""
+            if StockWidget is None:
+                logger.error("StockWidget class is None - import may have failed")
+                return
+                
             # Get the market from config, not symbols
             market_from_config = self.user_config.get("stock_market", "NASDAQ")
             stock_widget_toplevel = StockWidget(
@@ -880,6 +884,8 @@ class VideoClockScreenSaver:
             logger.info(f"Stock widget (Toplevel) for {market_from_config} created.")
         except Exception as e:
             logger.error(f"Exception in _create_stock_widget: {e}")
+            logger.error(f"StockWidget class: {StockWidget}")
+            logger.error(f"Available attributes: {dir(StockWidget) if StockWidget else 'None'}")
         
     def _create_media_widget(self, screen_w, screen_h):
         logger.debug("Called _create_media_widget")
