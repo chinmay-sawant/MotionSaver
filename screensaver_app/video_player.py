@@ -783,7 +783,7 @@ class VideoClockScreenSaver:
                 """Create widgets in separate thread with optimized timing"""
                 try:
                     # Reduced delay for faster startup
-                    time.sleep(0.1)  # Reduced from 0.5
+                    time.sleep(3)  # Reduced from 5
                     
                     widgets_to_create = []
                     
@@ -795,9 +795,7 @@ class VideoClockScreenSaver:
                     
                     # Prepare stock widget creation (medium priority)
                     if config.get("enable_stock_widget", False) and StockWidget:
-                        # Pass the stock_market from config instead of hardcoded value
-                        stock_market = config.get("stock_market", "NASDAQ")
-                        widgets_to_create.append(("stock", stock_market))
+                        widgets_to_create.append(("stock", config.get("stock_market", "NASDAQ")))
                     
                     # Prepare media widget creation (lower priority - more resource intensive)
                     if config.get("enable_media_widget", False) and MediaWidget:
