@@ -53,16 +53,13 @@ class ServiceRegistrar:
         # Use sys.executable to ensure we use the same python interpreter in the batch file
         # that is running this script, which is important in environments with multiple pythons.
         if self.photoengine_exec.endswith(".exe"):
-            launch_cmd = f'"{self.photoengine_exec}" --min --no-elevate'
+            app_cmd = f'"{self.photoengine_exec}" --min --no-elevate'
         else:
-            launch_cmd = f'"{sys.executable}" "{self.photoengine_exec}" --min --no-elevate'
+            app_cmd = f'"{sys.executable}" "{self.photoengine_exec}" --min --no-elevate'
             
-        batch_file_content = f"""
-@echo off
-rem Change directory to the location of this script
+        batch_file_content = f"""@echo off
 cd /d "%~dp0"
-rem Start the application minimized using the correct executable
-{launch_cmd}
+start /min "" {app_cmd}
 """
         # Use strip() to remove leading/trailing whitespace from the multiline string
         batch_file_content = '\n'.join([line.strip() for line in batch_file_content.strip().split('\n')])
@@ -113,7 +110,7 @@ rem Start the application minimized using the correct executable
         command = [
             'schtasks', '/create',
             '/tn', self.TASK_NAME,
-            '/tr', f'cmd /c start "" /min "{self.batch_file_path}"',
+            '/tr', self.batch_file_path,
             '/sc', 'ONEVENT',
             '/ec', 'Security',
             '/mo', '*[System[(EventID=4624)]]',
