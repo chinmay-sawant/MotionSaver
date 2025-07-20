@@ -1,3 +1,4 @@
+import logging
 import tkinter as tk
 import vlc
 from PIL import Image, ImageTk, ImageDraw, ImageFont
@@ -19,9 +20,15 @@ from utils.multi_monitor import update_secondary_monitor_blackouts
 from utils.wallpaper import set_windows_wallpaper
 from utils.app_utils import  release_lock
 
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Ensure parent directory is in sys.path for package imports
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+if parent_dir not in sys.path:
+    sys.path.insert(0, parent_dir)
+    
 from screensaver_app.central_logger import get_logger, log_startup, log_shutdown, log_exception
 logger = get_logger('VideoPlayer')
+logger.setLevel(logging.INFO)  # Set to INFO for general logs
 # Try to import enhanced blocker first, fallback to basic blocker
 try:
     from utils.enhanced_key_blocker import EnhancedKeyBlocker as KeyBlocker

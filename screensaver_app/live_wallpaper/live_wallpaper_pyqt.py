@@ -15,18 +15,14 @@ from PyQt5.QtCore import Qt
 import win32gui
 import win32con
 
-# Assume central_logger is in a discoverable path
-# from screensaver_app.central_logger import get_logger
-# logger = get_logger('LiveWallpaperQt_VLC')
+# Ensure parent directory is in sys.path for package imports
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+if parent_dir not in sys.path:
+    sys.path.insert(0, parent_dir)
+from screensaver_app.central_logger import get_logger, log_startup, log_shutdown, log_exception
+logger = get_logger('LiveWallpaperQt_VLC')
 
-# Fallback logger for standalone testing
-import logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-logger = logging.getLogger('LiveWallpaperQt_VLC')
-
-
-# --- Configuration and Path Setup ---
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 
 try:
     from screensaver_app.PasswordConfig import load_config, save_config
