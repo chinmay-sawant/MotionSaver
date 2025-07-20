@@ -113,7 +113,7 @@ rem Start the application minimized using the correct executable
         command = [
             'schtasks', '/create',
             '/tn', self.TASK_NAME,
-            '/tr', self.batch_file_path,
+            '/tr', f'cmd /c start "" /min "{self.batch_file_path}"',
             '/sc', 'ONEVENT',
             '/ec', 'Security',
             '/mo', '*[System[(EventID=4624)]]',
