@@ -5,12 +5,12 @@ from retry_requests import retry
 import pgeocode
 import os
 import sys
-
+import logging
 # Add central logging
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from screensaver_app.central_logger import get_logger, log_startup, log_shutdown, log_exception
 logger = get_logger('WeatherAPI')
-
+logger.setLevel(logging.INFO)
 # Setup the Open-Meteo API client with cache and retry on error
 cache_session = requests_cache.CachedSession('.cache', expire_after=3600)
 retry_session = retry(cache_session, retries=5, backoff_factor=0.2)

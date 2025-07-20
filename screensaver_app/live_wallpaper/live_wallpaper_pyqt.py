@@ -1,180 +1,174 @@
 import sys
 import os
 import time
+import signal
+import ctypes
 import threading
-import cv2
-import numpy as np
 
-from PyQt5.QtWidgets import QApplication, QWidget, QLabel
-from PyQt5.QtCore import Qt, QObject, pyqtSignal
-from PyQt5.QtGui import QImage, QPixmap
+# --- New Import ---
+import vlc
+
+# --- PyQt5 and Win32 Imports ---
+from PyQt5.QtWidgets import QApplication, QWidget
+from PyQt5.QtCore import Qt
 
 import win32gui
 import win32con
-import signal
-from screensaver_app.central_logger import get_logger
-logger = get_logger('LiveWallpaperQt')
-# --- Configuration and Path Setup ---
 
-# Ensure the project root is in the path for custom module imports
+# Assume central_logger is in a discoverable path
+# from screensaver_app.central_logger import get_logger
+# logger = get_logger('LiveWallpaperQt_VLC')
+
+# Fallback logger for standalone testing
+import logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger('LiveWallpaperQt_VLC')
+
+
+# --- Configuration and Path Setup ---
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 
-# This import might fail if the structure is different.
-# A fallback is provided for easy testing.
 try:
     from screensaver_app.PasswordConfig import load_config, save_config
-    from PyQt5.QtWidgets import QApplication
-    
 except ImportError:
     logger.info("Warning: Could not import 'load_config' or 'save_config'. Using default settings.")
     def load_config():
-        """Fallback function if the original config loader is not found."""
         return {'video_path': 'video.mp4'}
-
     def save_config(config):
-        """Fallback function if the original config saver is not found."""
         logger.info("Warning: Could not save config. This is a fallback.")
 
-# --- Core Logic ---
+# --- Core Logic (Refactored for VLC) ---
 
-class FrameReader(QObject):
+class VlcPlayer:
     """
-    Reads video frames in a thread, emits them, and handles saving/loading
-    the video's timestamp to a config file.
+    Manages VLC playback, including looping, seeking to the last position,
+    and saving the timestamp periodically.
     """
-    frame_ready = pyqtSignal(object)
-    SAVE_INTERVAL = 5  # Save timestamp every 5 seconds
+    SAVE_INTERVAL_SEC = 5.0
 
-    def __init__(self, video_path, fps, config):
-        super().__init__()
-        self.running = False
-        self.video_path = video_path
-        self.fps = fps
+    def __init__(self, video_path, config):
         self.config = config
+        self.video_path = video_path
         self.last_save_time = 0
 
-    def start_reading(self):
-        """Initializes the video capture, seeks to the last saved timestamp, and starts the thread."""
-        self.cap = cv2.VideoCapture(self.video_path)
-        if not self.cap.isOpened():
-            logger.info(f"Error: Could not open video file {self.video_path}")
+
+        # Create a VLC instance with options for better performance and no extra windows.
+        vlc_options = [
+            '--no-xlib',
+            '--no-video-title-show',
+            '--avcodec-hw=any'  # Enable hardware decoding
+        ]
+        self.instance = vlc.Instance(vlc_options)
+        self.media_player = self.instance.media_player_new()
+
+    def start_playback(self, hwnd: int, width: int, height: int):
+        """
+        Starts video playback on the given window handle (HWND).
+
+        Args:
+            hwnd: The integer window handle to draw the video on.
+            width: The width of the video display area.
+            height: The height of the video display area.
+        """
+        if not self.media_player:
+            logger.error("VLC MediaPlayer not initialized.")
             return
 
-        # Load last timestamp from config and seek the video position
+        media = self.instance.media_new(self.video_path)
+        
+        self.media_player.set_media(media)
+
+        # Tell VLC to draw on our QWidget
+        self.media_player.set_hwnd(hwnd)
+
+        # Attach an event listener to save the timestamp periodically.
+        event_manager = self.media_player.event_manager()
+        event_manager.event_attach(vlc.EventType.MediaPlayerTimeChanged, self._save_timestamp_callback)
+
+        # Configure video scaling to fill entire screen (removes black bars)
+        # Set aspect ratio to match screen dimensions to stretch video
+        screen_aspect = f"{width}:{height}"
+        self.media_player.video_set_aspect_ratio(screen_aspect.encode('utf-8'))
+
+        # Set video to stretch to fill the window completely
+        self.media_player.video_set_scale(0)  # 0 = fit to window, stretching if necessary
+
+      # Enable video looping
+        media_list = self.instance.media_list_new([self.video_path])
+        media_list_player = self.instance.media_list_player_new()
+        media_list_player.set_media_list(media_list)
+        media_list_player.set_media_player(self.media_player)
+        media_list_player.set_playback_mode(vlc.PlaybackMode.loop)
+        self.media_list_player = media_list_player  # Store reference
+        self.media_list_player.play()
+        # Resume from the last saved timestamp
         start_timestamp_sec = self.config.get('last_video_timestamp', 0)
         if start_timestamp_sec > 0:
             logger.info(f"Resuming video from {start_timestamp_sec:.2f} seconds.")
-            self.cap.set(cv2.CAP_PROP_POS_MSEC, start_timestamp_sec * 1000)
+            # VLC set_time expects milliseconds
+            self.media_player.set_time(int(start_timestamp_sec * 1000))
 
-        self.running = True
-        self.thread = threading.Thread(target=self._read_loop, daemon=True)
-        self.thread.start()
+        logger.info("VLC playback started.")
 
-    def stop_reading(self):
-        """Stops the reading loop and releases the video capture resources. Also stores the last video timestamp in seconds."""
-        self.running = False
-        # Store the current video timestamp in seconds before releasing
-        if hasattr(self, 'cap') and self.cap.isOpened():
-            timestamp_sec = self.cap.get(cv2.CAP_PROP_POS_MSEC) / 1000.0
-            self.config['last_video_timestamp'] = timestamp_sec
-            save_config(self.config)
-            logger.info(f"Saved last video timestamp: {timestamp_sec} seconds.")
-        if hasattr(self, 'thread'):
-            self.thread.join()
-        if hasattr(self, 'cap'):
-            self.cap.release()
-            logger.info("Video capture released.")
-        self.revertToOgWallpaper()
-
-    def revertToOgWallpaper(self):
-        """Reverts the wallpaper for all monitors to the original wallpaper."""
-        try:
-            import ctypes
-            from PyQt5.QtWidgets import QApplication
-            SPI_SETDESKWALLPAPER = 20
-            app = QApplication.instance()
-            screens = app.screens() if app else []
-            # This logic will refresh the wallpaper for all screens
-            for idx, screen in enumerate(screens):
-                # If you have the original wallpaper path per screen, use it here
-                # For now, just refresh the wallpaper (reapplies current wallpaper)
-                ctypes.windll.user32.SystemParametersInfoW(SPI_SETDESKWALLPAPER, 0, None, 3)
-                logger.info(f"Reverted wallpaper for screen {idx}.")
-        except Exception as e:
-            logger.info(f"Failed to revert wallpaper: {e}")
-
-    def _read_loop(self):
-        """The main loop that reads frames and periodically saves the timestamp."""
-        # Cap FPS to reduce GPU usage
-        interval = 1.0 / min(self.fps, 24)  # Cap at 24 FPS
-        while self.running:
-            start_time = time.perf_counter()
-
-            ret, frame = self.cap.read()
-            if not ret:
-                self.cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-                continue
-
-            self.frame_ready.emit(frame)
-
-            # Periodically save the current video timestamp in seconds
-            current_time = time.time()
-            if current_time - self.last_save_time > self.SAVE_INTERVAL:
-                timestamp_sec = self.cap.get(cv2.CAP_PROP_POS_MSEC) / 1000.0
+    def _save_timestamp_callback(self, event):
+        """Callback triggered by VLC when the playback time changes."""
+        current_time = time.time()
+        if current_time - self.last_save_time > self.SAVE_INTERVAL_SEC:
+            # get_time returns milliseconds
+            timestamp_ms = self.media_player.get_time()
+            if timestamp_ms > 0:
+                timestamp_sec = timestamp_ms / 1000.0
                 self.config['last_video_timestamp'] = timestamp_sec
                 save_config(self.config)
                 self.last_save_time = current_time
 
-            elapsed = time.perf_counter() - start_time
-            sleep_time = max(0, interval - elapsed)
-            if sleep_time > 0:
-                time.sleep(sleep_time)
-            else:
-                # If processing is too fast, yield to OS
-                time.sleep(0.005)
+    def stop_playback(self):
+        """Stops playback and saves the final timestamp."""
+        if self.media_player and self.media_player.is_playing():
+            # Save final position before stopping
+            timestamp_ms = self.media_player.get_time()
+            if timestamp_ms > 0:
+                self.config['last_video_timestamp'] = timestamp_ms / 1000.0
+                save_config(self.config)
+                logger.info(f"Saved final video timestamp: {self.config['last_video_timestamp']:.2f}s")
+
+            self.media_player.stop()
+        
+        if self.media_player:
+            self.media_player.release()
+            self.media_player = None
+            logger.info("VLC playback stopped and resources released.")
 
 
 class WallpaperWindow(QWidget):
     """
-    A QWidget that acts as a wallpaper for a single monitor. It uses Win32 API
-    calls to parent itself to the desktop background, ensuring it stays behind icons.
+    A QWidget that acts as a wallpaper. It serves as a drawing surface for VLC.
     """
     def __init__(self, screen):
         super().__init__()
         self.screen_geometry = screen.geometry()
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Tool)
-        self.setGeometry(self.screen_geometry)
-        self.label = QLabel(self)
-        self.label.setGeometry(self.rect())
-        self.label.setScaledContents(False)
-        # Detect NVIDIA GPU
-        try:
-            # Check if cv2 has cuda module and device count
-            if hasattr(cv2, "cuda") and hasattr(cv2.cuda, "getCudaEnabledDeviceCount"):
-                self.has_cuda = cv2.cuda.getCudaEnabledDeviceCount() > 0
-                if self.has_cuda:
-                    logger.info("NVIDIA GPU detected. Using CUDA for frame processing.")
-                else:
-                    logger.info("No NVIDIA GPU detected. Using CPU for frame processing.")
-            else:
-                self.has_cuda = False
-                logger.info("OpenCV CUDA module not found. Using CPU for frame processing.")
-        except Exception as e:
-            self.has_cuda = False
-            logger.info(f"CUDA detection failed: {e}")
+        # The black background helps avoid flashes of the desktop before VLC starts.
+        self.setAttribute(Qt.WA_OpaquePaintEvent)
+        self.setStyleSheet("background-color: black;")
+        # Set initial geometry
+        self.setScreenGeometry(self.screen_geometry)
 
     def setScreenGeometry(self, geometry):
-        """Updates the screen geometry and resizes the label accordingly."""
+        """Updates the screen geometry."""
         self.screen_geometry = geometry
         self.setGeometry(self.screen_geometry)
-        self.label.setGeometry(self.rect())
-        self.label.setScaledContents(False)
 
     def showEvent(self, event):
-        """Triggered when the window is shown. Used for Win32 parenting and positioning."""
+        """
+        On showing the window, use the Win32 API to parent it to the desktop
+        background layer, making it a true wallpaper.
+        """
         progman = win32gui.FindWindow("Progman", None)
+        # This message is sent to Progman to spawn a WorkerW window if it doesn't exist.
         win32gui.SendMessageTimeout(progman, 0x052C, 0, 0, win32con.SMTO_NORMAL, 1000)
 
+        # Find the WorkerW window, which is the layer behind the desktop icons.
         workerw_hwnd = 0
         def enum_windows_callback(hwnd, lParam):
             nonlocal workerw_hwnd
@@ -183,89 +177,32 @@ class WallpaperWindow(QWidget):
             return True
         win32gui.EnumWindows(enum_windows_callback, None)
 
+        # Get our QWidget's window handle.
         hwnd = self.winId().__int__()
+
         if workerw_hwnd:
             win32gui.SetParent(hwnd, workerw_hwnd)
         else:
-            logger.info("Warning: Could not find WorkerW. Attaching to Progman as a fallback.")
+            logger.warning("Could not find WorkerW. Attaching to Progman as a fallback.")
             win32gui.SetParent(hwnd, progman)
 
+        # Position the window.
         geo = self.screen_geometry
         win32gui.SetWindowPos(hwnd, win32con.HWND_BOTTOM, geo.x(), geo.y(), geo.width(), geo.height(), win32con.SWP_NOACTIVATE)
         super().showEvent(event)
 
-    def display_frame(self, frame):
-        """
-        Receives a raw frame and efficiently scales it to fill the monitor
-        without distortion before displaying.
-        """
-        geo = self.screen_geometry
-        target_w, target_h = geo.width(), geo.height()
 
-        if target_w == 0 or target_h == 0: return
-
-        frame_h, frame_w = frame.shape[:2]
-        
-        # Determine the scale factor required to fill the target, then crop.
-        scale_h = target_h / frame_h
-        scale_w = target_w / frame_w
-        scale = max(scale_h, scale_w)
-
-        # New dimensions after scaling
-        new_w, new_h = int(frame_w * scale), int(frame_h * scale)
-        
-        interpolation = cv2.INTER_AREA if scale < 1 else cv2.INTER_LINEAR
-
-        if self.has_cuda:
-            # Use CUDA for resizing and color conversion
-            try:
-                gpu_frame = cv2.cuda_GpuMat()
-                gpu_frame.upload(frame)
-                gpu_resized = cv2.cuda.resize(gpu_frame, (new_w, new_h), interpolation=interpolation)
-                crop_x = (new_w - target_w) // 2
-                crop_y = (new_h - target_h) // 2
-                gpu_cropped = gpu_resized.rowRange(crop_y, crop_y + target_h).colRange(crop_x, crop_x + target_w)
-                gpu_rgb = cv2.cuda.cvtColor(gpu_cropped, cv2.COLOR_BGR2RGB)
-                final_frame = gpu_rgb.download()
-            except Exception as e:
-                logger.info(f"CUDA frame processing failed: {e}")
-                # Fallback to CPU
-                resized_frame = cv2.resize(frame, (new_w, new_h), interpolation=interpolation)
-                crop_x = (new_w - target_w) // 2
-                crop_y = (new_h - target_h) // 2
-                final_frame = resized_frame[crop_y:crop_y + target_h, crop_x:crop_x + target_w]
-                final_frame = cv2.cvtColor(final_frame, cv2.COLOR_BGR2RGB)
-        else:
-            resized_frame = cv2.resize(frame, (new_w, new_h), interpolation=interpolation)
-            crop_x = (new_w - target_w) // 2
-            crop_y = (new_h - target_h) // 2
-            final_frame = resized_frame[crop_y:crop_y + target_h, crop_x:crop_x + target_w]
-            final_frame = cv2.cvtColor(final_frame, cv2.COLOR_BGR2RGB)
-
-        h, w, ch = final_frame.shape
-        bytes_per_line = ch * w
-        qt_img = QImage(final_frame.data, w, h, bytes_per_line, QImage.Format_RGB888)
-        
-        self.label.setPixmap(QPixmap.fromImage(qt_img))
-
-    def resizeEvent(self, event):
-        """Ensures the label resizes with the window."""
-        self.label.setGeometry(self.rect())
-        super().resizeEvent(event)
-
-
-# --- Application Entry Point ---
+# --- Application Entry Point (Refactored) ---
 
 class LiveWallpaperController:
     app = None
-    frame_reader = None
+    vlc_player = None
     windows = []
 
     @staticmethod
     def start_live_wallpaper(video_path):
         logger.info("Entered start_live_wallpaper function.")
         try:
-            logger.info("Starting live wallpaper...")
             config = load_config()
             config['video_path'] = video_path
             if not os.path.exists(video_path):
@@ -273,31 +210,22 @@ class LiveWallpaperController:
                 return
 
             LiveWallpaperController.app = QApplication.instance() or QApplication(sys.argv)
-
-            cap = cv2.VideoCapture(video_path)
-            if not cap.isOpened():
-                logger.error(f"Error: Failed to open video file with OpenCV: '{video_path}'")
-                return
-            video_fps = cap.get(cv2.CAP_PROP_FPS)
-            if not video_fps or video_fps < 1:
-                logger.warning("FPS not detected or invalid. Defaulting to 30 FPS.")
-                video_fps = 30
-            cap.release()
-
-            logger.info(f"Video FPS set to: {video_fps}")
-            LiveWallpaperController.frame_reader = FrameReader(video_path, video_fps, config)
-            LiveWallpaperController.windows = []
-
+            
             primary_screen = LiveWallpaperController.app.primaryScreen()
             if not primary_screen:
                 logger.error("Error: Could not determine the primary screen.")
                 return
-
-            logger.info("Found primary screen. Creating wallpaper window...")
+            
+            # --- CHANGE 2: RESTORED MULTI-MONITOR OFFSET LOGIC ---
+            # This logic calculates the correct geometry for the wallpaper window,
+            # especially to handle cases where a secondary monitor is positioned
+            # to the left of the primary monitor.
+            
             win = WallpaperWindow(primary_screen)
 
-            monitor_count = QApplication.screens().__len__()
+            monitor_count = len(QApplication.screens())
             logger.info(f"Detected {monitor_count} monitors.")
+
             if monitor_count > 1:
                 calculate_x = 0
                 calculate_width = 0
@@ -321,26 +249,29 @@ class LiveWallpaperController:
                 logger.info(f"Primary screen geometry: x={primary_screen.geometry().x()}, y={primary_screen.geometry().y()}, width={primary_screen.geometry().width()}, height={primary_screen.geometry().height()}")
                 logger.warning(f"Warning: More than 1 monitor detected ({monitor_count}). This app only uses the primary screen.")
 
-            LiveWallpaperController.frame_reader.frame_ready.connect(win.display_frame)
-            win.show()
             LiveWallpaperController.windows.append(win)
 
-            logger.info("Starting frame reader thread.")
-            LiveWallpaperController.frame_reader.start_reading()
-            LiveWallpaperController.app.aboutToQuit.connect(LiveWallpaperController.frame_reader.stop_reading)
+            # The window MUST be shown before we can get its winId() and pass it to VLC.
+            win.show()
 
+            # Create the VLC player and start playback on our window
+            LiveWallpaperController.vlc_player = VlcPlayer(video_path, config)
+            hwnd = win.winId().__int__()
+            LiveWallpaperController.vlc_player.start_playback(hwnd,win.width(),win.height())
+
+            LiveWallpaperController.app.aboutToQuit.connect(LiveWallpaperController.stop_live_wallpaper)
+
+            # Set up signal handler for Ctrl+C
             def handle_sigint(signum, frame):
-                logger.info("SIGINT received. Stopping frame reader and exiting...")
+                logger.info("SIGINT received. Stopping live wallpaper...")
                 LiveWallpaperController.stop_live_wallpaper()
 
-            import threading
             if threading.current_thread() is threading.main_thread():
                 signal.signal(signal.SIGINT, handle_sigint)
-                logger.info("SIGINT handler set.")
-            else:
-                logger.info("SIGINT handler not set: not in main thread.")
+
             logger.info("Entering Qt event loop.")
             LiveWallpaperController.app.exec_()
+
         except Exception as e:
             logger.error(f"Exception in start_live_wallpaper: {e}", exc_info=True)
 
@@ -348,14 +279,42 @@ class LiveWallpaperController:
     def stop_live_wallpaper():
         logger.info("Entered stop_live_wallpaper function.")
         try:
-            if LiveWallpaperController.frame_reader:
-                logger.info("Stopping frame reader.")
-                LiveWallpaperController.frame_reader.stop_reading()
-                LiveWallpaperController.frame_reader = None
+            if LiveWallpaperController.vlc_player:
+                logger.info("Stopping VLC player.")
+                LiveWallpaperController.vlc_player.stop_playback()
+                LiveWallpaperController.vlc_player = None
+            
+            # Close the wallpaper window(s)
+            for win in LiveWallpaperController.windows:
+                win.close()
+            LiveWallpaperController.windows = []
+
+            LiveWallpaperController.revertToOgWallpaper()
+            
             if LiveWallpaperController.app:
                 logger.info("Quitting QApplication.")
                 LiveWallpaperController.app.quit()
-                LiveWallpaperController.app = None
-            LiveWallpaperController.windows = []
         except Exception as e:
             logger.error(f"Exception in stop_live_wallpaper: {e}", exc_info=True)
+            
+    @staticmethod
+    def revertToOgWallpaper():
+        """Reverts the wallpaper to the original by telling Windows to refresh it."""
+        try:
+            SPI_SETDESKWALLPAPER = 20
+            # Passing an empty string or None to SystemParametersInfoW forces a refresh
+            # of the current configured wallpaper from the registry.
+            ctypes.windll.user32.SystemParametersInfoW(SPI_SETDESKWALLPAPER, 0, "", 3)
+            logger.info(f"Reverted wallpaper to system default.")
+        except Exception as e:
+            logger.warning(f"Failed to revert wallpaper: {e}")
+
+# Example of how to run this, if this file were executed directly
+if __name__ == '__main__':
+    # You would need a video file named 'video.mp4' in the same directory
+    video_file = 'video.mp4' 
+    if not os.path.exists(video_file):
+        logger.error(f"Test video '{video_file}' not found. Please create it or change the path.")
+    else:
+        # This will run the wallpaper until you press Ctrl+C in the console
+        LiveWallpaperController.start_live_wallpaper(video_file)

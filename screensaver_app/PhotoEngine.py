@@ -19,9 +19,17 @@ logger = get_logger('PhotoEngine')
 
 from utils.app_utils import acquire_lock, release_lock
 
-if not acquire_lock():
-    logger.warning("Another instance of PhotoEngine is already running. Exiting this instance.")
-    sys.exit(1)
+# Ensure only one instance runs unless in GUI mode
+
+# Parse arguments safely
+parser = argparse.ArgumentParser(add_help=False)
+parser.add_argument('--mode', choices=['saver', 'gui'], default='saver')
+args, _ = parser.parse_known_args()
+
+if args.mode != "gui":
+    if not acquire_lock():
+        logger.warning("Another instance of PhotoEngine is already running. Exiting this instance.")
+        sys.exit(1)
 
 logging.getLogger("PIL.Image").setLevel(logging.WARNING)
 
@@ -601,6 +609,7 @@ def run_in_system_tray():
         thread.start()
     
     def on_exit_app(icon, item):
+        release_lock()
         logger.info("on_exit_app")
         logger.info("Exiting application from tray...")
         shutdown_system_tray() # Call the centralized shutdown
@@ -866,6 +875,7 @@ def admin_main():
     if args.start_service:
         # Only works if running as a Windows service (LocalSystem)
         import ctypes
+
         try:
             # Correct session check
             session_id = ctypes.c_uint()
