@@ -52,7 +52,9 @@ class VlcPlayer:
         vlc_options = [
             '--no-xlib',
             '--no-video-title-show',
-            '--avcodec-hw=any'  # Enable hardware decoding
+            '--avcodec-hw=any',  # Enable hardware decoding
+            '--no-osd',           # Disable On-Screen Display (OSD)
+            '--no-snapshot-preview'  # Disable the snapshot preview thumbnail
         ]
         self.instance = vlc.Instance(vlc_options)
         self.media_player = self.instance.media_player_new()
@@ -76,11 +78,6 @@ class VlcPlayer:
 
         # Tell VLC to draw on our QWidget
         self.media_player.set_hwnd(hwnd)
-
-        # Attach an event listener to save the timestamp periodically.
-        event_manager = self.media_player.event_manager()
-        event_manager.event_attach(vlc.EventType.MediaPlayerTimeChanged, self._save_timestamp_callback)
-
         # Configure video scaling to fill entire screen (removes black bars)
         # Set aspect ratio to match screen dimensions to stretch video
         screen_aspect = f"{width}:{height}"
@@ -88,7 +85,8 @@ class VlcPlayer:
 
         # Set video to stretch to fill the window completely
         self.media_player.video_set_scale(0)  # 0 = fit to window, stretching if necessary
-
+        self.media_player.audio_set_mute(True)
+            
       # Enable video looping
         media_list = self.instance.media_list_new([self.video_path])
         media_list_player = self.instance.media_list_player_new()
@@ -98,12 +96,29 @@ class VlcPlayer:
         self.media_list_player = media_list_player  # Store reference
         self.media_list_player.play()
         # Resume from the last saved timestamp
-        start_timestamp_sec = self.config.get('last_video_timestamp', 0)
-        if start_timestamp_sec > 0:
-            logger.info(f"Resuming video from {start_timestamp_sec:.2f} seconds.")
-            # VLC set_time expects milliseconds
-            self.media_player.set_time(int(start_timestamp_sec * 1000))
 
+        logger.info(f"Video loaded: {self.video_path}")
+        logger.info(f"Video Size: {width}x{height} pixels")
+        if width is not None and height is not None:
+            logger.info(f"Video Width: {width} pixels")
+            logger.info(f"Video Height: {height} pixels")
+
+        if width <= 1920 and height <= 1080:
+            event_manager = self.media_player.event_manager()
+            event_manager.event_attach(vlc.EventType.MediaPlayerTimeChanged, self._save_timestamp_callback)
+
+            start_timestamp_sec = self.config.get('last_video_timestamp', 0)
+            if start_timestamp_sec > 0:
+                logger.info(f"Resuming video from {start_timestamp_sec:.2f} seconds.")
+                # VLC set_time expects milliseconds
+                self.media_player.set_time(int(start_timestamp_sec * 1000))
+        
+        # if the video is larger than 1080p, we don't set a start time
+        # also we will set the starting frame as the wallpaper
+        else:
+            from utils.wallpaper import capture_image_from_player
+            if not capture_image_from_player(self.media_player):
+                logger.error("Failed to set wallpaper using VLC media player.")
         logger.info("VLC playback started.")
 
     def _save_timestamp_callback(self, event):

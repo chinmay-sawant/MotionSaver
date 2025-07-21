@@ -3,6 +3,7 @@ import os
 from screensaver_app.central_logger import get_logger, log_startup, log_shutdown, log_exception
 import atexit
 import sys
+import signal
 
 
 logger = get_logger("app_utils")
@@ -53,4 +54,9 @@ def release_lock():
         except OSError as e:
             logger.error(f"Error removing lock file: {e}")
 
-# --- YOUR APPLICATION'S MAIN LOGIC ---
+def handle_exit_signal(signum, frame):
+    logger.info(f"Received signal {signum}. Releasing lock and exiting.")
+    release_lock()
+    sys.exit(0)
+
+            

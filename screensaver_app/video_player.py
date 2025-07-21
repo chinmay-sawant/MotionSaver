@@ -1,5 +1,6 @@
 import logging
 import tkinter as tk
+from turtle import width
 import vlc
 from PIL import Image, ImageTk, ImageDraw, ImageFont
 import time
@@ -279,29 +280,47 @@ def handle_media_player_paused(event, player):
     global captured_pil_image # Declare that we are modifying the global variable
 
     logger.info("\n--- Player Paused ---")
-    # Determine project root for snapshot path
-    if getattr(sys, 'frozen', False):
-        # If running as a PyInstaller executable
-        project_root = os.path.dirname(sys.executable)
+
+    # Get width and height of the actual video, not the player window
+    # The '0' argument refers to the primary video track.
+    width, height = player.video_get_size(0)
+
+    # Check if we successfully got the video dimensions (they will be > 0)
+    if width > 0 and height > 0:
+        logger.info(f"Video Width: {width} pixels")
+        logger.info(f"Video Height: {height} pixels")
+
+        # Only proceed if the video resolution is at or below 1920x1080
+        if width <= 1920 and height <= 1080:
+            # Determine project root for snapshot path
+            if getattr(sys, 'frozen', False):
+                # If running as a PyInstaller executable
+                project_root = os.path.dirname(sys.executable)
+            else:
+                # If running as a script
+                project_root = os.path.abspath(os.path.join(os.path.dirname(__file__)))
+
+            snapshot_path = os.path.join(project_root, "vlc_snapshot_temp.png")
+            logger.info(f"Resolution is within limits. Attempting to take snapshot to: {snapshot_path}")
+
+            player.video_take_snapshot(0, snapshot_path, 0, 0)
+            logger.info("Snapshot command issued. Waiting for file to be written...")
+
+            # Verify if the snapshot file was successfully created
+            if os.path.exists(snapshot_path):
+                try:
+                    set_windows_wallpaper(snapshot_path)  # Set the captured image as wallpaper
+                    logger.info("Successfully set snapshot as wallpaper")
+                except Exception as e:
+                    logger.error(f"Error setting wallpaper from snapshot: {e}")
+            else:
+                logger.warning("Snapshot file was not found. There might be an issue with VLC or permissions.")
+        else:
+            # This 'else' corresponds to the resolution check
+            logger.info(f"Video resolution ({width}x{height}) is larger than 1920x1080. Skipping snapshot.")
     else:
-        # If running as a script
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__)))
-    snapshot_path = os.path.join(project_root, "vlc_snapshot_temp.png")
-    logger.info(f"Attempting to take snapshot to: {snapshot_path}")
-
-    player.video_take_snapshot(0, snapshot_path, 0, 0)
-    logger.info("Snapshot command issued. Waiting for file to be written...")
-
-    # Verify if the snapshot file was successfully created
-    if os.path.exists(snapshot_path):
-        try:
-            set_windows_wallpaper(snapshot_path)  # Set the captured image as wallpaper
-            logger.info("Successfully set snapshot as wallpaper")
-        except Exception as e:
-            logger.error(f"Error opening or copying snapshot with PIL: {e}")
-    else:
-        logger.warning("Snapshot file was not found after taking snapshot. There might be an issue with VLC or permissions.")
-
+        # This 'else' corresponds to the check for valid dimensions
+        logger.warning("Could not determine video dimensions. Skipping snapshot.")
 class VideoClockScreenSaver:
 
     def __init__(self, master, video_path_arg=None, key_blocker_instance=None):
@@ -479,26 +498,27 @@ class VideoClockScreenSaver:
 
             # Start playback with looping
             # Read last_video_timestamp from config (default to 0.0 if not present)
-            last_video_timestamp = 0.0
-            try:
-                last_video_timestamp = float(self.user_config.get("last_video_timestamp", 0.0))
-            except Exception as e:
-                logger.warning(f"Could not parse last_video_timestamp from config: {e}")
+            if self.width <= 1920 and self.height <= 1080:
+                last_video_timestamp = 0.0
+                try:
+                    last_video_timestamp = float(self.user_config.get("last_video_timestamp", 0.0))
+                except Exception as e:
+                    logger.warning(f"Could not parse last_video_timestamp from config: {e}")
 
+               
+                # Start video from last_video_timestamp (skip initial video)
+                if last_video_timestamp > 0:
+                    # Wait briefly to ensure playback has started before seeking
+                    def seek_to_last_timestamp():
+                        try:
+                            if hasattr(self, 'vlc_player') and self.vlc_player:
+                                self.vlc_player.set_time(int(last_video_timestamp * 1000))
+                                logger.info(f"Seeked video to {last_video_timestamp} seconds")
+                        except Exception as e:
+                            logger.error(f"Error seeking to last_video_timestamp: {e}")
+                    self.master.after(0, seek_to_last_timestamp)
             self.media_list_player.play()
 
-            # Start video from last_video_timestamp (skip initial video)
-            if last_video_timestamp > 0:
-                # Wait briefly to ensure playback has started before seeking
-                def seek_to_last_timestamp():
-                    try:
-                        if hasattr(self, 'vlc_player') and self.vlc_player:
-                            self.vlc_player.set_time(int(last_video_timestamp * 1000))
-                            logger.info(f"Seeked video to {last_video_timestamp} seconds")
-                    except Exception as e:
-                        logger.error(f"Error seeking to last_video_timestamp: {e}")
-                self.master.after(0, seek_to_last_timestamp)
-            
             # Additional video scaling configuration after playback starts
             def configure_video_after_start():
                 try:
