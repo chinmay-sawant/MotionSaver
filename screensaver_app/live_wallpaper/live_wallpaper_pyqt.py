@@ -97,11 +97,10 @@ class VlcPlayer:
         self.media_list_player.play()
         # Resume from the last saved timestamp
 
+    
+        width, height = self.media_player.video_get_size()
         logger.info(f"Video loaded: {self.video_path}")
         logger.info(f"Video Size: {width}x{height} pixels")
-        if width is not None and height is not None:
-            logger.info(f"Video Width: {width} pixels")
-            logger.info(f"Video Height: {height} pixels")
 
         if width <= 1920 and height <= 1080:
             event_manager = self.media_player.event_manager()

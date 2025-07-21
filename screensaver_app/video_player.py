@@ -481,7 +481,7 @@ class VideoClockScreenSaver:
             # Set aspect ratio to match screen dimensions to stretch video
             screen_aspect = f"{self.screen_width}:{self.screen_height}"
             self.vlc_player.video_set_aspect_ratio(screen_aspect.encode('utf-8'))
-            
+            vwidth, vheight = self.vlc_player.video_get_size()
             # Set video to stretch to fill the window completely
             self.vlc_player.video_set_scale(0)  # 0 = fit to window, stretching if necessary
             
@@ -498,7 +498,8 @@ class VideoClockScreenSaver:
 
             # Start playback with looping
             # Read last_video_timestamp from config (default to 0.0 if not present)
-            if self.width <= 1920 and self.height <= 1080:
+            logger.info(f"vwidth & vheight: {vwidth}, {vheight}")
+            if vwidth <= 1920 and vheight <= 1080:
                 last_video_timestamp = 0.0
                 try:
                     last_video_timestamp = float(self.user_config.get("last_video_timestamp", 0.0))
