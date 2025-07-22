@@ -20,7 +20,7 @@ import subprocess
 from utils.multi_monitor import update_secondary_monitor_blackouts
 from utils.wallpaper import set_windows_wallpaper
 from utils.app_utils import  release_lock
-
+import cv2
 # Ensure parent directory is in sys.path for package imports
 current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
@@ -291,6 +291,8 @@ def handle_media_player_paused(event, player):
         logger.info(f"Video Height: {height} pixels")
 
         # Only proceed if the video resolution is at or below 1920x1080
+        # No need to add FPS here as this is for capturing a snapshot
+
         if width <= 1920 and height <= 1080:
             # Determine project root for snapshot path
             if getattr(sys, 'frozen', False):
@@ -498,8 +500,11 @@ class VideoClockScreenSaver:
 
             # Start playback with looping
             # Read last_video_timestamp from config (default to 0.0 if not present)
+            cap = cv2.VideoCapture(actual_video_path)
+            fps = cap.get(cv2.CAP_PROP_FPS)
+            cap.release()
             logger.info(f"vwidth & vheight: {vwidth}, {vheight}")
-            if vwidth <= 1920 and vheight <= 1080:
+            if vwidth <= 1920 and vheight <= 1080 and fps <= 30:
                 last_video_timestamp = 0.0
                 try:
                     last_video_timestamp = float(self.user_config.get("last_video_timestamp", 0.0))
@@ -535,6 +540,7 @@ class VideoClockScreenSaver:
             
             # Get the event manager for the media player. This allows us to subscribe to events.
             event_manager = self.vlc_player.event_manager()
+      
             event_manager.event_attach(vlc.EventType.MediaPlayerPaused, handle_media_player_paused, self.vlc_player)
 
             # Schedule overlays and ensure focus

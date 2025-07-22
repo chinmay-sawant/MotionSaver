@@ -14,6 +14,7 @@ from PyQt5.QtCore import Qt
 
 import win32gui
 import win32con
+import cv2
 
 # Ensure parent directory is in sys.path for package imports
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -99,10 +100,14 @@ class VlcPlayer:
 
     
         width, height = self.media_player.video_get_size()
+        cap = cv2.VideoCapture(self.video_path)
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        cap.release()
         logger.info(f"Video loaded: {self.video_path}")
         logger.info(f"Video Size: {width}x{height} pixels")
+        logger.info(f"Video FPS: {fps} frames per second")
 
-        if width <= 1920 and height <= 1080:
+        if width <= 1920 and height <= 1080 and fps <= 30:
             event_manager = self.media_player.event_manager()
             event_manager.event_attach(vlc.EventType.MediaPlayerTimeChanged, self._save_timestamp_callback)
 
