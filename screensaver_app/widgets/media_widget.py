@@ -15,8 +15,12 @@ import io
 from PIL import Image, ImageTk
 import sys
 
-# Add central logging
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Ensure parent directory is in sys.path for package imports
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+if parent_dir not in sys.path:
+    sys.path.insert(0, parent_dir)
+
 from screensaver_app.central_logger import get_logger, log_startup, log_shutdown, log_exception
 logger = get_logger('MediaWidget')
 
@@ -127,7 +131,52 @@ class MediaWidget:
             
         except Exception as e:
             logger.error(f"Error creating media widget UI: {e}")
-
+    
+    def _check_browser_window_titles(self):
+        """Check browser window titles directly - fallback method"""
+        try:
+            import win32gui
+            
+            def enum_windows_callback(hwnd, results):
+                if win32gui.IsWindowVisible(hwnd):
+                    window_title = win32gui.GetWindowText(hwnd)
+                    
+                    # Check for various streaming services
+                    patterns = [
+                        (" - YouTube", "YouTube"),
+                        (" - JioCinema", "JioCinema"),
+                        (" | Disney+ Hotstar", "Disney+ Hotstar"),
+                        (" | Netflix", "Netflix"),
+                        (" - Prime Video", "Prime Video"),
+                        (" - Spotify", "Spotify"),
+                        (" - SoundCloud", "SoundCloud")
+                    ]
+                    
+                    for pattern, source in patterns:
+                        if pattern in window_title:
+                            title = window_title.split(pattern)[0].strip()
+                            if title and title != source:
+                                results.append({
+                                    "title": title, 
+                                    "source": f"{source} (Window)",
+                                    "status": "Playing"
+                                })
+                                break
+                return True
+                
+            results = []
+            win32gui.EnumWindows(enum_windows_callback, results)
+            
+            if results:
+                print(f"Window title detection found: {results[0]}")
+                return results[0]
+            
+        except ImportError:
+            print("win32gui not available for window title detection")
+        except Exception as e:
+            print(f"Browser window detection error: {e}")
+        
+        return None
     def create_widget_content(self):
         """Create the media widget UI content within its Toplevel window"""
         try:

@@ -13,3 +13,4 @@ t2.py
 blockit.py
 logs
 Demo_Videos
+*.lock

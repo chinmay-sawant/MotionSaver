@@ -6,8 +6,14 @@ import ctypes
 # Assuming central_logger is in a sibling directory or configured in PYTHONPATH
 # from screensaver_app.central_logger import get_logger
 # For standalone execution, we can create a dummy logger:
-
+# Ensure parent directory is in sys.path for package imports
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+if parent_dir not in sys.path:
+    sys.path.insert(0, parent_dir)
+    
 from screensaver_app.central_logger import get_logger
+
 logger = get_logger("ServiceReg")
 
 class ServiceRegistrar:
@@ -47,16 +53,13 @@ class ServiceRegistrar:
         # Use sys.executable to ensure we use the same python interpreter in the batch file
         # that is running this script, which is important in environments with multiple pythons.
         if self.photoengine_exec.endswith(".exe"):
-            launch_cmd = f'"{self.photoengine_exec}" --min --no-elevate'
+            app_cmd = f'"{self.photoengine_exec}" --min --no-elevate'
         else:
-            launch_cmd = f'"{sys.executable}" "{self.photoengine_exec}" --min --no-elevate'
+            app_cmd = f'"{sys.executable}" "{self.photoengine_exec}" --min --no-elevate'
             
-        batch_file_content = f"""
-@echo off
-rem Change directory to the location of this script
+        batch_file_content = f"""@echo off
 cd /d "%~dp0"
-rem Start the application minimized using the correct executable
-{launch_cmd}
+start /min "" {app_cmd}
 """
         # Use strip() to remove leading/trailing whitespace from the multiline string
         batch_file_content = '\n'.join([line.strip() for line in batch_file_content.strip().split('\n')])

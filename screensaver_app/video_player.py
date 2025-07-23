@@ -1,4 +1,6 @@
+import logging
 import tkinter as tk
+from turtle import width
 import vlc
 from PIL import Image, ImageTk, ImageDraw, ImageFont
 import time
@@ -18,10 +20,16 @@ import subprocess
 from utils.multi_monitor import update_secondary_monitor_blackouts
 from utils.wallpaper import set_windows_wallpaper
 from utils.app_utils import  release_lock
-
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import cv2
+# Ensure parent directory is in sys.path for package imports
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+if parent_dir not in sys.path:
+    sys.path.insert(0, parent_dir)
+    
 from screensaver_app.central_logger import get_logger, log_startup, log_shutdown, log_exception
 logger = get_logger('VideoPlayer')
+logger.setLevel(logging.INFO)  # Set to INFO for general logs
 # Try to import enhanced blocker first, fallback to basic blocker
 try:
     from utils.enhanced_key_blocker import EnhancedKeyBlocker as KeyBlocker
@@ -272,29 +280,49 @@ def handle_media_player_paused(event, player):
     global captured_pil_image # Declare that we are modifying the global variable
 
     logger.info("\n--- Player Paused ---")
-    # Determine project root for snapshot path
-    if getattr(sys, 'frozen', False):
-        # If running as a PyInstaller executable
-        project_root = os.path.dirname(sys.executable)
+
+    # Get width and height of the actual video, not the player window
+    # The '0' argument refers to the primary video track.
+    width, height = player.video_get_size(0)
+
+    # Check if we successfully got the video dimensions (they will be > 0)
+    if width > 0 and height > 0:
+        logger.info(f"Video Width: {width} pixels")
+        logger.info(f"Video Height: {height} pixels")
+
+        # Only proceed if the video resolution is at or below 1920x1080
+        # No need to add FPS here as this is for capturing a snapshot
+
+        if width <= 1920 and height <= 1080:
+            # Determine project root for snapshot path
+            if getattr(sys, 'frozen', False):
+                # If running as a PyInstaller executable
+                project_root = os.path.dirname(sys.executable)
+            else:
+                # If running as a script
+                project_root = os.path.abspath(os.path.join(os.path.dirname(__file__)))
+
+            snapshot_path = os.path.join(project_root, "vlc_snapshot_temp.png")
+            logger.info(f"Resolution is within limits. Attempting to take snapshot to: {snapshot_path}")
+
+            player.video_take_snapshot(0, snapshot_path, 0, 0)
+            logger.info("Snapshot command issued. Waiting for file to be written...")
+
+            # Verify if the snapshot file was successfully created
+            if os.path.exists(snapshot_path):
+                try:
+                    set_windows_wallpaper(snapshot_path)  # Set the captured image as wallpaper
+                    logger.info("Successfully set snapshot as wallpaper")
+                except Exception as e:
+                    logger.error(f"Error setting wallpaper from snapshot: {e}")
+            else:
+                logger.warning("Snapshot file was not found. There might be an issue with VLC or permissions.")
+        else:
+            # This 'else' corresponds to the resolution check
+            logger.info(f"Video resolution ({width}x{height}) is larger than 1920x1080. Skipping snapshot.")
     else:
-        # If running as a script
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__)))
-    snapshot_path = os.path.join(project_root, "vlc_snapshot_temp.png")
-    logger.info(f"Attempting to take snapshot to: {snapshot_path}")
-
-    player.video_take_snapshot(0, snapshot_path, 0, 0)
-    logger.info("Snapshot command issued. Waiting for file to be written...")
-
-    # Verify if the snapshot file was successfully created
-    if os.path.exists(snapshot_path):
-        try:
-            set_windows_wallpaper(snapshot_path)  # Set the captured image as wallpaper
-            logger.info("Successfully set snapshot as wallpaper")
-        except Exception as e:
-            logger.error(f"Error opening or copying snapshot with PIL: {e}")
-    else:
-        logger.warning("Snapshot file was not found after taking snapshot. There might be an issue with VLC or permissions.")
-
+        # This 'else' corresponds to the check for valid dimensions
+        logger.warning("Could not determine video dimensions. Skipping snapshot.")
 class VideoClockScreenSaver:
 
     def __init__(self, master, video_path_arg=None, key_blocker_instance=None):
@@ -455,7 +483,7 @@ class VideoClockScreenSaver:
             # Set aspect ratio to match screen dimensions to stretch video
             screen_aspect = f"{self.screen_width}:{self.screen_height}"
             self.vlc_player.video_set_aspect_ratio(screen_aspect.encode('utf-8'))
-            
+            vwidth, vheight = self.vlc_player.video_get_size()
             # Set video to stretch to fill the window completely
             self.vlc_player.video_set_scale(0)  # 0 = fit to window, stretching if necessary
             
@@ -472,26 +500,31 @@ class VideoClockScreenSaver:
 
             # Start playback with looping
             # Read last_video_timestamp from config (default to 0.0 if not present)
-            last_video_timestamp = 0.0
-            try:
-                last_video_timestamp = float(self.user_config.get("last_video_timestamp", 0.0))
-            except Exception as e:
-                logger.warning(f"Could not parse last_video_timestamp from config: {e}")
+            cap = cv2.VideoCapture(actual_video_path)
+            fps = cap.get(cv2.CAP_PROP_FPS)
+            cap.release()
+            logger.info(f"vwidth & vheight: {vwidth}, {vheight}")
+            if vwidth <= 1920 and vheight <= 1080 and fps <= 30:
+                last_video_timestamp = 0.0
+                try:
+                    last_video_timestamp = float(self.user_config.get("last_video_timestamp", 0.0))
+                except Exception as e:
+                    logger.warning(f"Could not parse last_video_timestamp from config: {e}")
 
+               
+                # Start video from last_video_timestamp (skip initial video)
+                if last_video_timestamp > 0:
+                    # Wait briefly to ensure playback has started before seeking
+                    def seek_to_last_timestamp():
+                        try:
+                            if hasattr(self, 'vlc_player') and self.vlc_player:
+                                self.vlc_player.set_time(int(last_video_timestamp * 1000))
+                                logger.info(f"Seeked video to {last_video_timestamp} seconds")
+                        except Exception as e:
+                            logger.error(f"Error seeking to last_video_timestamp: {e}")
+                    self.master.after(0, seek_to_last_timestamp)
             self.media_list_player.play()
 
-            # Start video from last_video_timestamp (skip initial video)
-            if last_video_timestamp > 0:
-                # Wait briefly to ensure playback has started before seeking
-                def seek_to_last_timestamp():
-                    try:
-                        if hasattr(self, 'vlc_player') and self.vlc_player:
-                            self.vlc_player.set_time(int(last_video_timestamp * 1000))
-                            logger.info(f"Seeked video to {last_video_timestamp} seconds")
-                    except Exception as e:
-                        logger.error(f"Error seeking to last_video_timestamp: {e}")
-                self.master.after(0, seek_to_last_timestamp)
-            
             # Additional video scaling configuration after playback starts
             def configure_video_after_start():
                 try:
@@ -507,6 +540,7 @@ class VideoClockScreenSaver:
             
             # Get the event manager for the media player. This allows us to subscribe to events.
             event_manager = self.vlc_player.event_manager()
+      
             event_manager.event_attach(vlc.EventType.MediaPlayerPaused, handle_media_player_paused, self.vlc_player)
 
             # Schedule overlays and ensure focus
