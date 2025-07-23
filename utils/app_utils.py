@@ -4,6 +4,7 @@ from screensaver_app.central_logger import get_logger, log_startup, log_shutdown
 import atexit
 import sys
 import signal
+import psutil
 
 
 logger = get_logger("app_utils")
@@ -61,11 +62,15 @@ def is_another_instance_running():
             pid = int(pid_str)
             if pid == os.getpid():
                 return False  # Current process holds the lock
+            # Check if the process with this PID is running (Windows)
+            if psutil.pid_exists(pid):
+                return True  # Another instance is running
             else:
+                # Stale lock file, process not running
                 _lock_file_handle.close()
                 _lock_file_handle = None
-                os.remove(LOCK_FILE_PATH)  # Remove stale lock file
-                return True
+                os.remove(LOCK_FILE_PATH)
+                return False
         except Exception:
             return False
     except Exception as e:
