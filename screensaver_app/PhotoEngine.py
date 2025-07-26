@@ -1,4 +1,3 @@
-
 import logging
 import signal
 import tkinter as tk
@@ -9,6 +8,7 @@ import sys
 import subprocess # Added for service registration
 import threading
 import time
+
 # Ensure parent directory is in sys.path for package imports
 current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
@@ -16,6 +16,10 @@ if parent_dir not in sys.path:
     sys.path.insert(0, parent_dir)
 
 from screensaver_app.central_logger import get_logger, log_startup, log_shutdown, log_exception
+
+  # --- Live Wallpaper Tray Actions ---
+from screensaver_app.live_wallpaper.live_wallpaper_pyqt import LiveWallpaperController
+
 logger = get_logger('PhotoEngine')
 
 from utils.app_utils import acquire_lock, release_lock, handle_exit_signal
@@ -559,6 +563,7 @@ def restart_application():
 def run_in_system_tray():
     logger.info("run_in_system_tray")
     logger.info("Running in system tray mode...")
+    
     icon_image = create_image(64, 64, 'black', 'blue') # Example icon
     
     # Global variables for managing the tray mode
@@ -749,9 +754,7 @@ def run_in_system_tray():
         except Exception as e:
             logger.error(f"Error starting Win+S detection: {e}")
     
-    # --- Live Wallpaper Tray Actions ---
-    from screensaver_app.live_wallpaper.live_wallpaper_pyqt import LiveWallpaperController
-
+  
     def on_start_live_wallpaper(icon, item):
         logger.info("on_start_live_wallpaper")
         config = load_config()
