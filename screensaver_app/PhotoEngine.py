@@ -25,9 +25,12 @@ from utils.app_utils import acquire_lock, release_lock, handle_exit_signal
 # Parse arguments safely
 parser = argparse.ArgumentParser(add_help=False)
 parser.add_argument('--mode', choices=['saver', 'gui'], default='saver')
-args, _ = parser.parse_known_args()
-
-if args.mode != "gui":
+args, ukArgs = parser.parse_known_args()
+logger.info(f"Parsed arguments: {args}, Unknown arguments: {ukArgs}")
+restart = False
+if len(ukArgs) == 3:
+    restart = True
+if not restart and args.mode != "gui":
     if not acquire_lock():
         logger.warning("Another instance of PhotoEngine is already running. Exiting this instance.")
         sys.exit(1)
@@ -262,7 +265,6 @@ def start_screensaver(video_path_override=None):
         success = verify_password_dialog_macos(root, video_clock_screensaver=app)
         if success: 
             app.close()
-            release_lock()
             if hWinEventHook: # Unhook before destroying windows
                 try:
                     UnhookWinEvent(hWinEventHook)  # Use ctypes function
@@ -503,13 +505,13 @@ def restart_application():
         if getattr(sys, 'frozen', False):
             # For frozen executable, use the executable directly
             python_exe = sys.executable
-            script_args = ["--min", "--no-elevate"]
+            script_args = ["--min", "--no-elevate","--restart"]
             logger.debug(f"Detected frozen executable. python_exe={python_exe}, args={script_args}")
         else:
             # For script mode
             script_path = os.path.abspath(__file__)
             python_exe = sys.executable
-            script_args = [script_path, "--min", "--no-elevate"]
+            script_args = [script_path, "--min", "--no-elevate","--restart"]
             logger.debug(f"Detected script mode. python_exe={python_exe}, args={script_args}")
 
         # Check if we're running as admin and preserve elevation
@@ -871,8 +873,9 @@ def admin_main():
     parser.add_argument('--register-service', action='store_true', help='Register the application as a Windows service')
     parser.add_argument('--start-service', action='store_true', help='Start the tray app in the active user session (for service use)')
     parser.add_argument('--no-elevate', action='store_true', help='Skip elevation check (internal flag)')
+    parser.add_argument('--restart', action='store_true', help='Restart the application (used internally)')
     args = parser.parse_args()
-
+    logger.info(f"args: {args}")
     # Hide console window when running in minimized mode
     if args.min:
         hide_console_window()
@@ -917,6 +920,8 @@ def admin_main():
 
 if __name__ == "__main__":
     # Handle service registration commands first
+    # Print all command-line arguments for debugging
+    logger.info(f"Command-line arguments: {sys.argv}")
     if ServiceRegistrar.handle_service_args():
         sys.exit(0)
 

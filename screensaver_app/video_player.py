@@ -718,6 +718,7 @@ class VideoClockScreenSaver:
                         script_args = f'"{script_path}" --min --no-elevate'
                         logger.debug(f"Detected script mode. python_exe={python_exe}, args={script_args}")
 
+                    release_lock()
                     # Check if we're running as admin and preserve elevation
                     if is_admin():
                         logger.info("Restarting tray with admin privileges...")
@@ -1278,7 +1279,8 @@ class VideoClockScreenSaver:
         except Exception as e:
             logger.error(f"Exception in update_overlays: {e}")
 
-    def close(self):        
+    def close(self):   
+        release_lock()
         logger.debug("Called close")
         try:
             """Clean shutdown of the screensaver"""
