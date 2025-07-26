@@ -298,13 +298,13 @@ def start_screensaver(video_path_override=None):
                 if getattr(sys, 'frozen', False):
                     # For frozen executable, use the executable directly
                     python_exe = sys.executable
-                    script_args = "--min --no-elevate"
+                    script_args = "--min --no-elevate --restart"
                     logger.debug(f"Detected frozen executable. python_exe={python_exe}, args={script_args}")
                 else:
                     # For script mode
                     script_path = os.path.abspath(__file__)
                     python_exe = sys.executable
-                    script_args = f'"{script_path}" --min --no-elevate'
+                    script_args = f'"{script_path}" --min --no-elevate --restart'
                     logger.debug(f"Detected script mode. python_exe={python_exe}, args={script_args}")
 
                 # Check if we're running as admin and preserve elevation
@@ -328,12 +328,12 @@ def start_screensaver(video_path_override=None):
                     logger.info("Restarting tray without admin privileges...")
                     if getattr(sys, 'frozen', False):
                         # For frozen executable
-                        cmd_args = [python_exe, "--min", "--no-elevate"]
+                        cmd_args = [python_exe, "--min", "--no-elevate", "--restart"]
                     else:
                         # For script mode
                         script_path = os.path.abspath(__file__)
-                        cmd_args = [python_exe, script_path, "--min", "--no-elevate"]
-                    
+                        cmd_args = [python_exe, script_path, "--min", "--no-elevate", "--restart"]
+
                     logger.debug(f"Using subprocess.Popen to restart tray: {cmd_args}")
                     proc = subprocess.Popen(cmd_args,
                                    creationflags=subprocess.CREATE_NO_WINDOW if platform.system() == "Windows" else 0)

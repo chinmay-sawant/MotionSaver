@@ -707,7 +707,7 @@ class VideoClockScreenSaver:
                     if getattr(sys, 'frozen', False):
                         # For frozen executable, use the executable directly
                         python_exe = sys.executable
-                        script_args = "--min --no-elevate"
+                        script_args = "--min --no-elevate --restart"
                         logger.debug(f"Detected frozen executable. python_exe={python_exe}, args={script_args}")
                     else:
                         # For script mode
@@ -715,7 +715,7 @@ class VideoClockScreenSaver:
                         project_root = os.path.abspath(os.path.join(os.path.dirname(__file__)))
                         script_path = os.path.join(project_root, "PhotoEngine.py")
                         python_exe = sys.executable
-                        script_args = f'"{script_path}" --min --no-elevate'
+                        script_args = f'"{script_path}" --min --no-elevate --restart'
                         logger.debug(f"Detected script mode. python_exe={python_exe}, args={script_args}")
 
                     release_lock()
@@ -740,14 +740,14 @@ class VideoClockScreenSaver:
                         logger.info("Restarting tray without admin privileges...")
                         if getattr(sys, 'frozen', False):
                             # For frozen executable
-                            cmd_args = [python_exe, "--min", "--no-elevate"]
+                            cmd_args = [python_exe, "--min", "--no-elevate", "--restart"]
                         else:
                             # For script mode
                             # Find PhotoEngine.py path relative to this file
                             project_root = os.path.abspath(os.path.join(os.path.dirname(__file__)))
                             script_path = os.path.join(project_root, "PhotoEngine.py")
-                            cmd_args = [python_exe, script_path, "--min", "--no-elevate"]
-                        
+                            cmd_args = [python_exe, script_path, "--min", "--no-elevate", "--restart"]
+
                         logger.debug(f"Using subprocess.Popen to restart tray: {cmd_args}")
                         proc = subprocess.Popen(cmd_args,
                                     creationflags=subprocess.CREATE_NO_WINDOW if platform.system() == "Windows" else 0)
