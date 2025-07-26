@@ -49,6 +49,7 @@ def is_another_instance_running():
     Returns True if another instance is running, False otherwise.
     """
     if not os.path.exists(LOCK_FILE_PATH):
+        logger.info("Lock file does not exist. No other instance running.")
         return False
     try:
         global _lock_file_handle
@@ -58,20 +59,25 @@ def is_another_instance_running():
             _lock_file_handle.seek(0)
             pid_str = _lock_file_handle.read().strip()
             if not pid_str.isdigit():
+                logger.info("Lock file PID is invalid.")
                 return False  # Invalid PID in lock file
             pid = int(pid_str)
             if pid == os.getpid():
+                logger.info("Current process holds the lock.")
                 return False  # Current process holds the lock
             # Check if the process with this PID is running (Windows)
             if psutil.pid_exists(pid):
+                logger.info(f"Another instance is running with PID {pid}.")
                 return True  # Another instance is running
             else:
                 # Stale lock file, process not running
+                logger.info(f"Stale lock file found for PID {pid}. Removing lock file.")
                 _lock_file_handle.close()
                 _lock_file_handle = None
                 os.remove(LOCK_FILE_PATH)
                 return False
-        except Exception:
+        except Exception as ex:
+            logger.error(f"Exception while reading lock file: {ex}")
             return False
     except Exception as e:
         release_lock()
@@ -86,6 +92,7 @@ def release_lock():
     global _lock_file_handle
     if _lock_file_handle:
         _lock_file_handle.close()
+        _lock_file_handle = None
         try:
             os.remove(LOCK_FILE_PATH)
             logger.info("Lock file released and removed.")

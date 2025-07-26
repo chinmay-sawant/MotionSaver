@@ -18,11 +18,11 @@ logger = get_logger("ServiceReg")
 
 class ServiceRegistrar:
     TASK_NAME = "PhotoEngineAdminTask"
-    BATCH_FILE_NAME = "service_script_photoengine.bat"
+    VBS_FILE_NAME = "service_script_photoengine.vbs"
 
     def __init__(self):
         self.app_dir = self.get_app_dir()
-        self.batch_file_path = os.path.join(self.app_dir, self.BATCH_FILE_NAME)
+        self.vbs_file_path = os.path.join(self.app_dir, self.VBS_FILE_NAME)
         self.photoengine_exec = self.get_photoengine_exec()
 
     @staticmethod
@@ -48,7 +48,7 @@ class ServiceRegistrar:
             # To be more robust, find the python executable to run the script
             return os.path.join(self.app_dir, "PhotoEngine.py")
 
-    def create_batch_file(self):
+    def create_vbs_file(self):
         """Creates the batch file if it doesn't exist."""
         # Use sys.executable to ensure we use the same python interpreter in the batch file
         # that is running this script, which is important in environments with multiple pythons.
@@ -57,27 +57,26 @@ class ServiceRegistrar:
         else:
             app_cmd = f'"{sys.executable}" "{self.photoengine_exec}" --min --no-elevate'
             
-        batch_file_content = f"""@echo off
-cd /d "%~dp0"
-start /min "" {app_cmd}
-"""
+        vbs_content = f'''Set WshShell = CreateObject("WScript.Shell")
+WshShell.Run "{app_cmd}", 7, False
+'''
         # Use strip() to remove leading/trailing whitespace from the multiline string
-        batch_file_content = '\n'.join([line.strip() for line in batch_file_content.strip().split('\n')])
+        vbs_content = '\n'.join([line.strip() for line in vbs_content.strip().split('\n')])
 
         # Only write the file if content is different or file does not exist
         # to avoid unnecessary disk writes.
         should_write = True
-        if os.path.exists(self.batch_file_path):
-            with open(self.batch_file_path, "r") as f:
-                if f.read() == batch_file_content:
+        if os.path.exists(self.vbs_file_path):
+            with open(self.vbs_file_path, "r") as f:
+                if f.read() == vbs_content:
                     should_write = False
                     
         if should_write:
-            logger.info(f"Creating or updating batch file: {self.batch_file_path}")
-            with open(self.batch_file_path, "w") as f:
-                f.write(batch_file_content)
+            logger.info(f"Creating or updating VBS file: {self.vbs_file_path}")
+            with open(self.vbs_file_path, "w") as f:
+                f.write(vbs_content)
         else:
-            logger.info(f"Batch file '{self.batch_file_path}' is already up to date.")
+            logger.info(f"VBS file '{self.vbs_file_path}' is already up to date.")
 
 
     @staticmethod
@@ -110,7 +109,7 @@ start /min "" {app_cmd}
         command = [
             'schtasks', '/create',
             '/tn', self.TASK_NAME,
-            '/tr', self.batch_file_path,
+            '/tr', self.vbs_file_path,
             '/sc', 'ONEVENT',
             '/ec', 'Security',
             '/mo', '*[System[(EventID=4624)]]',
@@ -174,13 +173,13 @@ start /min "" {app_cmd}
             logger.warning(f"Details: {e.stderr.strip()}")
             
         try:
-            if os.path.exists(self.batch_file_path):
-                os.remove(self.batch_file_path)
-                logger.info(f"SUCCESS: Batch file '{self.batch_file_path}' deleted.")
+            if os.path.exists(self.vbs_file_path):
+                os.remove(self.vbs_file_path)
+                logger.info(f"SUCCESS: VBS file '{self.vbs_file_path}' deleted.")
             else:
-                logger.info(f"Batch file '{self.batch_file_path}' did not exist, nothing to remove.")
+                logger.info(f"VBS file '{self.vbs_file_path}' did not exist, nothing to remove.")
         except Exception as e:
-            logger.warning(f"Could not delete batch file '{self.batch_file_path}'. Details: {e}")
+            logger.warning(f"Could not delete VBS file '{self.vbs_file_path}'. Details: {e}")
 
     @staticmethod
     def handle_service_args(args=None):
@@ -198,7 +197,7 @@ start /min "" {app_cmd}
         registrar = ServiceRegistrar()
         
         if cmd == 'setup':
-            registrar.create_batch_file()
+            registrar.create_vbs_file()
             registrar.setup_admin_task()
             return True
         elif cmd == 'run':
