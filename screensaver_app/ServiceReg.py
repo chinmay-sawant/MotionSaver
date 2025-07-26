@@ -49,17 +49,16 @@ class ServiceRegistrar:
             return os.path.join(self.app_dir, "PhotoEngine.py")
 
     def create_vbs_file(self):
-        """Creates the batch file if it doesn't exist."""
-        # Use sys.executable to ensure we use the same python interpreter in the batch file
-        # that is running this script, which is important in environments with multiple pythons.
+        """Creates the VBS file to launch the app with correct quoting."""
         if self.photoengine_exec.endswith(".exe"):
-            app_cmd = f'"{self.photoengine_exec}" --min --no-elevate'
+            app_cmd = f'""{self.photoengine_exec}"" --min --no-elevate'
         else:
-            app_cmd = f'"{sys.executable}" "{self.photoengine_exec}" --min --no-elevate'
-            
-        vbs_content = f'''Set WshShell = CreateObject("WScript.Shell")
-WshShell.Run "{app_cmd}", 7, False
-'''
+            app_cmd = f'""{sys.executable}"" ""{self.photoengine_exec}"" --min --no-elevate'
+
+        vbs_content = (
+            'Set WshShell = CreateObject("WScript.Shell")\n'
+            f'WshShell.Run "{app_cmd}", 7, False\n'
+        )
         # Use strip() to remove leading/trailing whitespace from the multiline string
         vbs_content = '\n'.join([line.strip() for line in vbs_content.strip().split('\n')])
 
