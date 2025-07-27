@@ -22,7 +22,7 @@ from screensaver_app.live_wallpaper.live_wallpaper_pyqt import LiveWallpaperCont
 
 logger = get_logger('PhotoEngine')
 
-from utils.app_utils import acquire_lock, release_lock, handle_exit_signal
+from utils.app_utils import acquire_lock, force_acquire_lock, release_lock, handle_exit_signal
 
 # Ensure only one instance runs unless in GUI mode
 
@@ -33,8 +33,9 @@ args, ukArgs = parser.parse_known_args()
 logger.info(f"Parsed arguments: {args}, Unknown arguments: {ukArgs}")
 restart = False
 setup = False
-if len(ukArgs) == 3:
+if len(ukArgs) == 3 and ukArgs[0] == "--restart":
     restart = True
+    force_acquire_lock()
 if len(ukArgs) != 0 and ukArgs[0] == "setup":
     setup = True
     logger.info("Setup mode detected, skipping lock acquisition")

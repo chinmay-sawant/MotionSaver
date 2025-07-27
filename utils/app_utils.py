@@ -104,4 +104,18 @@ def handle_exit_signal(signum, frame):
     release_lock()
     sys.exit(0)
 
-            
+def force_acquire_lock():
+    """
+    Tries to acquire a lock by creating a lock file.
+    Returns True if the lock was acquired, False otherwise.
+    """
+    try:
+        _lock_file_handle = open(LOCK_FILE_PATH, 'x')
+        _lock_file_handle.write(str(os.getpid()))
+        _lock_file_handle.flush() # Ensure it's written immediately
+        atexit.register(release_lock)
+        logger.info(f"Lock acquired with PID {os.getpid()}: {LOCK_FILE_PATH}")
+        return True
+    except FileExistsError:
+        logger.warning(f"Lock file '{LOCK_FILE_PATH}' already exists. Another instance may be running.")
+        return False
