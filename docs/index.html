@@ -13,9 +13,49 @@
     <link rel="stylesheet" href="style.css" />
   </head>
   <body data-theme="dark">
+    <!-- Navigation Drawer -->
+    <div id="nav-drawer" class="nav-drawer open">
+      <div class="nav-drawer-header">
+        <h3>Navigation</h3>
+        <button id="close-drawer" class="close-drawer-btn">&times;</button>
+      </div>
+      <nav class="nav-drawer-content">
+        <a href="#introduction" class="nav-item">
+          <span class="nav-icon">🚀</span>
+          <span>Introduction</span>
+        </a>
+        <a href="#installation" class="nav-item">
+          <span class="nav-icon">🛠️</span>
+          <span>Installation & Usage</span>
+        </a>
+        <a href="#faq" class="nav-item">
+          <span class="nav-icon">❓</span>
+          <span>Frequently Asked Questions</span>
+        </a>
+        <a href="#releases" class="nav-item">
+          <span class="nav-icon">📦</span>
+          <span>Releases</span>
+        </a>
+        <a href="#issues" class="nav-item">
+          <span class="nav-icon">🐞</span>
+          <span>Open Issues & Feature Requests</span>
+        </a>
+        <a href="#reels" class="nav-item">
+          <span class="nav-icon">🎥</span>
+          <span>Instagram Reels</span>
+        </a>
+      </nav>
+    </div>
+
+    <!-- Overlay for drawer -->
+    <div id="nav-overlay" class="nav-overlay active"></div>
+
     <div class="container">
       <header>
-        <h1>MotionSaver 🚀</h1>
+        <div class="header-left">
+          <button id="menu-toggle" class="menu-toggle-btn">☰</button>
+          <h1>MotionSaver 🚀</h1>
+        </div>
         <button id="theme-toggle" class="theme-toggle-btn">🌙</button>
       </header>
 
@@ -54,178 +94,129 @@
 
         <section id="installation">
           <h2>Installation & Usage 🛠️</h2>
-
-          <h3>1. Download & Save to D Drive 📥</h3>
-          <ul>
+          <ol>
             <li>
-              Download the latest MotionSaver release from the
+              <strong>Download the latest release:</strong>
+              <br />
+              Go to the
               <a
                 href="https://github.com/chinmay-sawant/MotionSaver/releases"
                 target="_blank"
-                >Releases page</a
-              >.
-            </li>
-            <li>
-              Click
-              <a
-                href="https://github.com/chinmay-sawant/MotionSaver/releases/download/V3/MotionSaver_V3.zip"
-                target="_blank"
-                >here to download MotionSaver v3</a
-              >.
-            </li>
-            <li>
-              Save the downloaded file directly to your <code>D:/</code> drive.
-            </li>
-          </ul>
-          <img
-            src="https://github.com/chinmay-sawant/MotionSaver/raw/master/Installation/step1.png"
-            alt="Step 1: Downloaded File in D Drive"
-          />
-
-          <h3>2. Extract to D Drive 📦</h3>
-          <ul>
-            <li>Use an extraction tool like WinRAR or 7-Zip.</li>
-            <li>
-              Right-click the downloaded archive and select
-              <strong>Extract Here</strong> to extract all files directly into
-              the <code>D:/</code> drive.
-            </li>
-            <li>Ensure the folder structure matches the example below.</li>
-
-            <blockquote>
-              <li>
-                <strong>If you don't have a D drive:</strong>
-                <a
-                  href="javascript:void(0);"
-                  onclick="document.getElementById('faq-cdrive').open = true; document.getElementById('faq-cdrive').scrollIntoView({behavior:'smooth'});"
-                >
-                  Click here for instructions
-                </a>
-                to move the <code>MotionSaver</code> folder to your
-                <code>C:/</code> drive so the path is
-                <code>C:/MotionSaver</code>.<br />
-                <img
-                  src="https://github.com/chinmay-sawant/MotionSaver/raw/master/Installation/No_D_Drive.png"
-                  alt="No D Drive - Use C Drive"
-                  style="margin-top: 0.5em; max-width: 300px"
-                />
-              </li>
-            </blockquote>
-          </ul>
-          <img
-            src="https://github.com/chinmay-sawant/MotionSaver/raw/master/Installation/step2.png"
-            alt="Step 2: Extracted Files in D Drive"
-          />
-
-          <h3>3. Overview of the <code>D:/MotionSaver</code> Folder 🗂️</h3>
-          <p>
-            The <code>D:/MotionSaver</code> folder contains all the files and
-            subfolders required for MotionSaver to function. Here’s a quick
-            overview of its contents:
-          </p>
-          <ul>
-            <li>
-              <strong>.cache.sqlite</strong>: Stores cached data for the
-              application.
-            </li>
-            <li>
-              <strong>a35_crop.jpg, a35_crop_crop.jpg</strong>: Sample images
-              used by the screensaver.
-            </li>
-            <li>
-              <strong>AMG.mp4</strong>: Sample video file for testing or
-              demonstration.
-            </li>
-            <li>
-              <strong>config/</strong>: Contains configuration files and user
-              settings.
-            </li>
-            <li>
-              <strong>Gui.bat</strong>: Batch file to launch the settings GUI.
-            </li>
-            <li>
-              <strong>logs/</strong>: Stores log files generated by MotionSaver.
-            </li>
-            <li>
-              <strong>MotionSaver.bat</strong>: Main batch file to start the
-              screensaver service.
-            </li>
-            <li>
-              <strong>PhotoEngine.exe</strong>: Executable for image processing
-              tasks.
-            </li>
-            <li>
-              <strong>_internal/</strong>: Internal files and dependencies
-              required by the application.
-            </li>
-            <li>
-              <strong>StopMotionSaver.bat</strong>: Batch file to stop the
-              screensaver service.
-            </li>
-            <li>
-              <strong>unhooks.exe</strong>: Utility to release keyboard hooks
-              when stopping the service.
-            </li>
-            <li>
-              <strong>Note</strong>: The <code>StopMotionSaver.bat</code> file
-              is a new addition in version 2. It allows you to stop the
-              MotionSaver service and release any keyboard hooks that may be
-              blocking system shortcuts.
-            </li>
-          </ul>
-          <img
-            src="https://github.com/chinmay-sawant/MotionSaver/raw/master/Installation/step3.png"
-            alt="Step 3: Folder Structure in D Drive"
-          />
-
-          <h3>4. Start the Background Service ▶️</h3>
-          <img
-            src="https://github.com/chinmay-sawant/MotionSaver/raw/master/Installation/step4.png"
-            alt="Step 4: Background Service"
-          />
-          <ul>
-            <li>
-              Navigate to the <code>D:/MotionSaver</code> folder.
-              <em
-                >(Do not run from download or any other folder as it may cause
-                issues.)</em
+                >GitHub Releases page</a
               >
+              and download the latest
+              <a
+                href="https://github.com/chinmay-sawant/MotionSaver/releases/download/untagged-a78f74348306697451cf/MotionSaver_Setup_v4-installer.exe"
+                target="_blank"
+              >
+                <code>.exe</code> file </a
+              >.
             </li>
             <li>
-              Right-click <code>MotionSaver.bat</code> and select
-              <strong>Run as administrator</strong>.
+              <strong>Open the installer:</strong>
+              <br />
+              Locate the downloaded <code>.exe</code> file and double-click to run the installer.
+              <br />
+              <img
+                src="https://github.com/chinmay-sawant/MotionSaver/raw/master/Installation/V4_1.png"
+                alt="Open Installer"
+                style="margin-top: 0.5em; max-width: 400px"
+              />
+              <p style="margin-top: 1em; color: var(--text-secondary);">
+                <strong>Note:</strong> If you don't have permission to install on the C drive, you can install MotionSaver in <code>D:/MotionSaver</code> as shown in the image above.
+              </p>
+              <p>
+                Click on <strong>Install</strong>. This will install all the required files in the selected folder
+                (<code>C:/MotionSaver</code> or <code>D:/MotionSaver</code>).
+              </p>
+              <p>
+                After installation, make sure you have all the files as shown in the image below:
+              </p>
+              <img
+                src="https://github.com/chinmay-sawant/MotionSaver/raw/master/Installation/V4_2.png"
+                alt="Required Files After Installation"
+                style="margin-top: 0.5em; max-width: 400px"
+              />
             </li>
-            <li>This starts the screensaver background service in the tray.</li>
-            <li>Press <strong>Win + S</strong> to activate the screensaver.</li>
-          </ul>
-          <blockquote>
-            By default, the Mercedes AMG video (<code>AMG.mp4</code>) will be
-            used as the lockscreen animation when the screensaver is
-            activated.<br />
-            You can customize this later by replacing the
-            <code>AMG.mp4</code> file or using the settings GUI.
-          </blockquote>
+            <li>
+              <strong>Note:</strong>
+              <ul>
+              <li><p>
+                By default, the installer will register a scheduled task using <code>MotionSaver_Register_Service.bat</code> as <code>PhotoEngineAdminTask</code> in your Task Scheduler and start the application automatically.
+              </p></li>
+              <li>
+                <p>
+                If for some reason the application does not start, try disabling your antivirus temporarily, delete the <code>C:/MotionSaver</code> or <code>D:/MotionSaver</code> folder (as selected above), and relaunch the installer.
+              </p>
+              </li>
+              </ul>
+            </li>
+              <li>
+                    <span style="font-size: 1.2em; font-weight: bold;">
+                    If the AMG wallpaper has started, enjoy!
+                    </span><br>
+                  You can press <kbd>Win</kbd> + <kbd>S</kbd> to display the lockscreen.<br>
+                  If you are still facing issues, please check the <a href="#faq">FAQs section</a> below.
+                  <br>
+                  The <strong>default password is <b>test</b></strong>. You can change it later in the settings using GUI.bat.
+                </li>
+          </ol>
+        </section>
 
-          <h3>5. Customize Settings Using Gui.bat ⚙️</h3>
-          <ul>
+        <section id="uninstall">
+          <h2>How to Uninstall MotionSaver 📴</h2>
+          <ol>
+
             <li>
-              Right-click <code>Gui.bat</code> and select
-              <strong>Run as administrator</strong> in the
-              <code>D:/MotionSaver</code> folder to open the settings GUI.
+              <strong>Open Task Scheduler:</strong>
+              <ul>
+                <li>Press <kbd>Win</kbd> + <kbd>R</kbd> to open the Run dialog.</li>
+                <li>Type <code>taskschd.msc</code> and press <kbd>Enter</kbd>.</li>
+                <li>Alternatively, search for <strong>Task Scheduler</strong> in the Start menu and open it.</li>
+              </ul>
             </li>
             <li>
-              Use the interface to change the video, images, password, or other
-              preferences for your screensaver.
+              <strong>Find the MotionSaver Task:</strong>
+              <ul>
+                <li>In the left pane, click on <strong>Task Scheduler Library</strong>.</li>
+                <li>Look for a task named <code>PhotoEngineAdminTask</code> in the list.</li>
+              </ul>
             </li>
             <li>
-              After making changes, click <strong>Save</strong> in the GUI to
-              apply your settings.
+              <strong>Disable the Task:</strong>
+              <ul>
+                <li>Right-click on <code>PhotoEngineAdminTask</code> and select <strong>Disable</strong>.</li>
+                <li>This will prevent MotionSaver from starting automatically.</li>
+              </ul>
             </li>
-          </ul>
-          <img
-            src="https://github.com/chinmay-sawant/MotionSaver/raw/master/Installation/step5.png"
-            alt="Step 5: Customizing with GUI"
-          />
+            <li>
+              <strong>Stop MotionSaver:</strong>
+              <ul>
+                <li>
+                  Open <code>StopMotionSaver.bat</code> from your <code>C:/MotionSaver</code> or <code>D:/MotionSaver</code> folder to immediately exit the screensaver and stop all related processes.
+                </li>
+              </ul>
+            </li>
+            <li>
+              <strong>Run the Uninstaller:</strong>
+              <ul>
+                <li>
+                  Locate and run <code>Uninstall.exe</code> as Administrator from the same folder (<code>C:/MotionSaver</code> or <code>D:/MotionSaver</code>) to completely remove MotionSaver from your system.
+                </li>
+              </ul>
+            </li>
+            <li>
+              <strong>Remove Remaining Files (Optional):</strong>
+              <ul>
+                <li>
+                  If any files or folders remain after uninstalling, you can permanently delete them by selecting the folder (<code>C:/MotionSaver</code> or <code>D:/MotionSaver</code>), then pressing <kbd>Shift</kbd> + <kbd>Delete</kbd> to remove it completely.
+                </li>
+              </ul>
+            </li>
+          </ol>
+          <p>
+            You can re-enable the task at any time by right-clicking it and selecting <strong>Enable</strong>.
+          </p>
         </section>
 
         <section id="faq">
@@ -277,7 +268,7 @@
             <summary>How do I change the video?</summary>
             <div class="details-content">
               <p>
-                You can download a 1080p 30fps video and save it anywhere. Then,
+                You can download a 1080p 30fps/60fps video and save it anywhere. Then,
                 run <code>Gui.bat</code> as an administrator, use the option to
                 change the video file, select your new video, and click
                 <strong>Save</strong>. Make sure to restart the MotionSaver
@@ -506,6 +497,119 @@
                   screensaver's text elements.
                 </li>
               </ul>
+            </div>
+          </details>
+          <details>
+            <summary>
+              Where can I download 60fps 1080p videos for MotionSaver?
+            </summary>
+            <div class="details-content">
+              <ol>
+                <li>
+                  <strong>Download yt-dlp:</strong>
+                  <br>
+                  Visit the <a href="https://github.com/yt-dlp/yt-dlp" target="_blank">yt-dlp GitHub page</a> and download the latest version of <code>yt-dlp</code>.
+                </li>
+                <li>
+                  <strong>Organize your videos:</strong>
+                  <br>
+                  Place <code>yt-dlp.exe</code> in a folder such as <code>D:/Live_wallpapers</code> for easy access.
+                </li>
+                <li>
+                  <strong>Download 1080p 60fps videos:</strong>
+                  <br>
+                  Open a command prompt in the <code>D:/Live_wallpapers</code> folder and run the following command (replace the YouTube link with your preferred video):
+                  <pre>yt-dlp -f "bestvideo[height<=1080][fps=60][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=1080][fps=60]+bestaudio" --merge-output-format mp4 https://www.youtube.com/watch?v=21JAe9vqb-I</pre>
+                </li>
+                <li>
+                  <strong>Download 1080p 30fps videos:</strong>
+                  <br>
+                  Use this command for 30fps videos:
+                  <pre>yt-dlp -f "bestvideo[height<=1080][fps=30][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=1080][fps=30]+bestaudio" --merge-output-format mp4 https://www.youtube.com/watch?v=21JAe9vqb-I</pre>
+                </li>
+                <p>
+                <strong>Tip:</strong> You can also download Instagram Reels or videos using <code>yt-dlp</code>! For example, to download a 1080p 60fps Instagram Reel, use:
+                <pre>yt-dlp -f "bestvideo[height<=1080][fps=60][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=1080][fps=60]+bestaudio" --merge-output-format mp4 https://www.instagram.com/reel/DKRKBEnJVrS/?utm_source=ig_web_copy_link</pre>
+                Replace the link with your desired Instagram video or reel URL.
+              </p>
+              </ol>
+              
+              <p>
+                After downloading, follow these steps to set the new video as your MotionSaver lockscreen background:
+                <ol>
+                  <li>Exit MotionSaver if it is running.</li>
+                  <li>Open <code>Gui.bat</code>.</li>
+                  <li>Select the downloaded video file.</li>
+                  <li>Click on <strong>Save</strong>.</li>
+                  <li>Start MotionSaver again. It will now use the new video as your wallpaper.</li>
+                </ol>
+              </p>
+            </div>
+          </details>
+          <details>
+            <summary>How do I change the wallpaper?</summary>
+            <div class="details-content">
+              <ol>
+                <li>Run <code>GUI.bat</code> as administrator.</li>
+                <li>Select your desired screensaver video in the GUI.</li>
+                <li>
+                  Make sure to exit the running MotionSaver application from the system tray before applying changes.<br>
+                  <img
+                    src="https://github.com/chinmay-sawant/MotionSaver/raw/master/Installation/system_tray.png"
+                    alt="System Tray Icon"
+                    style="margin-top: 0.5em; max-width: 200px"
+                  />
+                </li>
+                <li>Click on <strong>Save</strong> in the GUI.</li>
+                <li>Run <code>MotionSaver.bat</code> as administrator to start with the new wallpaper.</li>
+              </ol>
+            </div>
+          </details>
+          <details>
+            <summary>How do I change the profile GIF?</summary>
+            <div class="details-content">
+              <ol>
+                <li>
+                  <strong>Prepare your GIF:</strong>
+                  <br>
+                  Make sure your GIF is <strong>400x400</strong> pixels for best results.
+                </li>
+                <li>
+                  <strong>Open the GUI:</strong>
+                  <br>
+                  Run <code>gui.bat</code> as administrator.
+                </li>
+                <li>
+                  <strong>Select your GIF:</strong>
+                  <br>
+                  In the profile picture/GIF menu, click <strong>Browse</strong> and choose your GIF file.
+                </li>
+                <li>
+                  <strong>Crop the image:</strong>
+                  <br>
+                  Click <strong>Crop Image</strong>. You can zoom in/out or drag the image to adjust the crop.
+                  <ul>
+                    <li>
+                      If cropping is buggy, simply click <strong>Circle Crop</strong> and proceed.
+                    </li>
+                  </ul>
+                </li>
+                <li>
+                  <strong>Stop MotionSaver:</strong>
+                  <br>
+                  Exit the running MotionSaver application from the system tray before applying changes.
+                </li>
+                <li>
+                  <strong>Save settings:</strong>
+                  <br>
+                  Click <strong>Save Setting</strong> in the GUI.
+                </li>
+                <li>
+                  <strong>Restart MotionSaver:</strong>
+                  <br>
+                  Run <code>MotionSaver.bat</code> as administrator to apply your new profile GIF.
+                </li>
+              </ol>
             </div>
           </details>
         </section>

@@ -40,20 +40,20 @@ body {
   margin: 0;
   padding: 0;
   transition: background-color 0.3s, color 0.3s;
+  overflow: auto; /* Allow scrolling */
 }
 
 .container {
   max-width: 900px;
   margin: 2rem auto;
   padding: 0 2rem;
+  transition: margin-left 0.3s ease;
 }
 
 header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  border-bottom: 2px solid var(--primary-color);
-  padding-bottom: 1rem;
   margin-bottom: 2rem;
 }
 
@@ -162,4 +162,158 @@ summary:hover {
 }
 .theme-toggle-btn:hover {
   background-color: var(--secondary-color);
+}
+
+/* Navigation Drawer Styles */
+.nav-drawer {
+  position: fixed;
+  top: 0;
+  left: -300px;
+  width: 300px;
+  height: 100vh;
+  background: var(--bg-color);
+  border-right: 1px solid var(--border-color);
+  z-index: 1000;
+  transition: left 0.3s ease;
+  box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
+}
+
+.nav-drawer.open {
+  left: 0;
+}
+
+.nav-drawer-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.nav-drawer-header h3 {
+  margin: 0;
+  color: var(--text-color);
+}
+
+.close-drawer-btn {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  color: var(--text-color);
+  cursor: pointer;
+  padding: 0.25rem;
+  border-radius: 4px;
+  transition: background-color 0.2s ease;
+}
+
+.close-drawer-btn:hover {
+  background-color: var(--hover-bg);
+}
+
+.nav-drawer-content {
+  padding: 1rem 0;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  color: var(--text-color);
+  text-decoration: none;
+  transition: background-color 0.2s ease;
+  border: none;
+  width: 100%;
+}
+
+.nav-item:hover {
+  background-color: var(--hover-bg);
+}
+
+.nav-icon {
+  margin-right: 0.75rem;
+  font-size: 1.1rem;
+}
+
+.nav-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 999;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.3s ease, visibility 0.3s ease;
+  pointer-events: none; /* Don't block clicks on desktop */
+}
+
+.nav-overlay.active {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto; /* Enable clicks only when active */
+}
+
+/* Header Updates */
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.menu-toggle-btn {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  color: var(--text-color);
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 4px;
+  transition: background-color 0.2s ease;
+}
+
+.menu-toggle-btn:hover {
+  background-color: var(--hover-bg);
+}
+
+/* Body adjustments - allow scrolling by default */
+body {
+  overflow: auto; /* Allow scrolling */
+}
+
+/* Container adjustment for open drawer */
+.container {
+  margin-left: 300px; /* Add left margin to accommodate open drawer */
+  transition: margin-left 0.3s ease;
+}
+
+.container.drawer-closed {
+  margin-left: 0;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .nav-drawer {
+    width: 280px;
+    left: -280px;
+  }
+
+  .nav-drawer.open {
+    left: 0;
+  }
+
+  .container {
+    margin-left: 0; /* Remove margin on mobile */
+  }
+
+  .header-left h1 {
+    font-size: 1.5rem;
+  }
 }

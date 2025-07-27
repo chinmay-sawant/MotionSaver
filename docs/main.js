@@ -294,3 +294,121 @@ document.addEventListener("DOMContentLoaded", () => {
       issuesContainer.innerHTML = "<p>Could not load issues. Please try again later.</p>";
     });
 });
+
+// Navigation Drawer Functionality
+document.addEventListener('DOMContentLoaded', function() {
+  const menuToggle = document.getElementById('menu-toggle');
+  const closeDrawer = document.getElementById('close-drawer');
+  const navDrawer = document.getElementById('nav-drawer');
+  const navOverlay = document.getElementById('nav-overlay');
+  const navItems = document.querySelectorAll('.nav-item');
+  const container = document.querySelector('.container');
+
+  // Check if we're on mobile
+  function isMobile() {
+    return window.innerWidth <= 768;
+  }
+
+  // Initialize drawer state based on screen size
+  function initializeDrawer() {
+    if (isMobile()) {
+      // On mobile, close drawer by default
+      navDrawer.classList.remove('open');
+      navOverlay.classList.remove('active');
+      container.classList.add('drawer-closed');
+      document.body.style.overflow = '';
+    } else {
+      // On desktop, keep drawer open by default
+      navDrawer.classList.add('open');
+      navOverlay.classList.remove('active'); // Remove overlay on desktop
+      container.classList.remove('drawer-closed');
+      document.body.style.overflow = ''; // Allow scrolling
+    }
+  }
+
+  // Initialize on page load
+  initializeDrawer();
+
+  // Re-initialize on window resize
+  window.addEventListener('resize', initializeDrawer);
+
+  // Toggle drawer (for hamburger menu)
+  menuToggle.addEventListener('click', function() {
+    if (navDrawer.classList.contains('open')) {
+      closeDrawerFunc();
+    } else {
+      openDrawerFunc();
+    }
+  });
+
+  // Open drawer function
+  function openDrawerFunc() {
+    navDrawer.classList.add('open');
+    if (isMobile()) {
+      navOverlay.classList.add('active');
+      document.body.style.overflow = 'hidden';
+    } else {
+      navOverlay.classList.remove('active');
+      document.body.style.overflow = '';
+    }
+    container.classList.remove('drawer-closed');
+  }
+
+  // Close drawer function
+  function closeDrawerFunc() {
+    navDrawer.classList.remove('open');
+    navOverlay.classList.remove('active');
+    container.classList.add('drawer-closed');
+    document.body.style.overflow = '';
+  }
+
+  // Close drawer on close button click
+  closeDrawer.addEventListener('click', closeDrawerFunc);
+
+  // Close drawer on overlay click (only on mobile)
+  navOverlay.addEventListener('click', function() {
+    if (isMobile()) {
+      closeDrawerFunc();
+    }
+  });
+
+  // Handle navigation item clicks
+  navItems.forEach(item => {
+    item.addEventListener('click', function(e) {
+      e.preventDefault();
+      const targetId = this.getAttribute('href');
+      const targetElement = document.querySelector(targetId);
+      
+      if (targetElement) {
+        // On mobile, close drawer first
+        if (isMobile()) {
+          closeDrawerFunc();
+          setTimeout(() => {
+            scrollToTarget(targetElement);
+          }, 300);
+        } else {
+          // On desktop, just scroll
+          scrollToTarget(targetElement);
+        }
+      }
+    });
+  });
+
+  // Scroll to target function
+  function scrollToTarget(targetElement) {
+    const headerHeight = document.querySelector('header').offsetHeight;
+    const targetPosition = targetElement.offsetTop - headerHeight - 20;
+    
+    window.scrollTo({
+      top: targetPosition,
+      behavior: 'smooth'
+    });
+  }
+
+  // Close drawer on Escape key (only on mobile)
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' && navDrawer.classList.contains('open') && isMobile()) {
+      closeDrawerFunc();
+    }
+  });
+});
