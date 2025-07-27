@@ -32,9 +32,13 @@ parser.add_argument('--mode', choices=['saver', 'gui'], default='saver')
 args, ukArgs = parser.parse_known_args()
 logger.info(f"Parsed arguments: {args}, Unknown arguments: {ukArgs}")
 restart = False
+setup = False
 if len(ukArgs) == 3:
     restart = True
-if not restart and args.mode != "gui":
+if len(ukArgs) != 0 and ukArgs[0] == "setup":
+    setup = True
+    logger.info("Setup mode detected, skipping lock acquisition")
+if not restart and not setup and args.mode != "gui":
     if not acquire_lock():
         logger.warning("Another instance of PhotoEngine is already running. Exiting this instance.")
         sys.exit(1)
