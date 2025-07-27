@@ -229,29 +229,40 @@ summary:hover {
   background-color: var(--hover-bg);
 }
 
-.nav-icon {
-  margin-right: 0.75rem;
-  font-size: 1.1rem;
+/* Review Item Styles - Similar to nav-item but allows proper link functionality */
+.review-item {
+  display: flex;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  color: #fff !important;
+  text-decoration: none;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  border: none;
+  width: calc(100% - 2rem);
+  margin-left: 1rem;
+  margin-right: 1rem;
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  font-weight: 500;
+  border-radius: 8px;
+  box-sizing: border-box;
 }
 
-.nav-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0, 0, 0, 0.5);
-  z-index: 999;
-  opacity: 0;
-  visibility: hidden;
-  transition: opacity 0.3s ease, visibility 0.3s ease;
-  pointer-events: none; /* Don't block clicks on desktop */
+.review-item:hover {
+  background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%) !important;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+  text-decoration: none;
 }
 
-.nav-overlay.active {
-  opacity: 1;
-  visibility: visible;
-  pointer-events: auto; /* Enable clicks only when active */
+/* Dark theme adjustments for review-item */
+[data-theme="dark"] .review-item {
+  background: linear-gradient(135deg, #2d3748 0%, #4a5568 100%);
+}
+
+[data-theme="dark"] .review-item:hover {
+  background: linear-gradient(135deg, #3d4758 0%, #5a6578 100%) !important;
 }
 
 /* Header Updates */
@@ -298,6 +309,74 @@ body {
   margin-left: 0;
 }
 
+/* Navigation Divider */
+.nav-divider {
+  height: 1px;
+  background-color: var(--border-color);
+  margin: 0.5rem 1rem;
+}
+
+/* Review Section Styles - Remove margin for inline use */
+.review-section {
+  margin: 2rem 0;
+}
+
+/* Review banner for inline use (in introduction section) */
+.review-banner {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 12px;
+  padding: 2rem;
+  text-align: center;
+  color: white;
+  box-shadow: 0 8px 32px rgba(102, 126, 234, 0.3);
+  margin-top: 1.5rem; /* Add margin when used inline */
+}
+
+.review-content h3 {
+  margin: 0 0 1rem 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+.review-content p {
+  margin: 0 0 1.5rem 0;
+  opacity: 0.9;
+  font-size: 1.1rem;
+}
+
+.review-btn {
+  display: inline-block;
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  padding: 0.75rem 2rem;
+  border-radius: 50px;
+  text-decoration: none;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  backdrop-filter: blur(10px);
+}
+
+.review-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+/* Dark theme adjustments */
+[data-theme="dark"] .review-banner {
+  background: linear-gradient(135deg, #2d3748 0%, #4a5568 100%);
+}
+
+[data-theme="dark"] .review-link {
+  background: linear-gradient(135deg, #2d3748 0%, #4a5568 100%);
+}
+
+[data-theme="dark"] .review-link:hover {
+  background: linear-gradient(135deg, #3d4758 0%, #5a6578 100%) !important;
+}
+
 /* Responsive adjustments */
 @media (max-width: 768px) {
   .nav-drawer {
@@ -315,5 +394,22 @@ body {
 
   .header-left h1 {
     font-size: 1.5rem;
+  }
+
+  .review-banner {
+    padding: 1.5rem;
+  }
+
+  .review-content h3 {
+    font-size: 1.3rem;
+  }
+
+  .review-content p {
+    font-size: 1rem;
+  }
+
+  .review-btn {
+    padding: 0.6rem 1.5rem;
+    font-size: 0.9rem;
   }
 }
