@@ -133,8 +133,8 @@
       "uniques": 8
     },
     "2025-07-27": {
-      "count": 32,
-      "uniques": 18
+      "count": 35,
+      "uniques": 19
     }
   },
   "views": {
@@ -291,8 +291,8 @@
       "uniques": 8
     },
     "2025-07-27": {
-      "count": 66,
-      "uniques": 8
+      "count": 89,
+      "uniques": 9
     }
   },
   "releases": {
