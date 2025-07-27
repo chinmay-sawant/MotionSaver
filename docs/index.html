@@ -13,9 +13,49 @@
     <link rel="stylesheet" href="style.css" />
   </head>
   <body data-theme="dark">
+    <!-- Navigation Drawer -->
+    <div id="nav-drawer" class="nav-drawer open">
+      <div class="nav-drawer-header">
+        <h3>Navigation</h3>
+        <button id="close-drawer" class="close-drawer-btn">&times;</button>
+      </div>
+      <nav class="nav-drawer-content">
+        <a href="#introduction" class="nav-item">
+          <span class="nav-icon">🚀</span>
+          <span>Introduction</span>
+        </a>
+        <a href="#installation" class="nav-item">
+          <span class="nav-icon">🛠️</span>
+          <span>Installation & Usage</span>
+        </a>
+        <a href="#faq" class="nav-item">
+          <span class="nav-icon">❓</span>
+          <span>Frequently Asked Questions</span>
+        </a>
+        <a href="#releases" class="nav-item">
+          <span class="nav-icon">📦</span>
+          <span>Releases</span>
+        </a>
+        <a href="#issues" class="nav-item">
+          <span class="nav-icon">🐞</span>
+          <span>Open Issues & Feature Requests</span>
+        </a>
+        <a href="#reels" class="nav-item">
+          <span class="nav-icon">🎥</span>
+          <span>Instagram Reels</span>
+        </a>
+      </nav>
+    </div>
+
+    <!-- Overlay for drawer -->
+    <div id="nav-overlay" class="nav-overlay active"></div>
+
     <div class="container">
       <header>
-        <h1>MotionSaver 🚀</h1>
+        <div class="header-left">
+          <button id="menu-toggle" class="menu-toggle-btn">☰</button>
+          <h1>MotionSaver 🚀</h1>
+        </div>
         <button id="theme-toggle" class="theme-toggle-btn">🌙</button>
       </header>
 
