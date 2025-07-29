@@ -137,8 +137,8 @@
       "uniques": 21
     },
     "2025-07-28": {
-      "count": 7,
-      "uniques": 5
+      "count": 13,
+      "uniques": 7
     }
   },
   "views": {
@@ -297,15 +297,19 @@
     "2025-07-27": {
       "count": 102,
       "uniques": 9
+    },
+    "2025-07-28": {
+      "count": 27,
+      "uniques": 7
     }
   },
   "releases": {
-    "total_downloads": 956,
+    "total_downloads": 960,
     "by_release": {
       "V2": {
-        "total_downloads": 346,
+        "total_downloads": 347,
         "assets": {
-          "MotionSaver_V2.zip": 238,
+          "MotionSaver_V2.zip": 239,
           "MotionSaver_V2_old.zip": 108
         }
       },
@@ -322,9 +326,9 @@
         }
       },
       "V4": {
-        "total_downloads": 7,
+        "total_downloads": 10,
         "assets": {
-          "MotionSaver_Setup_v4-installer.exe": 7
+          "MotionSaver_Setup_v4-installer.exe": 10
         }
       }
     }
