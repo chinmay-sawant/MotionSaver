@@ -445,10 +445,14 @@
     "2025-08-16": {
       "count": 3,
       "uniques": 1
+    },
+    "2025-08-17": {
+      "count": 14,
+      "uniques": 8
     }
   },
   "releases": {
-    "total_downloads": 1034,
+    "total_downloads": 1035,
     "by_release": {
       "V2": {
         "total_downloads": 360,
@@ -470,9 +474,9 @@
         }
       },
       "V4": {
-        "total_downloads": 69,
+        "total_downloads": 70,
         "assets": {
-          "MotionSaver_Setup_v4-installer.exe": 69
+          "MotionSaver_Setup_v4-installer.exe": 70
         }
       }
     }
