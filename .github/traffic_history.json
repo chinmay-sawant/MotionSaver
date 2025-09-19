@@ -341,8 +341,12 @@
       "uniques": 5
     },
     "2025-09-17": {
-      "count": 6,
+      "count": 7,
       "uniques": 5
+    },
+    "2025-09-18": {
+      "count": 8,
+      "uniques": 7
     }
   },
   "views": {
@@ -709,6 +713,10 @@
     "2025-09-17": {
       "count": 7,
       "uniques": 5
+    },
+    "2025-09-18": {
+      "count": 13,
+      "uniques": 2
     }
   },
   "releases": {
