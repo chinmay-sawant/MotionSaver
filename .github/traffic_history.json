@@ -401,8 +401,8 @@
       "uniques": 5
     },
     "2025-10-02": {
-      "count": 5,
-      "uniques": 4
+      "count": 8,
+      "uniques": 5
     }
   },
   "views": {
@@ -827,8 +827,8 @@
       "uniques": 4
     },
     "2025-10-02": {
-      "count": 11,
-      "uniques": 6
+      "count": 34,
+      "uniques": 7
     }
   },
   "releases": {
