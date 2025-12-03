@@ -641,8 +641,12 @@
       "uniques": 4
     },
     "2025-12-01": {
-      "count": 16,
-      "uniques": 9
+      "count": 22,
+      "uniques": 12
+    },
+    "2025-12-02": {
+      "count": 9,
+      "uniques": 6
     }
   },
   "views": {
@@ -1293,6 +1297,10 @@
     "2025-12-01": {
       "count": 1,
       "uniques": 1
+    },
+    "2025-12-02": {
+      "count": 9,
+      "uniques": 5
     }
   },
   "releases": {
