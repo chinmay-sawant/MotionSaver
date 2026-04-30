@@ -2464,7 +2464,7 @@
     }
   },
   "releases": {
-    "total_downloads": 1436,
+    "total_downloads": 1439,
     "by_release": {
       "V2": {
         "total_downloads": 476,
@@ -2480,15 +2480,15 @@
         }
       },
       "V3": {
-        "total_downloads": 607,
+        "total_downloads": 608,
         "assets": {
-          "MotionSaver_V3.zip": 607
+          "MotionSaver_V3.zip": 608
         }
       },
       "V4": {
-        "total_downloads": 346,
+        "total_downloads": 348,
         "assets": {
-          "MotionSaver_Setup_v4-installer.exe": 346
+          "MotionSaver_Setup_v4-installer.exe": 348
         }
       }
     }
